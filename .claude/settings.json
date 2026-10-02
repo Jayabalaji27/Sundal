@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(**)",
+      "Edit(**)",
+      "Write(**)",
+      "Bash(php artisan:*)",
+      "Bash(php:*)",
+      "Bash(composer:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(npx:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Bash(rm -rf:*)",
+      "Bash(php artisan migrate:fresh)",
+      "Bash(php artisan db:wipe)",
+      "Bash(git push --force:*)",
+      "Bash(mysql:*)",
+      "Bash(mysqldump:*)",
+      "Bash(curl:*)"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(php artisan migrate:*)"
+    ]
+  }
+}

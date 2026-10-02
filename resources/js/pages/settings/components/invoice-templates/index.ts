@@ -1,0 +1,10 @@
+export { NewYork } from './NewYork';
+export { Toronto } from './Toronto';
+export { Rio } from './Rio';
+export { London } from './London';
+export { Istanbul } from './Istanbul';
+export { Mumbai } from './Mumbai';
+export { HongKong } from './HongKong';
+export { Tokyo } from './Tokyo';
+export { Sydney } from './Sydney';
+export { Paris } from './Paris';

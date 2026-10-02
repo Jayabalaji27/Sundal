@@ -1,0 +1,1 @@
+const t=r=>{var e;if(typeof window<"u"&&((e=window.appSettings)!=null&&e.formatCurrency)){const n=typeof r=="number"?r:parseFloat(r)||0;return window.appSettings.formatCurrency(n,{showSymbol:!0})}return r||0};export{t as f};

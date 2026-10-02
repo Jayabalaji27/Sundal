@@ -1,0 +1,34 @@
+{
+  "app_map": {
+    "app": "Sundal - multi-tenant Laravel + Inertia/React SaaS project management platform",
+    "tenancy": "Workspace is the tenant boundary (not User). BelongsToWorkspace trait scopes queries to auth()->user()->current_workspace_id via a global scope.",
+    "permission_systems": [
+      "Spatie laravel-permission (route middleware + RoleSeeder.php, source of truth)",
+      "App\\Traits\\HasPermissionChecks (used by ~33 controllers) - checkPermission() gives BLANKET ACCESS to any user with type==='company', bypassing Spatie entirely"
+    ],
+    "roles_tested": ["superadmin", "owner (type=company)", "manager", "member", "client"],
+    "seeded_test_accounts": "superadmin@test.com / company@test.com / manager@test.com / member@test.com / client@test.com, password123, share 'Test Workspace' (id=4)",
+    "nav_structure": {
+      "superadmin": "separate nav tree: Dashboard, Companies, Media Library, Plans(+Requests+Orders), Coupons, Landing Page(+Custom Pages+Contact Inquiries+Newsletter), Settings",
+      "owner/manager/member/client": "13 shared top-level items via buildCommonNavItems(): Dashboard, Workspaces, Team, Projects(All Projects/Tasks/Bugs), Calendar, Timesheets(My/Weekly/Approvals), Contracts, Chat, Meetings(Zoom/Google), Finance(Invoices/Budgets/Expenses/ExpenseApprovals/Taxes), Docs(KB/Notes), Forms, AI, Reports(Project/Timesheet), Billing(owner only), Settings"
+    },
+    "known_module_gating_differences": {
+      "manager": "no Workspaces/Billing nav; has Team, Calendar (module list includes 'calendar','task_calendar'), Timesheet Approvals, Contracts(view/create/edit not delete), Taxes(view/create/edit not delete)",
+      "member": "no Workspaces/Billing/Settings; Tasks full CRUD incl delete; Budgets view-only own-projects; Expenses own full CRUD; KB view+attachments only",
+      "client": "most restrictive: no Team/Timesheets/Chat/Docs/Forms/AI/Settings; no standalone Tasks page (task_view_any absent) but CAN change task status via Calendar (task_change_status permission); Contracts view/preview/sign(accept-decline)/comment; Invoices view-only; no Budget/Expense access at all"
+    },
+    "unified_shell_routes": "finance, reports, meetings, docs use server-side redirectToFirstPermittedTab pattern in routes/web.php to avoid Inertia page-flash",
+    "superadmin_workspace_block": "BlockSuperAdminWorkspaceAccess middleware (alias block.superadmin.workspace) abort_if(user.type==='superadmin', 403) is applied to a large workspace-scoped route group. dashboard route explicitly opts out via withoutMiddleware. Superadmin is meant to reach real workspace/company data only via an Impersonate flow.",
+    "test_data_present": "Workspace has 33 projects (owner view) / 14-17 (member/manager view, scoped), multiple PW-TEST prefixed projects/tasks/bugs/contracts/invoices/expenses/timesheets from prior automated test runs, 3 contracts, 5 invoices, ~10 companies (superadmin view)."
+  },
+  "tested": [
+    "Login for all 5 seeded roles (client required a password reset via tinker - firstOrCreate in CreateTestUsers doesn't update password on existing users, account had drifted from a prior session)",
+    "Owner: clicked/navigated all 13+ nav destinations, checked console+network on each - only /taxes crashed",
+    "Manager: verified nav diff vs owner (no Workspaces/Billing), verified Calendar IS visible (resolves an initial doubt from module-list read), verified /taxes crash reproduces, verified direct navigation to /workspaces and /plans correctly 403s, verified contract delete button correctly hidden (contract_delete permission absent) and backend authorizePermission() does not bypass for type=manager (only type=company bypasses per HasPermissionChecks)",
+    "Member: verified nav diff, verified direct /invoices access 403s (member lacks invoice_view_any), verified /expenses loads (own-scope), full Task CRUD cycle (create with all required fields incl. Start/Due Date, verified persistence via count increment, deleted with confirm dialog, verified count decrement) - discovered Start Date/Due Date required-field UX bug (see findings)",
+    "Client: verified nav (only Dashboard/Projects[All Projects only]/Calendar/Contracts/Meetings/Finance[Invoices only]/Reports), verified /tasks direct access 403s, verified /task-calendar loads with no errors (task_change_status capability), verified /budgets 403s, verified Contract Accept flow end-to-end (status combobox Pending->Accept, persisted after reload)",
+    "Superadmin: verified own nav loads (Companies/Media Library/Plans/Coupons/Landing Page/Settings), verified Companies/Plans/Coupons/Landing Page all load with no console errors - discovered Media Library nav link 403s due to BlockSuperAdminWorkspaceAccess middleware (root cause confirmed in code)",
+    "Logout flow via UI dropdown menu for owner/manager/member/client - all redirect correctly to landing page, but discovered a background TimerWidget/NavigationTimer poller keeps hitting /timer/status after logout, getting HTML (login redirect) back instead of JSON, throwing a console SyntaxError",
+    "NOT yet tested: Bugs CRUD, Timesheet create/submit/approve cycle, Invoice CRUD, Budget CRUD, Expense CRUD, Contract create/edit (owner), Notes/KB CRUD, Forms builder+fill, AI agent usage, Chat messaging, Zoom/Google meeting scheduling UI (out of scope: live session creation), search/filter/pagination correctness, file upload/download, cross-workspace isolation (only one workspace exists in this test DB so could not verify), payment gateway UI (out of scope: real charge completion)"
+  ]
+}
