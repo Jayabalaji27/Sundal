@@ -108,6 +108,11 @@ class Project extends Model
         return $this->hasMany(ProjectExpense::class);
     }
 
+    public function bugs(): HasMany
+    {
+        return $this->hasMany(Bug::class);
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
@@ -231,6 +236,26 @@ class Project extends Model
     /**
      * Boot the model and set up event listeners for cascade deletion
      */
+    /**
+     * Counts of records that go with this project when it's deleted (shown in the
+     * delete confirmation). Invoices are financial records and are never deleted
+     * with a project - a project that has any blocks deletion instead.
+     */
+    public function deletionSummary(): array
+    {
+        return [
+            'tasks' => $this->tasks()->count(),
+            'bugs' => $this->bugs()->count(),
+            'milestones' => $this->milestones()->count(),
+            'budgets' => $this->budget()->count(),
+            'expenses' => $this->expenses()->count(),
+            'timesheet_entries' => $this->timesheetEntries()->count(),
+            'attachments' => $this->attachments()->count(),
+            'notes' => $this->notes()->count(),
+            'invoices' => $this->invoices()->count(),
+        ];
+    }
+
     protected static function booted()
     {
         static::deleting(function ($project) {
@@ -257,6 +282,13 @@ class Project extends Model
                     $task->delete();
                 }
                 
+                // Delete bugs and their comments/attachments
+                foreach ($project->bugs()->get() as $bug) {
+                    $bug->comments()->delete();
+                    $bug->attachments()->delete();
+                    $bug->delete();
+                }
+
                 // Delete project attachments
                 $project->attachments()->delete();
                 

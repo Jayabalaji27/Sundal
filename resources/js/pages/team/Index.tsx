@@ -28,6 +28,7 @@ interface PendingInvitation {
     email: string;
     role: string;
     expires_at: string;
+    is_expired?: boolean;
     invited_by: { name: string } | null;
     created_at: string;
 }
@@ -206,8 +207,12 @@ export default function TeamIndex({ workspace, members, pendingInvitations, isOw
                                     <div className="min-w-0">
                                         <span className="font-medium break-all">{inv.email}</span>{' '}
                                         <Badge variant="outline">{t(ROLE_LABEL[inv.role] ?? inv.role)}</Badge>
+                                        {inv.is_expired && (
+                                            <Badge variant="secondary" className="ml-1 text-muted-foreground">{t('Expired')}</Badge>
+                                        )}
                                     </div>
-                                    {canInvite && (
+                                    {/* Managers can only cancel the Member invitations they're allowed to send */}
+                                    {canInvite && invitableRoles.includes(inv.role) && (
                                         <Button size="sm" variant="ghost" onClick={() => cancelInvitation(inv)}>
                                             {t('Cancel')}
                                         </Button>

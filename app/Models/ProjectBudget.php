@@ -68,9 +68,22 @@ class ProjectBudget extends Model
         return $this->hasMany(BudgetRevision::class)->latest();
     }
 
+    /**
+     * Approved project expenses that count against this budget: those dated inside
+     * the budget period (start_date..end_date, either bound optional). Expenses
+     * aren't linked to a budget directly, so the period is what ties them to it.
+     */
+    public function spentExpenses()
+    {
+        return $this->expenses()
+            ->where('status', 'approved')
+            ->when($this->start_date, fn ($q) => $q->whereDate('expense_date', '>=', $this->start_date->toDateString()))
+            ->when($this->end_date, fn ($q) => $q->whereDate('expense_date', '<=', $this->end_date->toDateString()));
+    }
+
     public function getTotalSpentAttribute()
     {
-        return $this->expenses()->where('status', 'approved')->sum('amount');
+        return $this->spentExpenses()->sum('amount');
     }
 
     public function getRemainingBudgetAttribute()

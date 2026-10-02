@@ -182,6 +182,18 @@ class NoteController extends Controller
         $data['workspace'] = $currentWorkspace->id;
         $data['created_by'] = Auth::user()->id;
 
+        // Guard against double submits: the same user posting an identical note in
+        // the same workspace within a minute is a duplicate, not a new note.
+        $isDuplicate = Note::where('workspace', $data['workspace'])
+            ->where('created_by', $data['created_by'])
+            ->where('title', $data['title'])
+            ->where('text', $data['text'])
+            ->where('created_at', '>=', now()->subMinute())
+            ->exists();
+        if ($isDuplicate) {
+            return redirect()->route('notes.index')->with('warning', __('This note was already created.'));
+        }
+
         Note::create($data);
 
         return redirect()->route('notes.index')->with('success', 'Note created successfully!');

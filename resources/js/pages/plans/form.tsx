@@ -238,11 +238,13 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
                       id="max_users_per_workspace"
                       name="max_users_per_workspace"
                       type="number"
+                      min="0"
                       placeholder='e.g. 10'
                       value={formData.max_users_per_workspace}
                       onChange={handleChange}
                       className={errors.max_users_per_workspace ? 'border-red-500' : ''}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">{t("0 = unlimited")}</p>
                     {errors.max_users_per_workspace && <p className="text-sm text-red-600 mt-1">{errors.max_users_per_workspace}</p>}
                   </div>
 
@@ -252,11 +254,13 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
                       id="max_clients_per_workspace"
                       name="max_clients_per_workspace"
                       type="number"
+                      min="0"
                       placeholder='e.g. 5'
                       value={formData.max_clients_per_workspace}
                       onChange={handleChange}
                       className={errors.max_clients_per_workspace ? 'border-red-500' : ''}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">{t("0 = unlimited")}</p>
                     {errors.max_clients_per_workspace && <p className="text-sm text-red-600 mt-1">{errors.max_clients_per_workspace}</p>}
                   </div>
 
@@ -266,6 +270,7 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
                       id="max_managers_per_workspace"
                       name="max_managers_per_workspace"
                       type="number"
+                      min="1"
                       placeholder='e.g. 2'
                       value={formData.max_managers_per_workspace}
                       onChange={handleChange}
@@ -280,6 +285,7 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
                       id="max_projects_per_workspace"
                       name="max_projects_per_workspace"
                       type="number"
+                      min="1"
                       placeholder='e.g. 10'
                       value={formData.max_projects_per_workspace}
                       onChange={handleChange}
@@ -310,11 +316,13 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
                       name="storage_limit"
                       type="number"
                       step="0.01"
+                      min="0"
                       placeholder='e.g. 10'
                       value={formData.storage_limit}
                       onChange={handleChange}
                       className={errors.storage_limit ? 'border-red-500' : ''}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">{t("0 = unlimited")}</p>
                     {errors.storage_limit && <p className="text-sm text-red-600 mt-1">{errors.storage_limit}</p>}
                   </div>
                 </>

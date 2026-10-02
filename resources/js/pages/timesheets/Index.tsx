@@ -21,6 +21,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface Timesheet {
     id: number;
+    user_id: number;
     start_date: string;
     end_date: string;
     status: string;
@@ -337,7 +338,8 @@ export default function TimesheetsIndex({ timesheets, members, projects = [], ov
             icon: 'Send',
             action: 'submit',
             className: 'text-blue-500 hover:text-blue-700',
-            condition: (row: any) => hasPermission(userPermissions, 'timesheet_submit') && row.status === 'draft'
+            // Only the timesheet's own user submits it; others approve/reject it
+            condition: (row: any) => hasPermission(userPermissions, 'timesheet_submit') && row.status === 'draft' && row.user_id === auth?.user?.id
         },
         {
             label: t('Delete'),
@@ -690,7 +692,7 @@ export default function TimesheetsIndex({ timesheets, members, projects = [], ov
                                         </Tooltip>
                                     )}
                                     
-                                    {hasPermission(userPermissions, 'timesheet_submit') && timesheet.status === 'draft' && (
+                                    {hasPermission(userPermissions, 'timesheet_submit') && timesheet.status === 'draft' && timesheet.user_id === auth?.user?.id && (
                                         <Button 
                                             size="sm"
                                             onClick={() => handleAction('submit', timesheet.id)}

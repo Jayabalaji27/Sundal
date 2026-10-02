@@ -35,4 +35,13 @@ class Setting extends BaseModel
     {
         return $this->belongsTo(Workspace::class);
     }
+
+    protected static function booted(): void
+    {
+        // settings() caches each user/workspace's settings for 5 minutes; without
+        // this a saved toggle (e.g. Landing Page off) kept its old value until expiry.
+        $forget = fn (Setting $setting) => \Illuminate\Support\Facades\Cache::forget("settings_{$setting->user_id}_{$setting->workspace_id}");
+        static::saved($forget);
+        static::deleted($forget);
+    }
 }

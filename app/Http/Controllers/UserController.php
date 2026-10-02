@@ -311,6 +311,14 @@ class UserController extends BaseController
         $perPage = $request->has('per_page') ? (int) $request->per_page : 10;
         $loginHistories = $loginHistoriesQuery->paginate($perPage)->withQueryString();
 
+        // users.type is 'company' for every self-registered account (including invited
+        // managers/members/clients), so label each user by their workspace role instead.
+        $loginHistories->getCollection()->each(function ($log) {
+            if ($log->user) {
+                $log->user->setAttribute('role_label', $this->userRoleLabel($log->user));
+            }
+        });
+
         return Inertia::render('users/all-logs', [
             'loginHistories' => $loginHistories,
             'filters' => [
@@ -390,5 +398,20 @@ class UserController extends BaseController
             ]);
         }
         return response()->json(['success' => false], 400);
+    }
+
+    private function userRoleLabel(User $user): string
+    {
+        if ($user->isSuperAdmin()) {
+            return __('Superadmin');
+        }
+
+        return match ($user->getCurrentWorkspaceRole()) {
+            'owner' => __('Company'),
+            'manager' => __('Manager'),
+            'member' => __('Member'),
+            'client' => __('Client'),
+            default => ucfirst((string) $user->type),
+        };
     }
 }

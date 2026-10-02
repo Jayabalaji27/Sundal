@@ -235,9 +235,8 @@ export default function ContractShow() {
         router.put(route('contracts.change-status', contract.id), {
             status: newStatus
         }, {
-            onSuccess: () => {
-                toast.success('Contract status updated successfully');
-            },
+            // Success / "already accepted" messages come from the server flash
+            // (FlashMessages), so no local success toast here.
             onError: () => {
                 toast.error('Failed to update contract status');
             }

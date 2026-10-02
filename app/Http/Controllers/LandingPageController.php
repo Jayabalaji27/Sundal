@@ -64,13 +64,14 @@ class LandingPageController extends Controller
                 'name' => $plan->name,
                 'price' => $plan->price,
                 'yearly_price' => $plan->yearly_price,
+                'yearly_savings_percent' => $plan->yearlySavingsPercent(),
                 'duration' => $plan->duration,
                 'description' => $plan->description,
                 'features' => $features,
                 'stats' => [
                     'workspaces' => $plan->workspace_limit ?: 'Unlimited',
                     'users' => $plan->max_users_per_workspace ?: 'Unlimited',
-                    'storage' => $plan->storage_limit ? $plan->storage_limit . ' GB' : 'Unlimited',
+                    'storage' => $plan->formattedStorage(),
                     'projects' => $plan->max_projects_per_workspace ?: 'Unlimited'
                 ],
                 'is_plan_enable' => $plan->is_plan_enable,

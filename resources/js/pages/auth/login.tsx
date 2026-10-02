@@ -1,4 +1,5 @@
 import { useForm, router, usePage } from '@inertiajs/react';
+import { isRegistrationEnabled } from '@/utils/helpers';
 import { Mail, Lock } from 'lucide-react';
 import { FormEventHandler, useState, useEffect } from 'react';
 
@@ -271,7 +272,7 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                     </div>
                 )}
 
-                {(pageProps.isSaasMode) && (
+                {(pageProps.isSaasMode && isRegistrationEnabled(pageProps)) && (
                     <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-6">
                         {t("Don't have an account?")}{' '}
                         <TextLink 

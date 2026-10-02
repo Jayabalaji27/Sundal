@@ -46,7 +46,7 @@ class NotificationController extends Controller
 
     private function workspaceNotifications($user): MorphMany
     {
-        return $user->notifications()->where('data->workspace_id', $user->current_workspace_id);
+        return $user->workspaceNotifications();
     }
 
     public static function format(DatabaseNotification $notification): array

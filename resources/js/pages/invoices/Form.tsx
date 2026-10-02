@@ -477,7 +477,7 @@ export default function InvoiceForm({ invoice, projects, clients, currencies, ta
                                                         <Input
                                                             type="number"
                                                             step="0.01"
-                                                            min="0"
+                                                            min="0.01"
                                                             value={item.amount}
                                                             onChange={(e) => handleItemChange(index, 'amount', parseFloat(e.target.value) || 0)}                                                        />
                                                     </div>

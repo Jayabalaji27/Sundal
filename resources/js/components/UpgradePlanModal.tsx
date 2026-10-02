@@ -18,6 +18,7 @@ interface Plan {
   features?: string[];
   is_active?: boolean;
   is_current?: boolean;
+  yearly_savings_percent?: number;
 }
 
 interface UpgradePlanModalProps {
@@ -69,6 +70,7 @@ export function UpgradePlanModal({
   };
   
   const isYearly = billingCycle === 'yearly';
+  const maxYearlySavings = Math.max(0, ...(plans || []).map(plan => plan.yearly_savings_percent ?? 0));
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -100,9 +102,9 @@ export function UpgradePlanModal({
             )}>
               {t("Yearly")}
             </span>
-            {isYearly && (
+            {isYearly && maxYearlySavings > 0 && (
               <Badge variant="secondary" className="ml-2 bg-green-100 text-green-700 border-0 text-xs font-medium">
-                {t("Save up to 20%")}
+                {t("Save up to {{percent}}%", { percent: maxYearlySavings })}
               </Badge>
             )}
           </div>

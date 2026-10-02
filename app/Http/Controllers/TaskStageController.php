@@ -43,6 +43,8 @@ class TaskStageController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'color' => 'required|string|max:7',
+            // Optional: when omitted, TaskStage infers it from the name (Done/Completed)
+            'is_completed' => 'sometimes|boolean',
         ]);
 
         $maxOrder = TaskStage::forWorkspace(auth()->user()->current_workspace_id)->max('order') ?? 0;
@@ -64,6 +66,7 @@ class TaskStageController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'color' => 'required|string|max:7',
+            'is_completed' => 'sometimes|boolean',
         ]);
 
         $taskStage->update($validated);

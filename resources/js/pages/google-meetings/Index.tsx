@@ -168,7 +168,7 @@ export default function GoogleMeetingIndex() {
                         <p className="text-gray-500 mb-4">
                             {canConfigureGoogleMeet 
                                 ? t('Please configure your Google Meet API credentials in Settings to use this feature.')
-                                : t('Google Meet integration has not been configured yet. Please contact your admin or manager to set it up in Settings.')
+                                : t('Google Meet integration has not been configured yet. Ask your workspace owner to configure Google Meet.')
                             }
                         </p>
                         <div className="flex items-center justify-center gap-2">

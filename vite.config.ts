@@ -37,8 +37,9 @@ export default defineConfig({
         host: '0.0.0.0',
         // Browsers on other LAN devices can't resolve 0.0.0.0, so the HMR
         // websocket needs this machine's actual LAN IP to connect back to.
+        // Override with VITE_HMR_HOST (e.g. 127.0.0.1) when running on another machine.
         hmr: {
-            host: '192.168.88.5',
+            host: process.env.VITE_HMR_HOST || '192.168.88.5',
         },
         headers: {
             'Access-Control-Allow-Origin': '*',

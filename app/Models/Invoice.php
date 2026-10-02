@@ -115,10 +115,70 @@ class Invoice extends Model
         return $query->where('status', $status);
     }
 
+    /**
+     * Statuses an invoice can be overdue in: it has been issued to the client and
+     * still has a balance. Drafts were never sent, so they're never overdue.
+     */
+    public const OVERDUE_ELIGIBLE_STATUSES = ['sent', 'viewed', 'partial_paid', 'overdue'];
+
     public function scopeOverdue($query)
     {
-        return $query->where('due_date', '<', now())
-                    ->whereNotIn('status', ['paid', 'cancelled']);
+        return $query->whereIn('status', self::OVERDUE_ELIGIBLE_STATUSES)
+                    ->whereNotNull('due_date')
+                    ->whereDate('due_date', '<', now()->toDateString())
+                    ->whereColumn('total_amount', '>', 'paid_amount');
+    }
+
+    public function scopeNotOverdue($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('due_date')
+                ->orWhereDate('due_date', '>=', now()->toDateString())
+                ->orWhereColumn('total_amount', '<=', 'paid_amount');
+        });
+    }
+
+    /**
+     * Status tab buckets used by the invoices list. "overdue" is its own bucket,
+     * so sent/partial_paid exclude overdue invoices and the buckets add up to "all"
+     * (cancelled invoices aside).
+     */
+    public function scopeInStatusBucket($query, string $bucket)
+    {
+        return match ($bucket) {
+            'overdue' => $query->overdue(),
+            'sent' => $query->whereIn('status', ['sent', 'viewed', 'overdue'])->notOverdue(),
+            'partial_paid' => $query->where('status', 'partial_paid')->notOverdue(),
+            default => $query->where('status', $bucket),
+        };
+    }
+
+    /**
+     * Invoices a workspace role may see - shared by the invoices list and the
+     * dashboard widget so the two can't drift apart.
+     */
+    public function scopeVisibleToRole($query, User $user, ?string $role)
+    {
+        if (in_array($role, ['manager', 'member'])) {
+            $onMyProjects = function ($projQ) use ($user) {
+                $projQ->where(function ($projectQuery) use ($user) {
+                    $projectQuery->whereHas('members', function ($memberQuery) use ($user) {
+                        $memberQuery->where('user_id', $user->id);
+                    })->orWhere('created_by', $user->id);
+                });
+            };
+
+            return $query->whereHas('project', $onMyProjects)
+                ->when($role === 'member', fn ($q) => $q->where('status', '!=', 'draft'));
+        }
+
+        if ($role === 'client') {
+            // Clients only see sent invoices addressed to them
+            return $query->where('client_id', $user->id)->where('status', '!=', 'draft');
+        }
+
+        // Owners see all invoices
+        return $query;
     }
 
     public function scopePending($query)
@@ -150,7 +210,10 @@ class Invoice extends Model
 
     public function getIsOverdueAttribute()
     {
-        return $this->due_date < now() && !in_array($this->status, ['paid', 'cancelled']);
+        return $this->due_date
+            && in_array($this->status, self::OVERDUE_ELIGIBLE_STATUSES)
+            && $this->due_date->lt(now()->startOfDay())
+            && (float) $this->total_amount > (float) $this->paid_amount;
     }
 
     public function getDaysOverdueAttribute()
@@ -286,8 +349,8 @@ class Invoice extends Model
         } elseif ($totalPaid > 0) {
             $this->update(['status' => 'partial_paid', 'paid_amount' => $totalPaid]);
         } else {
-            // Check if overdue
-            if ($this->due_date < now() && !in_array($this->status, ['paid', 'cancelled'])) {
+            // Check if overdue (drafts were never issued, so they can't be overdue)
+            if ($this->due_date < now() && in_array($this->status, ['sent', 'viewed'])) {
                 $this->update(['status' => 'overdue']);
             }
         }

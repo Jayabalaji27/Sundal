@@ -80,6 +80,9 @@ export default function NoteFormModal({ isOpen, onClose, note, mode, users }: No
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        // Ignore double clicks / repeated Enter while a request is in flight -
+        // that's how identical duplicate notes were being created.
+        if (isSubmitting) return;
         setIsSubmitting(true);
 
         const newErrors: { [key: string]: string } = {};
@@ -118,12 +121,11 @@ export default function NoteFormModal({ isOpen, onClose, note, mode, users }: No
         router[method](url, submitData, {
             onSuccess: () => {
                 onClose();
-                setIsSubmitting(false);
             },
             onError: (errors) => {
                 setErrors(errors);
-                setIsSubmitting(false);
-            }
+            },
+            onFinish: () => setIsSubmitting(false),
         });
     };
 
@@ -278,7 +280,7 @@ export default function NoteFormModal({ isOpen, onClose, note, mode, users }: No
                         <Button type="button" variant="outline" onClick={onClose}>
                             {t('Cancel')}
                         </Button>
-                        <Button type="submit">
+                        <Button type="submit" disabled={isSubmitting}>
                             {(mode === 'edit' ? t('Update') : t('Create'))}
                         </Button>
                     </DialogFooter>

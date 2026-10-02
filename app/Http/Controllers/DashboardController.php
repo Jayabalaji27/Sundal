@@ -251,7 +251,7 @@ class DashboardController extends Controller
             $query = \App\Models\Task::whereHas('project', function ($q) use ($workspace, $user) {
                 $q->where('workspace_id', $workspace->id)->visibleTo($user);
             })
-                ->where('progress', '<', 100)
+                ->open()
                 ->whereNotNull('end_date')
                 ->whereBetween('end_date', [now()->startOfDay(), now()->addDays(7)->endOfDay()]);
 
@@ -413,9 +413,14 @@ class DashboardController extends Controller
                     }
                 }])->get();
             
-            $pending = $stages->first() ? $stages->first()->tasks_count : 0;
-            $inProgress = $stages->skip(1)->first() ? $stages->skip(1)->first()->tasks_count : 0;
-            $completed = $stages->skip(2)->first() ? $stages->skip(2)->first()->tasks_count : 0;
+            // "Completed" = tasks in a completed stage (TaskStage::is_completed, e.g.
+            // Done) - not whichever stage happens to be third. Pending = the first
+            // open stage; everything else open is in progress.
+            $stages = $stages->sortBy('order')->values();
+            $completed = $stages->where('is_completed', true)->sum('tasks_count');
+            $openStages = $stages->where('is_completed', false)->values();
+            $pending = $openStages->first() ? $openStages->first()->tasks_count : 0;
+            $inProgress = $openStages->skip(1)->sum('tasks_count');
             
             return [
                 'total' => $total,
@@ -472,8 +477,8 @@ class DashboardController extends Controller
                     $q->where('workspace_id', $workspace->id)->visibleTo($user);
                 })
                 ->where('assigned_to', $user->id)
-                ->where('progress', '<', 100)
-                ->with(['project:id,title', 'taskStage:id,name,color'])
+                ->open()
+                ->with(['project:id,title', 'taskStage:id,name,color,is_completed'])
                 ->orderByRaw("FIELD(priority, 'critical', 'high', 'medium', 'low')")
                 ->orderByRaw('end_date IS NULL, end_date asc')
                 ->limit(8)
@@ -484,7 +489,7 @@ class DashboardController extends Controller
                         'title' => $task->title,
                         'priority' => $task->priority,
                         'end_date' => $task->end_date,
-                        'is_overdue' => $task->end_date && $task->end_date->isPast(),
+                        'is_overdue' => $task->isOverdue(),
                         'project' => $task->project ? ['id' => $task->project->id, 'title' => $task->project->title] : null,
                         'task_stage_id' => $task->task_stage_id,
                         'stage_name' => $task->taskStage->name ?? null,
@@ -533,21 +538,11 @@ class DashboardController extends Controller
                 }
             });
             
-            $expenseQuery = \App\Models\ProjectExpense::whereHas('project', function($q) use ($workspace, $user, $role) {
-                $q->where('workspace_id', $workspace->id);
-                if ($role === 'client') {
-                    $q->whereHas('clients', function($m) use ($user) {
-                        $m->where('user_id', $user->id);
-                    });
-                } elseif ($role !== 'company') {
-                    $q->whereHas('members', function($m) use ($user) {
-                        $m->where('user_id', $user->id);
-                    });
-                }
-            })->where('status', 'approved');
-            
-            $totalBudget = $budgetQuery->sum('total_budget') ?? 0;
-            $spent = $expenseQuery->sum('amount') ?? 0;
+            // Spent = each budget's own approved expenses inside its period (see
+            // ProjectBudget::spentExpenses), so it matches the Budgets page.
+            $budgets = $budgetQuery->get();
+            $totalBudget = $budgets->sum('total_budget') ?? 0;
+            $spent = $budgets->sum(fn ($budget) => (float) $budget->total_spent);
             $remaining = $totalBudget - $spent;
             $utilization = $totalBudget > 0 ? ($spent / $totalBudget) * 100 : 0;
             
@@ -569,24 +564,16 @@ class DashboardController extends Controller
                 return ['total' => 0, 'paid' => 0, 'pending' => 0, 'overdue' => 0];
             }
             
-            $baseQuery = \App\Models\Invoice::whereHas('project', function($q) use ($workspace, $user, $role) {
-                $q->where('workspace_id', $workspace->id);
-                if ($role === 'client') {
-                    $q->whereHas('clients', function($m) use ($user) {
-                        $m->where('user_id', $user->id);
-                    });
-                } elseif ($role !== 'company') {
-                    $q->whereHas('members', function($m) use ($user) {
-                        $m->where('user_id', $user->id);
-                    });
-                }
-            });
-            
+            // Same role scope as the /invoices list (a client only sees sent invoices
+            // addressed to them, not every invoice on their projects).
+            $baseQuery = \App\Models\Invoice::where('workspace_id', $workspace->id)
+                ->where('status', '!=', 'cancelled')
+                ->visibleToRole($user, $role === 'company' ? 'owner' : $role);
+
             $total = (clone $baseQuery)->count();
             $paid = (clone $baseQuery)->where('status', 'paid')->count();
-            $pending = (clone $baseQuery)->whereIn('status', ['draft', 'sent', 'viewed'])->count();
-            $overdue = (clone $baseQuery)->where('due_date', '<', now())
-                ->where('status', '!=', 'paid')->count();
+            $pending = (clone $baseQuery)->whereIn('status', ['draft', 'sent', 'viewed', 'partial_paid'])->notOverdue()->count();
+            $overdue = (clone $baseQuery)->overdue()->count();
             
             return [
                 'total' => $total,
@@ -889,10 +876,12 @@ class DashboardController extends Controller
     private function getCompanyStats()
     {
         try {
+            // Same rule as the Companies list: active = login enabled AND plan not expired.
             $total = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'company'))->count();
             $active = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'company'))
-                ->where('status', 'active')
-                ->orWhereNull('status')
+                ->where(fn ($q) => $q->where('status', 'active')->orWhereNull('status'))
+                ->where(fn ($q) => $q->whereNull('plan_expire_date')
+                    ->orWhere('plan_expire_date', '>=', now()))
                 ->count();
             $inactive = $total - $active;
             

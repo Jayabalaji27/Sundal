@@ -34,8 +34,11 @@ class CouponController extends BaseController
         if ($request->has('type') && $request->type !== 'all') {
             $query->where('type', $request->type);
         }
-        if ($request->has('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
+        if ($request->status === 'expired') {
+            $query->expired();
+        } elseif ($request->has('status') && $request->status !== 'all') {
+            $query->where('status', $request->status)
+                ->when($request->status === '1', fn ($q) => $q->notExpired());
         }
 
         // Apply sorting
@@ -166,8 +169,8 @@ class CouponController extends BaseController
             ], 400);
         }
         
-        // Check if coupon is expired
-        if ($coupon->expiry_date && $coupon->expiry_date < now()) {
+        // Check if coupon is expired (valid through the end of its expiry date)
+        if ($coupon->is_expired) {
             return response()->json([
                 'valid' => false,
                 'message' => __('Coupon has expired')

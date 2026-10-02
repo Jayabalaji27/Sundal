@@ -119,7 +119,15 @@ class SettingsController extends Controller
         // Custom role management (create/clone/edit) is Phase 5 — deliberately not exposed here yet.
         // Only superadmin/company reach this controller (settings_view), so no extra scoping is needed —
         // Role::withPermissionCheck() is skipped because it assumes a `created_by` column the roles table doesn't have.
+        // Super Admin is a platform role - only superadmins see it. Workspace owners see
+        // every workspace role; everyone else only sees their own.
+        $isSuperAdmin = $user->isSuperAdmin();
+        $workspaceRole = $user->getCurrentWorkspaceRole();
+        $currentRoleName = $isSuperAdmin ? 'superadmin' : ($workspaceRole === 'owner' ? 'company' : $workspaceRole);
+
         $roles = Role::with('permissions:id,name,module')
+            ->when(!$isSuperAdmin, fn ($q) => $q->where('name', '!=', 'superadmin'))
+            ->when(!$isSuperAdmin && $workspaceRole !== 'owner', fn ($q) => $q->where('name', $currentRoleName))
             ->get(['id', 'name', 'label'])
             ->map(fn ($role) => [
                 'id' => $role->id,
@@ -127,7 +135,10 @@ class SettingsController extends Controller
                 'label' => $role->label ?? $role->name,
                 'permission_count' => $role->permissions->count(),
                 'modules' => $role->permissions->pluck('module')->unique()->values(),
-            ]);
+                'is_current' => $role->name === $currentRoleName,
+            ])
+            ->sortByDesc('is_current')
+            ->values();
 
         return Inertia::render('settings/index', [
             'systemSettings' => $systemSettings,

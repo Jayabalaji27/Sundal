@@ -30,6 +30,31 @@ class Coupon extends Model
         'status' => 'boolean'
     ];
 
+    protected $appends = ['is_expired'];
+
+    /** A coupon is valid through the end of its expiry date. */
+    public function getIsExpiredAttribute(): bool
+    {
+        return $this->expiry_date !== null && $this->expiry_date->lt(now()->startOfDay());
+    }
+
+    public function scopeNotExpired($query)
+    {
+        return $query->where(fn ($q) => $q->whereNull('expiry_date')
+            ->orWhereDate('expiry_date', '>=', now()->toDateString()));
+    }
+
+    public function scopeExpired($query)
+    {
+        return $query->whereNotNull('expiry_date')->whereDate('expiry_date', '<', now()->toDateString());
+    }
+
+    /** Enabled and not past its expiry date - the only coupons that may be applied. */
+    public function scopeUsable($query)
+    {
+        return $query->where('status', 1)->notExpired();
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

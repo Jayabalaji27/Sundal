@@ -42,7 +42,10 @@ class TeamController extends Controller
         $pendingInvitations = $workspace->pendingInvitations()
             ->with('invitedBy:id,name')
             ->latest()
-            ->get(['id', 'email', 'role', 'expires_at', 'invited_by', 'created_at']);
+            ->get(['id', 'email', 'role', 'expires_at', 'invited_by', 'created_at'])
+            // Expired invitations can't be accepted and don't count towards plan
+            // limits - flag them so the page doesn't present them as pending.
+            ->each(fn ($invitation) => $invitation->setAttribute('is_expired', $invitation->isExpired()));
 
         return Inertia::render('team/Index', [
             'workspace' => $workspace->only('id', 'name'),

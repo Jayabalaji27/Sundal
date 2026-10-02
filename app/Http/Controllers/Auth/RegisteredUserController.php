@@ -25,6 +25,8 @@ class RegisteredUserController extends Controller
      */
     public function create(Request $request): Response
     {
+        abort_unless(isRegistrationEnabled(), 404);
+
 
         $referralCode = $request->get('ref');
         $encryptedPlanId = $request->get('plan');
@@ -60,6 +62,9 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        // Self sign-up switched off in Settings -> General -> User Registration.
+        // (Invited users create their account through the invitation link instead.)
+        abort_unless(isRegistrationEnabled(), 404);
 
         $request->validate([
             'name' => 'required|string|max:255',

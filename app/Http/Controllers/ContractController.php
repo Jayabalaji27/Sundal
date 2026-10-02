@@ -269,6 +269,28 @@ class ContractController extends Controller
     {
         $this->authorizePermission('contract_change_status');
         $request->validate(['status' => 'required|in:pending,sent,accept,decline,expired']);
+
+        $user = auth()->user();
+        $statusLabels = ['pending' => 'pending', 'sent' => 'sent', 'accept' => 'accepted', 'decline' => 'declined', 'expired' => 'expired'];
+
+        if ($contract->status === $request->status) {
+            return redirect()->back()->with('warning', __('Contract is already :status.', ['status' => $statusLabels[$contract->status] ?? $contract->status]));
+        }
+
+        // A client may only respond to their own contract (accept or decline), and
+        // only while it's still awaiting a response - an accepted or declined
+        // contract is final from the client's side.
+        if ($user->currentWorkspace?->getMemberRole($user) === 'client') {
+            abort_if((int) $contract->client_id !== (int) $user->id, 403);
+
+            if (!in_array($request->status, ['accept', 'decline'], true)) {
+                return redirect()->back()->with('error', __('You can only accept or decline a contract.'));
+            }
+            if (in_array($contract->status, ['accept', 'decline', 'expired'], true)) {
+                return redirect()->back()->with('error', __('This contract is already :status and can no longer be changed.', ['status' => $statusLabels[$contract->status]]));
+            }
+        }
+
         $updates = ['status' => $request->status];
         if ($request->status === 'sent' && !$contract->sent_at)
             $updates['sent_at'] = now();

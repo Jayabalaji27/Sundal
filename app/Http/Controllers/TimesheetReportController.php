@@ -178,12 +178,12 @@ class TimesheetReportController extends Controller
         return $entries->groupBy('project_id')->map(function($projectEntries) {
             $project = $projectEntries->first()->project;
             $tasks = $project ? $project->tasks()->with('taskStage')->get() : collect();
-            $completedTasks = $tasks->where('taskStage.name', 'Done')->count();
+            $completedTasks = $tasks->filter(fn ($task) => $task->isCompleted())->count();
             $totalTasks = $tasks->count();
             
             return [
                 'project_name' => $project ? $project->title : 'Unknown Project',
-                'progress' => $project ? $project->progress : 0,
+                'progress' => $project ? $project->calculateProgress() : 0,
                 'status' => $project ? $project->status : 'unknown',
                 'total_hours' => $projectEntries->sum('hours'),
                 'billable_hours' => $projectEntries->where('is_billable', true)->sum('hours'),
@@ -201,20 +201,27 @@ class TimesheetReportController extends Controller
             $user = $userEntries->first()->user;
             $projectData = $userEntries->groupBy('project_id')->map(function($projectEntries) {
                 $project = $projectEntries->first()->project;
-                $tasks = $project ? $project->tasks()->where('assigned_to', $projectEntries->first()->user_id)->with('taskStage')->get() : collect();
+                // The tasks this member actually logged time against in the selected
+                // range - not every task currently assigned to them on the project.
+                $tasks = $projectEntries->groupBy('task_id')
+                    ->filter(fn ($taskEntries, $taskId) => $taskId && $taskEntries->first()->task)
+                    ->map(function ($taskEntries) {
+                        $task = $taskEntries->first()->task;
+                        return [
+                            'title' => $task->title,
+                            'status' => $task->taskStage ? $task->taskStage->name : 'No Stage',
+                            'priority' => $task->priority,
+                            'due_date' => $task->end_date,
+                            'hours' => $taskEntries->sum('hours'),
+                        ];
+                    })
+                    ->values();
                 
                 return [
                     'project_name' => $project ? $project->title : 'Unknown Project',
                     'hours' => $projectEntries->sum('hours'),
                     'billable_hours' => $projectEntries->where('is_billable', true)->sum('hours'),
-                    'tasks' => $tasks->map(function($task) {
-                        return [
-                            'title' => $task->title,
-                            'status' => $task->taskStage ? $task->taskStage->name : 'No Stage',
-                            'priority' => $task->priority,
-                            'due_date' => $task->end_date
-                        ];
-                    }),
+                    'tasks' => $tasks,
                     'entries' => $projectEntries->map(function($entry) {
                         return [
                             'date' => $entry->date,

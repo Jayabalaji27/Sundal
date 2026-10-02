@@ -229,6 +229,7 @@ class ProjectExpenseController extends Controller
     public function update(Request $request, ProjectExpense $expense)
     {
         $this->authorizePermission('expense_update');
+        abort_unless($this->memberMayChange($expense), 403, __('You can only edit your own expenses that have not been approved yet.'));
 
         $validated = $request->validate([
             'budget_category_id' => 'nullable|exists:budget_categories,id',
@@ -260,6 +261,7 @@ class ProjectExpenseController extends Controller
     public function destroy(ProjectExpense $expense)
     {
         $this->authorizePermission('expense_delete');
+        abort_unless($this->memberMayChange($expense), 403, __('You can only delete your own expenses that have not been approved yet.'));
 
         $expense->delete();
         return back()->with('success', __('Expense deleted successfully!'));
@@ -285,5 +287,21 @@ class ProjectExpenseController extends Controller
             ->get();
 
         return response()->json($tasks);
+    }
+
+    /**
+     * Members manage their own expenses only, and only until they're approved
+     * (approved expenses count against the budget). Owners/managers aren't limited.
+     */
+    private function memberMayChange(ProjectExpense $expense): bool
+    {
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+        if (!$workspace || $workspace->isOwner($user) || $workspace->getMemberRole($user) !== 'member') {
+            return true;
+        }
+
+        return (int) $expense->submitted_by === (int) $user->id
+            && in_array($expense->status, ['pending', 'requires_info'], true);
     }
 }

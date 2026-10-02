@@ -42,6 +42,7 @@ interface RoleSummary {
   label: string;
   permission_count: number;
   modules: string[];
+  is_current?: boolean;
 }
 
 /** Quick-access card for an integration/module that now lives inside Settings instead of the sidebar. */
@@ -83,13 +84,25 @@ export default function Settings() {
     }
   }, [isDemoMode]);
 
+  const canViewSettings = hasPermission('settings_view');
+  // Only show tabs that have something in them for this role (e.g. Managers have
+  // no Branding or Billing sections, so those tabs would be empty cards).
+  const tabHasContent: Record<string, boolean> = {
+    integrations: hasPermission('zapier_view_any') || hasPermission('api_key_view_any') || hasPermission('settings_google_calendar')
+      || (canViewSettings && ['settings_slack', 'settings_telegram', 'settings_webhook', 'settings_zoom', 'settings_google_meet'].some(p => hasPermission(p))),
+    branding: canViewSettings && hasPermission('settings_brand'),
+    billing: (canViewSettings && (hasPermission('settings_currency') || hasPermission('settings_payment')))
+      || hasPermission('tax_view_any') || hasPermission('settings_invoice'),
+    roles: roles.length > 0,
+    general: true,
+  };
   const tabs = [
     { key: 'integrations', label: t('Integrations') },
     { key: 'branding', label: t('Branding') },
     { key: 'billing', label: t('Billing') },
     { key: 'roles', label: t('Roles') },
     { key: 'general', label: t('General') },
-  ];
+  ].filter(tb => tabHasContent[tb.key]);
   // "Configure" buttons elsewhere in the app link to #<section-id> anchors that
   // live inside a tab panel (e.g. #zoom-settings is inside the Integrations tab),
   // not to a top-level tab key. Map those section ids to the tab that contains them
@@ -186,13 +199,13 @@ export default function Settings() {
           {(hasPermission('settings_view') && hasPermission('settings_webhook')) && (
             <section id="webhook-settings"><WebhookSettings webhooks={webhooks} /></section>
           )}
-          {(hasPermission('settings_view') && hasPermission('zoom_meeting_view_any')) && (
+          {(hasPermission('settings_view') && hasPermission('settings_zoom')) && (
             <section id="zoom-settings"><ZoomSettings settings={systemSettings} /></section>
           )}
           {hasPermission('settings_google_calendar') && (
             <section id="google-calendar-settings"><GoogleCalendarSettings settings={systemSettings} /></section>
           )}
-          {(hasPermission('settings_view') && hasPermission('google_meeting_view_any')) && (
+          {(hasPermission('settings_view') && hasPermission('settings_google_meet')) && (
             <section id="google-meet-settings"><GoogleMeetSettings settings={systemSettings} /></section>
           )}
         </TabsContent>
@@ -235,9 +248,12 @@ export default function Settings() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {roles.map((role: RoleSummary) => (
-              <Card key={role.id}>
+              <Card key={role.id} className={role.is_current ? 'border-primary ring-1 ring-primary' : undefined}>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">{role.label}</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    {role.label}
+                    {role.is_current && <Badge>{t('Your role')}</Badge>}
+                  </CardTitle>
                   <CardDescription>{role.permission_count} {t('permissions')}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-1.5">

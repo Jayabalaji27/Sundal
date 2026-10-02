@@ -97,7 +97,7 @@ function ClientPortalPanel({ project }: { project: any }) {
 
 export default function ProjectShow() {
     const { t } = useTranslation();
-    const { auth, project, budget = null, members, managers, clients, projectTasks = [], taskStages = [], projectBugs = [], projectTimesheets = [], canDeleteProject, attachmentFilters = {}, noteFilters = {}, activityFilters = {} } = usePage().props as any;
+    const { auth, project, budget = null, members, managers, clients, projectTasks = [], taskStages = [], projectBugs = [], projectTimesheets = [], canDeleteProject, userWorkspaceRole, attachmentFilters = {}, noteFilters = {}, activityFilters = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
     
     // Permission-based access control
@@ -841,11 +841,13 @@ export default function ProjectShow() {
                         </CardContent>
                     </Card>
 
-                    {/* AI Health Score */}
-                    <ProjectHealthWidget projectId={project.id} />
-
-                    {/* Scope Creep Detector */}
-                    <ScopeCreepWidget projectId={project.id} />
+                    {/* AI Health Score + Scope Creep are internal delivery metrics - not for clients */}
+                    {userWorkspaceRole !== 'client' && (
+                        <>
+                            <ProjectHealthWidget projectId={project.id} />
+                            <ScopeCreepWidget projectId={project.id} />
+                        </>
+                    )}
                 </div>
             </div>
 

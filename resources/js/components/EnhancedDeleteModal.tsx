@@ -12,6 +12,7 @@ interface EnhancedDeleteModalProps {
   warningMessage?: string;
   additionalInfo?: string[];
   isSubmitting?: boolean;
+  confirmDisabled?: boolean;
 }
 
 export function EnhancedDeleteModal({
@@ -22,7 +23,8 @@ export function EnhancedDeleteModal({
   entityName,
   warningMessage,
   additionalInfo = [],
-  isSubmitting = false
+  isSubmitting = false,
+  confirmDisabled = false
 }: EnhancedDeleteModalProps) {
   const { t } = useTranslation();
   
@@ -69,7 +71,7 @@ export function EnhancedDeleteModal({
             type="button"
             variant="destructive"
             onClick={onConfirm}
-            disabled={isSubmitting}
+            disabled={isSubmitting || confirmDisabled}
             className="bg-red-600 hover:bg-red-700"
           >
             <Trash2 className="h-4 w-4 mr-2" />

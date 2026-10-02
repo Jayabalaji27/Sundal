@@ -59,6 +59,12 @@ class CalendarController extends Controller
                             ->orWhere('created_by', $user->id);
                     });
                 }
+
+                // Clients can't open /tasks, so they only see task titles for projects
+                // whose shared settings explicitly expose tasks to them.
+                if ($userWorkspaceRole === 'client') {
+                    $tasksQuery->whereIn('project_id', $this->clientTaskVisibleProjectIds($user, $workspace->id));
+                }
             }
 
             $tasks = $tasksQuery->get()->map(function ($task) {
@@ -182,6 +188,11 @@ class CalendarController extends Controller
             abort(403, 'Task not found in current workspace.');
         }
 
+        if ($workspace->getMemberRole($user) === 'client'
+            && !in_array($task->project_id, $this->clientTaskVisibleProjectIds($user, $workspace->id))) {
+            abort(403, 'You do not have permission to perform this action.');
+        }
+
         $task->load([
             'project',
             'taskStage',
@@ -192,5 +203,19 @@ class CalendarController extends Controller
         return response()->json([
             'task' => $task
         ]);
+    }
+
+    /**
+     * Projects where the client is assigned and the project's shared settings
+     * have "Task" switched on.
+     */
+    private function clientTaskVisibleProjectIds(User $user, int $workspaceId): array
+    {
+        return Project::where('workspace_id', $workspaceId)
+            ->whereHas('clients', fn ($q) => $q->where('user_id', $user->id))
+            ->get(['id', 'shared_settings'])
+            ->filter(fn ($project) => !empty($project->shared_settings['task']))
+            ->pluck('id')
+            ->all();
     }
 }

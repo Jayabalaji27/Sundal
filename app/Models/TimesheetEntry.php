@@ -59,6 +59,18 @@ class TimesheetEntry extends Model
         return $query->whereDate('date', $date);
     }
 
+    public const MIN_HOURS = 0.25;
+    public const MAX_HOURS_PER_DAY = 24;
+
+    /** Hours a user has already logged on a date, optionally ignoring some entries (being edited). */
+    public static function hoursLoggedOn(int $userId, $date, array $excludeIds = []): float
+    {
+        return (float) static::where('user_id', $userId)
+            ->whereDate('date', \Carbon\Carbon::parse($date)->toDateString())
+            ->when($excludeIds, fn ($q) => $q->whereNotIn('id', $excludeIds))
+            ->sum('hours');
+    }
+
     public function calculateHours(): float
     {
         if ($this->start_time && $this->end_time) {

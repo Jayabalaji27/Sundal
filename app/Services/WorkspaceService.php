@@ -70,23 +70,25 @@ class WorkspaceService
     {
         // Normalize role mapping (frontend might send 'member' but we store as 'member')
         $normalizedRole = $this->normalizeRole($role);
-        
+
+        // "Already a member" must be checked before the plan limit - inviting an
+        // existing member should say so, not report a misleading plan limit.
+        $existingUser = User::where('email', $email)->first();
+
+        if ($existingUser && ($workspace->hasMember($existingUser) || $workspace->owner_id === $existingUser->id)) {
+            throw new \Exception(__('This user is already a member of this workspace.'));
+        }
+
+        if ($existingUser && $existingUser->type=='superadmin') {
+            throw new \Exception('This email is already registered.');
+        }
+
         // Check plan limits before inviting user (skip in non-SaaS mode)
         if (isSaasMode()) {
             $limitCheck = $this->planLimitService->canAddUserToWorkspace($workspace, $normalizedRole);
             if (!$limitCheck['allowed']) {
                 throw new \Exception($limitCheck['message']);
             }
-        }
-
-        $existingUser = User::where('email', $email)->first();
-        
-        if ($existingUser && $workspace->hasMember($existingUser)) {
-            throw new \Exception('User is already a member of this workspace');
-        }
-        
-        if ($existingUser && $existingUser->type=='superadmin') {
-            throw new \Exception('This email is already registered.');
         }
 
         $invitation = WorkspaceInvitation::create([

@@ -116,7 +116,8 @@ export default function AllUserLogs() {
       key: 'user.type', 
       label: t('User Type'),
       render: (_, row) => {
-        const userType = row.user?.type || '-';
+        // role_label = the user's workspace role (server-side); type is only a fallback
+        const userType = row.user?.role_label || row.user?.type || '-';
         return userType.charAt(0).toUpperCase() + userType.slice(1);
       }
     },

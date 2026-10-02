@@ -66,6 +66,7 @@ interface Plan {
   has_pending_request?: boolean;
   is_ai_enabled?: boolean;
   sort_order?: number;
+  yearly_savings_percent?: number;
 }
 
 interface AddonPlan {
@@ -104,6 +105,8 @@ export default function Plans({ plans: initialPlans, billingCycle: initialBillin
   const [isAddonSubscriptionModalOpen, setIsAddonSubscriptionModalOpen] = useState(false);
   const [selectedAddon, setSelectedAddon] = useState<AddonPlan | null>(null);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>(initialBillingCycle);
+  // Real per-plan yearly savings (server-computed) - no hard-coded percentage
+  const maxYearlySavings = Math.max(0, ...(initialPlans || []).map((plan: Plan) => plan.yearly_savings_percent ?? 0));
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<Plan | null>(null);
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
@@ -751,9 +754,11 @@ export default function Plans({ plans: initialPlans, billingCycle: initialBillin
                     className="px-6 py-2 text-sm font-medium data-[state=active]:bg-white data-[state=active]:dark:bg-gray-900 data-[state=active]:text-gray-900 data-[state=active]:dark:text-gray-100 data-[state=active]:shadow-sm rounded-md relative"
                   >
                     {t("Yearly")}
-                    <span className="ml-2 inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">
-                      {t("Save 20%")}
-                    </span>
+                    {maxYearlySavings > 0 && (
+                      <span className="ml-2 inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">
+                        {t("Save up to {{percent}}%", { percent: maxYearlySavings })}
+                      </span>
+                    )}
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -856,6 +861,11 @@ export default function Plans({ plans: initialPlans, billingCycle: initialBillin
                         /{t(plan.duration.toLowerCase())}
                       </span>
                     </div>
+                    {billingCycle === 'yearly' && (plan.yearly_savings_percent ?? 0) > 0 && (
+                      <span className="mt-2 inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">
+                        {t("Save {{percent}}%", { percent: plan.yearly_savings_percent })}
+                      </span>
+                    )}
                   </div>
 
                   {/* Description */}
@@ -893,7 +903,7 @@ export default function Plans({ plans: initialPlans, billingCycle: initialBillin
                           <Users className="h-4 w-4 text-emerald-500" />
                           <span className="text-sm text-gray-700 dark:text-gray-300">{t("Users/Workspace")}</span>
                         </div>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{plan.limits.users_per_workspace}</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{plan.limits.users_per_workspace || t('Unlimited')}</span>
                       </div>
 
                       <div className="flex items-center justify-between">
@@ -901,7 +911,7 @@ export default function Plans({ plans: initialPlans, billingCycle: initialBillin
                           <Users className="h-4 w-4 text-amber-500" />
                           <span className="text-sm text-gray-700 dark:text-gray-300">{t("Clients/Workspace")}</span>
                         </div>
-                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{plan.limits.clients_per_workspace}</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{plan.limits.clients_per_workspace || t('Unlimited')}</span>
                       </div>
 
                       <div className="flex items-center justify-between">
