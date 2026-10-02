@@ -49,6 +49,7 @@ class PlanController extends Controller
                 'legacy_addon_access' => $plan->legacy_addon_access,
                 'price' => $price,
                 'yearly_price' => $plan->yearly_price,
+                'yearly_savings_percent' => $plan->yearlySavingsPercent(),
                 'formattedPrice' => $formattedPrice,
                 'duration' => $duration,
                 'description' => $plan->description,
@@ -60,7 +61,7 @@ class PlanController extends Controller
                     'clients_per_workspace' => $plan->max_clients_per_workspace,
                     'managers_per_workspace' => $plan->max_managers_per_workspace,
                     'projects_per_workspace' => $plan->max_projects_per_workspace,
-                    'storage' => $plan->storage_limit . ' GB',
+                    'storage' => $plan->formattedStorage(),
                 ],
                 'status' => $plan->is_plan_enable === 'on',
                 'is_default' => $plan->is_default,
@@ -151,6 +152,7 @@ class PlanController extends Controller
             'is_plan_enable' => 'nullable|in:on,off',
             'is_default' => 'nullable|boolean',
         ]);
+        $this->ensureYearlyPriceNotAboveMonthly($validated);
 
         // Set default values for nullable fields
         $validated['plan_type'] = $validated['plan_type'] ?? 'base';
@@ -228,6 +230,7 @@ class PlanController extends Controller
             'is_plan_enable' => 'nullable|in:on,off',
             'is_default' => 'nullable|boolean',
         ]);
+        $this->ensureYearlyPriceNotAboveMonthly($validated);
 
         // Set default values for nullable fields
         $validated['enable_chatgpt'] = $validated['enable_chatgpt'] ?? 'off';
@@ -266,7 +269,23 @@ class PlanController extends Controller
         if ($plan->is_default) {
             return back()->with('error', __('Cannot delete the default plan.'));
         }
-        
+
+        // Don't orphan subscribers or in-flight purchases: they'd be left pointing
+        // at a plan that no longer exists.
+        $subscribers = \App\Models\User::where('plan_id', $plan->id)->count()
+            + \App\Models\User::where('addon_plan_id', $plan->id)->count();
+        $pendingRequests = \App\Models\PlanRequest::where('plan_id', $plan->id)->where('status', 'pending')->count();
+        $pendingOrders = \App\Models\PlanOrder::where('plan_id', $plan->id)->where('status', 'pending')->count();
+
+        if ($subscribers > 0 || $pendingRequests > 0 || $pendingOrders > 0) {
+            return back()->with('error', __('Cannot delete ":plan": :subscribers companies are subscribed to it and it has :requests pending requests and :orders pending orders. Move those companies to another plan and resolve the requests/orders first.', [
+                'plan' => $plan->name,
+                'subscribers' => $subscribers,
+                'requests' => $pendingRequests,
+                'orders' => $pendingOrders,
+            ]));
+        }
+
         $plan->delete();
         
         return redirect()->route('plans.index')->with('success', __('Plan deleted successfully.'));
@@ -322,6 +341,7 @@ class PlanController extends Controller
                 'name' => $plan->name,
                 'price' => $price,
                 'yearly_price' => $plan->yearly_price,
+                'yearly_savings_percent' => $plan->yearlySavingsPercent(),
                 'formatted_price' => '$' . number_format($price, 2),
                 'duration' => $billingCycle,
                 'description' => $plan->description,
@@ -333,7 +353,7 @@ class PlanController extends Controller
                     'clients_per_workspace' => $plan->max_clients_per_workspace,
                     'managers_per_workspace' => $plan->max_managers_per_workspace,
                     'projects_per_workspace' => $plan->max_projects_per_workspace,
-                    'storage' => $plan->storage_limit . ' GB',
+                    'storage' => $plan->formattedStorage(),
                 ],
                 'is_current' => $user->plan_id == $plan->id && $userPlanCycle === $billingCycle,
                 'is_trial_available' => $plan->is_trial === 'on' && $plan->trial_day > 0 && $user->is_trial === null && $user->trial_expire_date === null,
@@ -373,6 +393,7 @@ class PlanController extends Controller
                 'name' => $plan->name,
                 'price' => $price,
                 'yearly_price' => $plan->yearly_price,
+                'yearly_savings_percent' => $plan->yearlySavingsPercent(),
                 'formatted_price' => '$' . number_format($price, 2),
                 'duration' => $billingCycle,
                 'description' => $plan->description,
@@ -510,5 +531,24 @@ class PlanController extends Controller
         }
         
         return back()->withErrors(['error' => __('No pending request found')]);
+    }
+
+    /**
+     * A yearly price above 12 x the monthly price means yearly billing costs more
+     * than paying monthly - almost certainly a data-entry mistake.
+     */
+    private function ensureYearlyPriceNotAboveMonthly(array $validated): void
+    {
+        if (!isset($validated['yearly_price']) || $validated['yearly_price'] === null) {
+            return;
+        }
+
+        if ((float) $validated['yearly_price'] > (float) $validated['price'] * 12) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'yearly_price' => __('The yearly price can\'t be more than 12 × the monthly price (:max).', [
+                    'max' => number_format((float) $validated['price'] * 12, 2),
+                ]),
+            ]);
+        }
     }
 }

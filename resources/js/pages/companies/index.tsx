@@ -725,6 +725,7 @@ export default function Companies() {
                       <SelectItem value="all">{t("All Status")}</SelectItem>
                       <SelectItem value="active">{t("Active")}</SelectItem>
                       <SelectItem value="inactive">{t("Inactive")}</SelectItem>
+                      <SelectItem value="expired">{t("Plan expired")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -958,11 +959,13 @@ export default function Companies() {
                 {/* Status Badge */}
                 <div className="absolute top-4 right-4 z-10">
                   <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
-                    company.status === 'active'
-                      ? 'bg-green-50 text-green-700 ring-green-600/20'
-                      : 'bg-red-50 text-red-700 ring-red-600/20'
+                    company.plan_expired
+                      ? 'bg-amber-50 text-amber-700 ring-amber-600/20'
+                      : company.status === 'active'
+                        ? 'bg-green-50 text-green-700 ring-green-600/20'
+                        : 'bg-red-50 text-red-700 ring-red-600/20'
                   }`}>
-                    {company.status === 'active' ? t('Active') : t('Inactive')}
+                    {company.plan_expired ? t('Plan expired') : company.status === 'active' ? t('Active') : t('Inactive')}
                   </span>
                 </div>
 
@@ -1195,10 +1198,32 @@ export default function Companies() {
           fields: [
             { name: 'name', label: t('Company Name'), type: 'text', required: formMode !== 'view', placeholder: t('Enter company name') },
             { name: 'email', label: t('Email'), type: 'email', required: formMode !== 'view', placeholder: t('Enter company email') },
-            { 
-              name: 'login_enabled', 
-              label: t('Enable Login'), 
-              type: 'switch', 
+            {
+              name: 'plan_id',
+              label: t('Plan'),
+              type: 'select',
+              options: (plans || []).map((plan: any) => ({
+                value: String(plan.id),
+                label: plan.is_default ? `${plan.name} (${t('Default')})` : plan.name,
+              })),
+              defaultValue: String((plans || []).find((plan: any) => plan.is_default)?.id ?? ''),
+              conditional: (mode: string) => mode === 'create'
+            },
+            {
+              name: 'billing_cycle',
+              label: t('Billing Cycle'),
+              type: 'select',
+              options: [
+                { value: 'monthly', label: t('Monthly') },
+                { value: 'yearly', label: t('Yearly') },
+              ],
+              defaultValue: 'monthly',
+              conditional: (mode: string) => mode === 'create'
+            },
+            {
+              name: 'login_enabled',
+              label: t('Enable Login'),
+              type: 'switch',
               defaultValue: true,
               conditional: (mode: string) => mode === 'create'
             },

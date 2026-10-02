@@ -266,7 +266,7 @@ export default function Header({ settings, sectionData, customPages = [], brandC
                 >
                   {t('Login')}
                 </Link>
-                {(pageProps.isSaas && isRegistrationEnabled()) && (
+                {(pageProps.isSaas && isRegistrationEnabled(pageProps)) && (
                   <Link
                     href={route('register')}
                     className="px-6 py-2.5 rounded-lg text-sm font-semibold transition-colors border"
@@ -373,7 +373,7 @@ export default function Header({ settings, sectionData, customPages = [], brandC
                     >
                       {t('Login')}
                     </Link>
-                    {(pageProps.isSaas && isRegistrationEnabled()) && (
+                    {(pageProps.isSaas && isRegistrationEnabled(pageProps)) && (
                       <Link
                         href={route('register')}
                         className="block w-full text-center py-2.5 rounded-lg text-sm font-semibold transition-colors border"

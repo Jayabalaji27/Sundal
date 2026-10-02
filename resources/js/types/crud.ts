@@ -78,6 +78,7 @@ export interface EntityConfig {
     max?: number; // For number fields
     step?: number; // For number fields
     multiple?: boolean; // For media-picker and multi-select fields
+    defaultValue?: any; // Initial value in create mode (applied by CrudFormModal)
     options?: FilterOption[];
     relation?: {
       endpoint: string;

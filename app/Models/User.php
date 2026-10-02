@@ -571,6 +571,74 @@ class User extends BaseAuthenticatable implements MustVerifyEmail
         return $member?->role;
     }
 
+    /**
+     * Permission check that follows the user's role in their *current* workspace,
+     * mirroring HandleInertiaRequests::getUserPermissions().
+     *
+     * `type = 'company'` is an account type (every self-registered user gets it in
+     * SaaS mode), not a role — an invited manager/member/client often has it too.
+     * Blanket access therefore only applies to the owner of the current workspace.
+     */
+    public function hasWorkspacePermission(string $permission): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        $key = (string) $this->current_workspace_id;
+        if (!array_key_exists($key, $this->workspaceRoleCache)) {
+            $this->workspaceRoleCache[$key] = $this->getCurrentWorkspaceRole();
+        }
+        $role = $this->workspaceRoleCache[$key];
+
+        if ($role === 'owner') {
+            return true;
+        }
+
+        // Company account that hasn't set up / selected a workspace yet.
+        if ($role === null && $this->type === 'company' && !$this->current_workspace_id) {
+            return true;
+        }
+
+        if ($role !== null) {
+            return in_array($permission, $this->workspaceRolePermissionNames($role), true);
+        }
+
+        try {
+            return $this->hasPermissionTo($permission);
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist) {
+            return false;
+        }
+    }
+
+    /**
+     * Notifications for the current workspace that this user can act on. Chat
+     * notifications are dropped for roles without chat access so the bell never
+     * links to a 403 page.
+     */
+    public function workspaceNotifications()
+    {
+        return $this->notifications()
+            ->where('data->workspace_id', $this->current_workspace_id)
+            ->when(!$this->hasWorkspacePermission('chat_view'), fn ($q) => $q->where(function ($q) {
+                $q->whereNull('data->type')->orWhere('data->type', '!=', 'chat_message');
+            }));
+    }
+
+    /** @var array<string, ?string> per-instance memo, keyed by current_workspace_id */
+    private array $workspaceRoleCache = [];
+
+    /** @var array<string, list<string>> */
+    private array $workspaceRolePermissionCache = [];
+
+    private function workspaceRolePermissionNames(string $role): array
+    {
+        return $this->workspaceRolePermissionCache[$role] ??= (function () use ($role) {
+            $spatieRole = \Spatie\Permission\Models\Role::where('name', $role)->first();
+            return $spatieRole ? $spatieRole->permissions->pluck('name')->all() : [];
+        })();
+    }
+
     public function findWorkspaceWithActivePlan(): ?\App\Models\Workspace
     {
         $workspaces = $this->workspaces()

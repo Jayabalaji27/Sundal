@@ -13,7 +13,6 @@ interface UserMenuContentProps {
 export function UserMenuContent({ user }: UserMenuContentProps) {
     const { t } = useTranslation();
     const cleanup = useMobileNavigation();
-    const isClient = (user as any)?.workspace_role === 'client';
 
     return (
         <>
@@ -23,16 +22,14 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
                 </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {!isClient && (
-                <DropdownMenuGroup>
-                    <DropdownMenuItem asChild>
-                        <Link className="block w-full" href={route('profile')} as="button" prefetch onClick={cleanup}>
-                            <Settings className="mr-2" />
-                            {t("Profile")}
-                        </Link>
-                    </DropdownMenuItem>
-                </DropdownMenuGroup>
-            )}
+            <DropdownMenuGroup>
+                <DropdownMenuItem asChild>
+                    <Link className="block w-full" href={route('profile')} as="button" prefetch onClick={cleanup}>
+                        <Settings className="mr-2" />
+                        {t("Profile")}
+                    </Link>
+                </DropdownMenuItem>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
                 <Link className="block w-full" method="post" href={route('logout')} as="button" onClick={cleanup}>

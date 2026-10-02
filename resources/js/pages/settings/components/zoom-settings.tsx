@@ -166,7 +166,7 @@ export default function ZoomSettings({ settings = {} }: ZoomSettingsProps) {
             </div>
             
             <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-              <strong>Note:</strong> You must test and validate your credentials before Zoom Meetings will appear in the sidebar.
+              <strong>Note:</strong> You must test and validate your credentials before your team can schedule Zoom meetings.
             </p>
           </div>
         </div>

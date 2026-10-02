@@ -42,20 +42,20 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
     // Payment Settings (admin only)
     Route::post('/payment-settings', [PaymentSettingController::class, 'store'])->middleware('permission:settings_payment')->name('payment.settings');
     
-    // Profile settings page with profile and password sections.
-    // Client role has no self-service profile page (see ProfileController) — block direct
-    // navigation to these routes too, not just the nav link.
-    Route::middleware('block.client.profile')->group(function () {
-        Route::get('profile', function () {
-            return Inertia::render('settings/profile-settings');
-        })->name('profile');
+    // Profile settings page with profile and password sections - available to every
+    // role (clients included) so everyone can manage their own name/avatar/password.
+    Route::get('profile', function () {
+        return Inertia::render('settings/profile-settings');
+    })->name('profile');
 
-        // Routes for form submissions
-        Route::patch('profile', [ProfileController::class, 'update'])->name('profile.update');
-        Route::post('profile', [ProfileController::class, 'update']); // For file uploads with method spoofing
-        Route::delete('profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-        Route::put('profile/password', [PasswordController::class, 'update'])->name('password.update');
-    });
+    // Routes for form submissions
+    Route::patch('profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('profile', [ProfileController::class, 'update']); // For file uploads with method spoofing
+    Route::put('profile/password', [PasswordController::class, 'update'])->name('password.update');
+
+    // Client accounts are managed by the workspace owner, so clients can't delete
+    // their own account.
+    Route::delete('profile', [ProfileController::class, 'destroy'])->middleware('block.client.profile')->name('profile.destroy');
     
     // Language update route
     Route::post('user/language', function(\Illuminate\Http\Request $request) {

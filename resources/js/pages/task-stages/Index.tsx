@@ -30,7 +30,8 @@ export default function TaskStagesIndex({ stages, permissions }: Props) {
     const [stagesList, setStagesList] = useState(stages);
     const [formData, setFormData] = useState({
         name: '',
-        color: '#3b82f6'
+        color: '#3b82f6',
+        is_completed: false
     });
 
     // Show flash messages
@@ -44,7 +45,7 @@ export default function TaskStagesIndex({ stages, permissions }: Props) {
     }, [flash]);
 
     const resetForm = () => {
-        setFormData({ name: '', color: '#3b82f6' });
+        setFormData({ name: '', color: '#3b82f6', is_completed: false });
         setEditingStage(null);
     };
 
@@ -87,7 +88,7 @@ export default function TaskStagesIndex({ stages, permissions }: Props) {
     const handleEdit = (stage: TaskStage) => {
         resetForm();
         setEditingStage(stage);
-        setFormData({ name: stage.name, color: stage.color });
+        setFormData({ name: stage.name, color: stage.color, is_completed: !!stage.is_completed });
     };
 
     const handleCreateNew = () => {
@@ -303,6 +304,11 @@ export default function TaskStagesIndex({ stages, permissions }: Props) {
                                                                                 {t('Default')}
                                                                             </Badge>
                                                                         )}
+                                                                        {stage.is_completed && (
+                                                                            <Badge variant="outline" className="text-xs border-green-300 text-green-700">
+                                                                                {t('Completed stage')}
+                                                                            </Badge>
+                                                                        )}
                                                                     </div>
                                                                     <p className="text-sm text-gray-500">{t('Order')}: {stage.order}</p>
                                                                 </div>
@@ -444,6 +450,18 @@ export default function TaskStagesIndex({ stages, permissions }: Props) {
                                 />
                             </div>
                         </div>
+                        <label className="flex items-start gap-2 text-sm text-gray-700">
+                            <input
+                                type="checkbox"
+                                checked={formData.is_completed}
+                                onChange={(e) => setFormData({...formData, is_completed: e.target.checked})}
+                                className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                            />
+                            <span>
+                                {t('Completed stage')}
+                                <span className="block text-xs text-gray-500">{t('Tasks moved here are marked 100% done and are never shown as overdue.')}</span>
+                            </span>
+                        </label>
                         <div className="flex justify-end space-x-2 pt-4">
                             <Button type="button" variant="outline" onClick={() => {
                                 setIsCreateOpen(false);
@@ -498,6 +516,18 @@ export default function TaskStagesIndex({ stages, permissions }: Props) {
                                     />
                                 </div>
                             </div>
+                            <label className="flex items-start gap-2 text-sm text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    checked={formData.is_completed}
+                                    onChange={(e) => setFormData({...formData, is_completed: e.target.checked})}
+                                    className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                                />
+                                <span>
+                                    {t('Completed stage')}
+                                    <span className="block text-xs text-gray-500">{t('Tasks moved here are marked 100% done and are never shown as overdue.')}</span>
+                                </span>
+                            </label>
                             <div className="flex justify-end space-x-2 pt-4">
                                 <Button type="button" variant="outline" onClick={() => resetForm()}>
                                     {t('Cancel')}

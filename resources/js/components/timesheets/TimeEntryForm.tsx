@@ -37,7 +37,7 @@ interface Props {
     isOpen: boolean;
     onClose: () => void;
     timeEntry?: TimeEntry;
-    timesheetId: number;
+    timesheetId: number | null;
     projects: Project[];
     selectedDate?: string;
 }

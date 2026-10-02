@@ -122,7 +122,7 @@ export default function ZoomMeetingIndex() {
                         <p className="text-gray-500 mb-4">
                             {canConfigureZoom 
                                 ? t('Please configure your Zoom API credentials in Settings to use this feature.')
-                                : t('Zoom integration has not been configured yet. Please contact your admin or manager to set it up in Settings.')
+                                : t('Zoom integration has not been configured yet. Ask your workspace owner to configure Zoom.')
                             }
                         </p>
                         <div className="flex items-center justify-center gap-2">

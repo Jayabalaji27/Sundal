@@ -90,46 +90,71 @@ class TimesheetController extends Controller
      */
     private function scopeEntriesToUser($query, $user, $workspace)
     {
-        if ($workspace->isOwner($user)) {
+        // "My Timesheets" / Daily / Weekly / Monthly views: own data unless the user
+        // can access all workspace data (owner). Managers review other people's
+        // timesheets under Approvals, not here.
+        if ($this->canAccessAllData($user, $workspace)) {
             return $query;
         }
 
-        $role = $workspace->getMemberRole($user);
+        return $query->whereHas('timesheet', fn ($q) => $q->where('user_id', $user->id));
+    }
 
-        if ($role === 'manager') {
-            return $query->whereHas('project', function ($projectQuery) use ($user) {
-                $projectQuery->where(function ($pq) use ($user) {
-                    $pq->whereHas('members', function ($memberQuery) use ($user) {
-                        $memberQuery->where('user_id', $user->id);
-                    })->orWhere('created_by', $user->id);
-                });
-            });
+    /**
+     * Parse an entry's start/end into Carbon instances (datetime or time-only input).
+     */
+    private function parseEntryTimes(array $entryData, string $fallbackDate): array
+    {
+        if (strpos($entryData['start_time'], 'T') !== false) {
+            return [Carbon::parse($entryData['start_time']), Carbon::parse($entryData['end_time'])];
         }
 
-        if ($role === 'client') {
-            return $query->whereHas('project', function ($projectQuery) use ($user) {
-                $projectQuery->whereHas('clients', function ($clientQuery) use ($user) {
-                    $clientQuery->where('user_id', $user->id);
-                });
-            });
+        return [
+            Carbon::parse($fallbackDate . ' ' . $entryData['start_time']),
+            Carbon::parse($fallbackDate . ' ' . $entryData['end_time']),
+        ];
+    }
+
+    /**
+     * Server-side hour rules for timesheet entries: end after start (no 0h entries),
+     * at least 0.25h, and no more than 24h logged by the user on any one day.
+     */
+    private function ensureValidEntryHours(array $entries, string $fallbackDate, int $userId, array $replacedEntryIds = []): void
+    {
+        $errors = [];
+        $hoursByDate = [];
+
+        foreach ($entries as $i => $entryData) {
+            [$startTime, $endTime] = $this->parseEntryTimes($entryData, $fallbackDate);
+
+            if ($endTime->lte($startTime)) {
+                $errors["entries.$i.end_time"] = __('The end time must be after the start time.');
+                continue;
+            }
+
+            $hours = $startTime->diffInMinutes($endTime) / 60;
+            if ($hours < TimesheetEntry::MIN_HOURS) {
+                $errors["entries.$i.end_time"] = __('An entry must be at least 15 minutes long.');
+                continue;
+            }
+
+            $date = $startTime->toDateString();
+            $hoursByDate[$date] = ($hoursByDate[$date] ?? 0) + $hours;
         }
 
-        // Member: their own timesheets OR entries on tasks assigned to them
-        return $query->whereHas('timesheet', function ($q) use ($user) {
-            $q->where(function ($tq) use ($user) {
-                $tq->where('user_id', $user->id)
-                    ->orWhereHas('entries', function ($entryQuery) use ($user) {
-                        $entryQuery->whereHas('task', function ($taskQuery) use ($user) {
-                            $taskQuery->where(function ($tQuery) use ($user) {
-                                $tQuery->where('assigned_to', $user->id)
-                                    ->orWhereHas('members', function ($memberQuery) use ($user) {
-                                        $memberQuery->where('user_id', $user->id);
-                                    });
-                            });
-                        });
-                    });
-            });
-        });
+        foreach ($hoursByDate as $date => $hours) {
+            $total = $hours + TimesheetEntry::hoursLoggedOn($userId, $date, $replacedEntryIds);
+            if ($total > TimesheetEntry::MAX_HOURS_PER_DAY) {
+                $errors['entries'] = __('Total hours for :date would be :total. A day can have at most 24 hours.', [
+                    'date' => $date,
+                    'total' => round($total, 2),
+                ]);
+            }
+        }
+
+        if ($errors) {
+            throw \Illuminate\Validation\ValidationException::withMessages($errors);
+        }
     }
 
     public function index(Request $request)
@@ -146,30 +171,10 @@ class TimesheetController extends Controller
         $query = Timesheet::with(['user', 'entries.project', 'entries.task', 'approver'])
             ->where('workspace_id', $workspace->id);
 
-        // Apply role-based data filtering - members and clients only see their own data
-        if (!$workspace->isOwner($user)) {
-            $role = $workspace->getMemberRole($user);
-            if ($role === 'manager' || $role === 'client') {
-                // Manager/Client: see timesheets whose entries belong to a project visible to them
-                $query->whereHas('entries', function($q) use ($user) {
-                    $q->whereHas('project', fn($projectQuery) => $projectQuery->visibleTo($user));
-                });
-            } else {
-                // Member: see their own timesheets OR timesheets with tasks assigned to them
-                $query->where(function($q) use ($user) {
-                    $q->where('user_id', $user->id)
-                      ->orWhereHas('entries', function($entryQuery) use ($user) {
-                          $entryQuery->whereHas('task', function($taskQuery) use ($user) {
-                              $taskQuery->where(function($tq) use ($user) {
-                                  $tq->where('assigned_to', $user->id)
-                                     ->orWhereHas('members', function($memberQuery) use ($user) {
-                                         $memberQuery->where('user_id', $user->id);
-                                     });
-                              });
-                          });
-                      });
-                });
-            }
+        // Own timesheets only, unless the user can access all workspace data (owner).
+        $canAccessAllData = $this->canAccessAllData($user, $workspace);
+        if (!$canAccessAllData) {
+            $query->where('user_id', $user->id);
         }
 
         // Apply filters
@@ -251,19 +256,12 @@ class TimesheetController extends Controller
         
         $timesheets = $query->paginate($perPage)->withQueryString();
 
-        // Get members - only owner/manager can see all members
+        // Member filter - only useful when the list spans more than one person
         $members = collect();
-        if ($workspace->isOwner($user)) {
+        if ($canAccessAllData) {
             $members = User::whereHas('workspaces', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id)->where('status', 'active');
-            })->get();
-        } else {
-            $role = $workspace->getMemberRole($user);
-            if ($role === 'manager') {
-                $members = User::whereHas('workspaces', function($q) use ($workspace) {
-                    $q->where('workspace_id', $workspace->id)->where('status', 'active');
-                })->get();
-            }
+            })->get(['id', 'name', 'email', 'avatar']);
         }
 
         // Get projects based on role permissions
@@ -279,45 +277,8 @@ class TimesheetController extends Controller
             $workspace
         );
 
-        if (!$workspace->isOwner($user)) {
-            $role = $workspace->getMemberRole($user);
-            if ($role === 'manager') {
-                // Manager: statistics from assigned projects
-                $statsQuery->whereHas('entries', function($q) use ($user) {
-                    $q->whereHas('project', function($projectQuery) use ($user) {
-                        $projectQuery->where(function($pq) use ($user) {
-                            $pq->whereHas('members', function($memberQuery) use ($user) {
-                                $memberQuery->where('user_id', $user->id);
-                            })
-                            ->orWhere('created_by', $user->id);
-                        });
-                    });
-                });
-            } elseif ($role === 'client') {
-                // Client: statistics from assigned projects
-                $statsQuery->whereHas('entries', function($q) use ($user) {
-                    $q->whereHas('project', function($projectQuery) use ($user) {
-                        $projectQuery->whereHas('clients', function($clientQuery) use ($user) {
-                            $clientQuery->where('user_id', $user->id);
-                        });
-                    });
-                });
-            } else {
-                // Member: their own data OR tasks assigned to them
-                $statsQuery->where(function($q) use ($user) {
-                    $q->where('user_id', $user->id)
-                      ->orWhereHas('entries', function($entryQuery) use ($user) {
-                          $entryQuery->whereHas('task', function($taskQuery) use ($user) {
-                              $taskQuery->where(function($tq) use ($user) {
-                                  $tq->where('assigned_to', $user->id)
-                                     ->orWhereHas('members', function($memberQuery) use ($user) {
-                                         $memberQuery->where('user_id', $user->id);
-                                     });
-                              });
-                          });
-                      });
-                });
-            }
+        if (!$canAccessAllData) {
+            $statsQuery->where('user_id', $user->id);
         }
 
         $overviewStats = [
@@ -430,6 +391,8 @@ class TimesheetController extends Controller
             ]
         );
 
+        $this->ensureValidEntryHours($validated['entries'] ?? [], $validated['start_date'], $user->id);
+
         // Create entries if provided
         if (!empty($validated['entries'])) {
             foreach ($validated['entries'] as $entryData) {
@@ -482,6 +445,15 @@ class TimesheetController extends Controller
             'entries.*.end_time' => 'required',
             'entries.*.description' => 'nullable|string'
         ]);
+
+        // Entries kept by this update replace the timesheet's current ones, so only
+        // the user's entries outside this timesheet count towards the daily limit.
+        $this->ensureValidEntryHours(
+            $validated['entries'] ?? [],
+            $validated['start_date'],
+            $timesheet->user_id,
+            $timesheet->entries()->pluck('id')->all()
+        );
 
         // Same rule as store(): the week is always derived from start_date, never
         // trusted as an arbitrary start/end pair from the client.
@@ -567,7 +539,13 @@ class TimesheetController extends Controller
     public function submit(Timesheet $timesheet)
     {
         $this->authorizePermission('timesheet_submit');
-        
+
+        // Only the person who logged the time submits it; owners/managers approve or
+        // reject it afterwards.
+        if ((int) $timesheet->user_id !== (int) auth()->id()) {
+            abort(403, __('You can only submit your own timesheets.'));
+        }
+
         if ($timesheet->status !== 'draft') {
             return back()->withErrors(['message' => 'Only draft timesheets can be submitted']);
         }
@@ -785,7 +763,12 @@ class TimesheetController extends Controller
         }
 
         $projects = $this->getAccessibleProjects($user, $workspace);
-        $timesheetId = $user->timesheets()->where('workspace_id', $workspace->id)->first()->id ?? 1;
+        // This user's timesheet for the week being viewed (null if they have none yet)
+        $timesheetId = $user->timesheets()
+            ->where('workspace_id', $workspace->id)
+            ->whereDate('start_date', '<=', $weekStart->toDateString())
+            ->whereDate('end_date', '>=', $weekStart->toDateString())
+            ->value('id');
 
         return Inertia::render('timesheets/WeeklyView', [
             'weekData' => $weekData,

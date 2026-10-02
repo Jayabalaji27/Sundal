@@ -215,10 +215,15 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
         }
     };
 
-    const isTaskOverdue = (endDate: string | null) => {
-        if (!endDate) return false;
+    // Tasks in a completed stage (e.g. "Done") or at 100% are never overdue.
+    // Compares calendar days, so a task due today isn't overdue yet.
+    const isTaskOverdue = (task: any) => {
+        if (!task?.end_date) return false;
+        if (task.task_stage?.is_completed || (task.progress ?? 0) >= 100) return false;
         const today = new Date();
-        const dueDate = new Date(endDate);
+        today.setHours(0, 0, 0, 0);
+        const dueDate = new Date(task.end_date);
+        dueDate.setHours(0, 0, 0, 0);
         return dueDate < today;
     };
 
@@ -287,7 +292,7 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
                         </div>
                         <div className="text-center">
                             <div className="text-xl font-bold text-red-600">
-                                {(Array.isArray(tasks) ? tasks : tasks?.data || []).filter(task => task.end_date && isTaskOverdue(task.end_date)).length}
+                                {(Array.isArray(tasks) ? tasks : tasks?.data || []).filter(task => task.end_date && isTaskOverdue(task)).length}
                             </div>
                             <div className="text-xs text-gray-600">{t('Overdue')}</div>
                         </div>
@@ -696,7 +701,7 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
                                                                             <span className="bg-gray-100 px-2 py-1 rounded text-xs">{task.project?.title}</span>
                                                                         )}
                                                                         <div className="flex items-center gap-2">
-                                                                            {task.end_date && isTaskOverdue(task.end_date) && (
+                                                                            {task.end_date && isTaskOverdue(task) && (
                                                                                 <Badge variant="destructive" className="text-xs">
                                                                                     <AlertTriangle className="h-3 w-3 mr-1" />
                                                                                     Overdue
@@ -760,7 +765,7 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
                                             <div className="flex justify-between items-center text-xs">
                                                 <TaskPriority priority={task.priority} showIcon />
                                                 <div className="flex items-center gap-2">
-                                                    {task.end_date && isTaskOverdue(task.end_date) && (
+                                                    {task.end_date && isTaskOverdue(task) && (
                                                         <Badge variant="destructive" className="text-xs">
                                                             <AlertTriangle className="h-3 w-3 mr-1" />
                                                             {t('Overdue')}
@@ -940,7 +945,7 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                             <div className="flex items-center gap-2">
-                                                {task.end_date && isTaskOverdue(task.end_date) && (
+                                                {task.end_date && isTaskOverdue(task) && (
                                                     <Badge variant="destructive" className="text-xs">
                                                         <AlertTriangle className="h-3 w-3 mr-1" />
                                                         Overdue

@@ -30,37 +30,9 @@ class InvoiceController extends Controller
         $query = Invoice::with(['project:id,title', 'client:id,name,avatar', 'creator:id,name', 'payments'])
             ->where('workspace_id', $workspace->id);
 
-        // Apply role-based filtering
-        if (in_array($userWorkspaceRole, ['manager', 'member'])) {
-            $query->where(function ($q) use ($user, $userWorkspaceRole) {
-                // Show sent invoices to all members
-                $q->where('status', '!=', 'draft')
-                    ->whereHas('project', function ($projQ) use ($user) {
-                        $projQ->where(function ($projectQuery) use ($user) {
-                            $projectQuery->whereHas('members', function ($memberQuery) use ($user) {
-                                $memberQuery->where('user_id', $user->id);
-                            })->orWhere('created_by', $user->id);
-                        });
-                    });
-
-                // Show draft invoices only to managers
-                if ($userWorkspaceRole === 'manager') {
-                    $q->orWhere('status', 'draft')
-                        ->whereHas('project', function ($projQ) use ($user) {
-                            $projQ->where(function ($projectQuery) use ($user) {
-                                $projectQuery->whereHas('members', function ($memberQuery) use ($user) {
-                                    $memberQuery->where('user_id', $user->id);
-                                })->orWhere('created_by', $user->id);
-                            });
-                        });
-                }
-            });
-        } elseif ($userWorkspaceRole === 'client') {
-            // Clients only see sent invoices assigned to them
-            $query->where('client_id', $user->id)
-                ->where('status', '!=', 'draft');
-        }
-        // Owners see all invoices (no additional filtering needed)
+        // Apply role-based filtering (managers: their projects incl. drafts; members:
+        // their projects, no drafts; clients: sent invoices addressed to them)
+        $query->visibleToRole($user, $userWorkspaceRole);
 
         // Apply filters
         if ($request->search) {
@@ -84,17 +56,12 @@ class InvoiceController extends Controller
         // Snapshot the role/search/project/client-scoped query (before the status
         // filter) so status tab counts reflect the same rows the user could see
         // under any tab, not just the currently selected one.
-        $statusCounts = [
-            'all' => (clone $query)->count(),
-            'draft' => (clone $query)->where('status', 'draft')->count(),
-            'sent' => (clone $query)->where('status', 'sent')->count(),
-            'paid' => (clone $query)->where('status', 'paid')->count(),
-            'partial_paid' => (clone $query)->where('status', 'partial_paid')->count(),
-            // Overdue is computed from due_date, not a literal status value - nothing
-            // proactively flips an invoice's status to 'overdue' outside of a payment
-            // attempt, so a status match here would almost always read 0.
-            'overdue' => (clone $query)->overdue()->count(),
-        ];
+        // Overdue is its own bucket (computed from due_date + balance, never for
+        // drafts), so sent/partial_paid exclude overdue rows and the buckets add up.
+        $statusCounts = ['all' => (clone $query)->where('status', '!=', 'cancelled')->count()];
+        foreach (['draft', 'sent', 'paid', 'partial_paid', 'overdue'] as $bucket) {
+            $statusCounts[$bucket] = (clone $query)->inStatusBucket($bucket)->count();
+        }
 
         $totalAmount = (clone $query)->sum('total_amount');
         $paidAmount = (clone $query)->sum('paid_amount');
@@ -103,10 +70,8 @@ class InvoiceController extends Controller
         $outstandingCount = $outstandingQuery->count();
         $overdueCount = (clone $query)->overdue()->count();
 
-        if ($request->status === 'overdue') {
-            $query->overdue();
-        } elseif ($request->status) {
-            $query->where('status', $request->status);
+        if ($request->status) {
+            $query->inStatusBucket($request->status);
         }
 
         $perPage = $request->get('per_page', 12);
@@ -194,6 +159,12 @@ class InvoiceController extends Controller
         return !empty($host) && $host !== 'smtp.example.com';
     }
 
+    private const ITEM_AMOUNT_MESSAGES = [
+        'items.*.amount.gt' => 'Each item amount must be greater than 0.',
+        'items.*.amount.numeric' => 'Each item amount must be a number.',
+        'items.*.amount.required' => 'Each item needs an amount.',
+    ];
+
     public function store(Request $request)
     {
         $user = auth()->user();
@@ -212,9 +183,9 @@ class InvoiceController extends Controller
             'terms' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.type' => 'required|in:task',
-            'items.*.amount' => 'required|numeric|min:0',
+            'items.*.amount' => 'required|numeric|gt:0',
             'items.*.task_id' => 'required|exists:tasks,id',
-        ]);
+        ], self::ITEM_AMOUNT_MESSAGES);
 
         $project = Project::findOrFail($validated['project_id']);
 
@@ -266,6 +237,17 @@ class InvoiceController extends Controller
 
     public function update(Request $request, Invoice $invoice)
     {
+        // The edit form sends the edited value as `amount` (older payloads only
+        // sent `rate`). Treat amount as the source of truth so an edit is never
+        // silently dropped in favour of the stale rate.
+        if (is_array($request->input('items'))) {
+            $request->merge(['items' => collect($request->input('items'))
+                ->map(fn ($item) => is_array($item)
+                    ? array_merge($item, ['amount' => $item['amount'] ?? $item['rate'] ?? null])
+                    : $item)
+                ->all()]);
+        }
+
         $validated = $request->validate([
             'client_id' => 'nullable|exists:users,id',
             'title' => 'required|string|max:255',
@@ -278,12 +260,12 @@ class InvoiceController extends Controller
             'terms' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.type' => 'required|in:custom,task,expense,time',
-            'items.*.description' => 'required|string',
-            'items.*.rate' => 'required|numeric|min:0',
+            'items.*.description' => 'nullable|string',
+            'items.*.amount' => 'required|numeric|gt:0',
             'items.*.task_id' => 'nullable|exists:tasks,id',
             'items.*.expense_id' => 'nullable|exists:project_expenses,id',
             'items.*.timesheet_entry_id' => 'nullable|exists:timesheet_entries,id',
-        ]);
+        ], self::ITEM_AMOUNT_MESSAGES);
 
         $appliedTaxes = Tax::whereIn('id', $validated['selected_taxes'] ?? [])->get(['id', 'name', 'rate']);
 
@@ -301,12 +283,15 @@ class InvoiceController extends Controller
         // Update items
         $invoice->items()->delete();
         foreach ($validated['items'] as $index => $item) {
+            $description = $item['description']
+                ?? (!empty($item['task_id']) ? Task::find($item['task_id'])?->title : null)
+                ?? 'Item';
             InvoiceItem::create([
                 'invoice_id' => $invoice->id,
                 'type' => $item['type'],
-                'description' => $item['description'],
-                'rate' => $item['rate'],
-                'amount' => $item['rate'],
+                'description' => $description,
+                'rate' => $item['amount'],
+                'amount' => $item['amount'],
                 'task_id' => $item['task_id'] ?? null,
                 'expense_id' => $item['expense_id'] ?? null,
                 'timesheet_entry_id' => $item['timesheet_entry_id'] ?? null,

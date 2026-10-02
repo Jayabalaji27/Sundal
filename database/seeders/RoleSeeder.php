@@ -179,8 +179,8 @@ class RoleSeeder extends Seeder
                 'team_invite', // controller enforces Manager may only invite the 'member' role
                 // user_view_logs removed: managers do not need access to login history
                 'settings_view',
-                'settings_zoom',
-                'settings_google_meet',
+                // settings_zoom / settings_google_meet removed: workspace integration
+                // credentials are owner-only. Managers still use the meetings.
                 'zoom_meeting_view_any',
                 'zoom_meeting_view',
                 'zoom_meeting_join',

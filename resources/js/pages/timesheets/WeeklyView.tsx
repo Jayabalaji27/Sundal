@@ -38,7 +38,7 @@ interface Props {
     projects: Project[];
     weekStart: string;
     weekEnd: string;
-    timesheetId: number;
+    timesheetId: number | null;
     permissions?: any;
 }
 

@@ -245,7 +245,7 @@ class HandleInertiaRequests extends Middleware
             return null;
         }
 
-        return $user->notifications()->where('data->workspace_id', $user->current_workspace_id);
+        return $user->workspaceNotifications();
     }
 
     private function getUnreadNotificationsCount(Request $request): int

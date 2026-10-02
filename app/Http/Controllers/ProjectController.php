@@ -20,6 +20,9 @@ use Maatwebsite\Excel\Facades\Excel;
 class ProjectController extends Controller
 {
     use HasPermissionChecks;
+
+    private const USER_PUBLIC_COLUMNS = 'users.id,users.name,users.email,users.avatar';
+
     public function __construct(private PlanLimitService $planLimitService)
     {
     }
@@ -36,7 +39,9 @@ class ProjectController extends Controller
 
         $userWorkspaceRole = $workspace->getMemberRole($user);
 
-        $query = Project::with(['workspace', 'clients', 'creator', 'members.user'])
+        // Only the user fields the page renders - full user rows carry plan, referral
+        // and timer data that must not reach other workspace members or clients.
+        $query = Project::with(['workspace', 'clients:' . self::USER_PUBLIC_COLUMNS, 'creator:' . self::USER_PUBLIC_COLUMNS, 'members.user:' . self::USER_PUBLIC_COLUMNS])
             ->forWorkspace($user->current_workspace_id)
             ->visibleTo($user);
 
@@ -81,17 +86,15 @@ class ProjectController extends Controller
                 }
             });
         });
-        $members = User::whereHas('workspaces', function ($q) use ($workspace) {
-            $q->where('workspace_id', $workspace->id)->where('status', 'active')->where('role', 'member');
-        })->get();
+        // Used by the create/edit project dialog only.
+        $canPickUsers = $this->checkAnyPermission(['project_create', 'project_update']);
+        $workspaceUsersWithRole = fn (string $role) => !$canPickUsers ? collect() : User::whereHas('workspaces', function ($q) use ($workspace, $role) {
+            $q->where('workspace_id', $workspace->id)->where('status', 'active')->where('role', $role);
+        })->get(['id', 'name', 'email', 'avatar']);
 
-        $managers = User::whereHas('workspaces', function ($q) use ($workspace) {
-            $q->where('workspace_id', $workspace->id)->where('status', 'active')->where('role', 'manager');
-        })->get();
-
-        $clients = User::whereHas('workspaces', function ($q) use ($workspace) {
-            $q->where('workspace_id', $workspace->id)->where('status', 'active')->where('role', 'client');
-        })->get();
+        $members = $workspaceUsersWithRole('member');
+        $managers = $workspaceUsersWithRole('manager');
+        $clients = $workspaceUsersWithRole('client');
 
         return Inertia::render('projects/Index', [
             'projects' => $projects,
@@ -220,11 +223,14 @@ class ProjectController extends Controller
             abort_if(!$hasAccess, 404);
         }
 
+        $isClient = $userWorkspaceRole === 'client';
+        $sharedWithClient = fn (string $key) => !$isClient || !empty($project->shared_settings[$key]);
+
         $project->load([
             'workspace',
-            'clients',
-            'creator',
-            'members.user',
+            'clients:' . self::USER_PUBLIC_COLUMNS,
+            'creator:' . self::USER_PUBLIC_COLUMNS,
+            'members.user:' . self::USER_PUBLIC_COLUMNS,
             'milestones',
             'expenses' => function ($query) {
                 $query->with(['budgetCategory', 'submitter'])->get();
@@ -266,8 +272,17 @@ class ProjectController extends Controller
 
         $project->setRelation('activities', $activities);
 
+        // Clients only get what the project's shared settings expose to them -
+        // internal notes, expenses, timesheets and budget figures stay internal.
+        if (!$sharedWithClient('notes')) {
+            $project->setRelation('notes', collect());
+        }
+        if (!$sharedWithClient('expenses')) {
+            $project->setRelation('expenses', collect());
+        }
+
         // Load project tasks with related data
-        $projectTasks = \App\Models\Task::with(['taskStage', 'assignedTo', 'creator'])
+        $projectTasks = !$sharedWithClient('task') ? collect() : \App\Models\Task::with(['taskStage', 'assignedTo:' . self::USER_PUBLIC_COLUMNS, 'creator:' . self::USER_PUBLIC_COLUMNS])
             ->where('project_id', $project->id)
             ->latest()
             ->get();
@@ -282,7 +297,7 @@ class ProjectController extends Controller
             }
         });
         // Load project bugs with related data
-        $projectBugs = \App\Models\Bug::with(['bugStatus', 'assignedTo', 'reportedBy'])
+        $projectBugs = !$sharedWithClient('recent_bugs') ? collect() : \App\Models\Bug::with(['bugStatus', 'assignedTo:' . self::USER_PUBLIC_COLUMNS, 'reportedBy:' . self::USER_PUBLIC_COLUMNS])
             ->where('project_id', $project->id)
             ->latest()
             ->get();
@@ -297,9 +312,9 @@ class ProjectController extends Controller
             }
         });
 
-        // Load project timesheets with related data
-        $projectTimesheets = \App\Models\Timesheet::with([
-            'user',
+        // Load project timesheets with related data (team-internal: never sent to clients)
+        $projectTimesheets = $isClient ? collect() : \App\Models\Timesheet::with([
+            'user:' . self::USER_PUBLIC_COLUMNS,
             'entries' => function ($query) use ($project) {
                 $query->whereHas('task', function ($taskQuery) use ($project) {
                     $taskQuery->where('project_id', $project->id);
@@ -371,7 +386,7 @@ class ProjectController extends Controller
         });
 
         // Load single budget for this project
-        $budget = \App\Models\ProjectBudget::with(['categories', 'creator'])
+        $budget = !$sharedWithClient('budget') ? null : \App\Models\ProjectBudget::with(['categories', 'creator:' . self::USER_PUBLIC_COLUMNS])
             ->where('project_id', $project->id)
             ->first();
 
@@ -389,26 +404,18 @@ class ProjectController extends Controller
                 ->get();
         }
 
-        // Get workspace members (users with member role in workspace)
-        $members = User::whereHas('workspaces', function ($q) use ($workspace) {
+        // Workspace users by role - only needed for the assign dialogs, so skip them
+        // entirely for users who can't assign anyone.
+        $canAssign = $this->checkAnyPermission(['project_assign_members', 'project_assign_clients']);
+        $workspaceUsersWithRole = fn (string $role) => !$canAssign ? collect() : User::whereHas('workspaces', function ($q) use ($workspace, $role) {
             $q->where('workspace_id', $workspace->id)
                 ->where('status', 'active')
-                ->where('role', 'member');
-        })->get();
+                ->where('role', $role);
+        })->get(['id', 'name', 'email', 'avatar']);
 
-        // Get workspace managers (users with manager role in workspace)
-        $managers = User::whereHas('workspaces', function ($q) use ($workspace) {
-            $q->where('workspace_id', $workspace->id)
-                ->where('status', 'active')
-                ->where('role', 'manager');
-        })->get();
-
-        // Get clients (users with client role in workspace)
-        $clients = User::whereHas('workspaces', function ($q) use ($workspace) {
-            $q->where('workspace_id', $workspace->id)
-                ->where('status', 'active')
-                ->where('role', 'client');
-        })->get();
+        $members = $workspaceUsersWithRole('member');
+        $managers = $workspaceUsersWithRole('manager');
+        $clients = $workspaceUsersWithRole('client');
 
         return Inertia::render('projects/Show', [
             'project' => $project,
@@ -479,6 +486,9 @@ class ProjectController extends Controller
             abort(404);
         }
 
+        // Overdue tasks / critical bugs are internal delivery details.
+        abort_if($workspace->getMemberRole($user) === 'client', 403);
+
         $health = (new ProjectHealthService())->calculate($project);
 
         return response()->json($health);
@@ -491,6 +501,7 @@ class ProjectController extends Controller
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
         if (!$workspace || $project->workspace_id != $workspace->id) abort(403);
+        abort_if($workspace->getMemberRole($user) === 'client', 403);
 
         return response()->json((new ScopeCreepService())->detect($project));
     }
@@ -522,11 +533,40 @@ class ProjectController extends Controller
             abort(403);
         }
 
+        $invoiceCount = $project->invoices()->count();
+        if ($invoiceCount > 0) {
+            return back()->with('error', trans_choice(
+                'This project has :count invoice, which must be deleted or moved to another project before the project can be deleted.|This project has :count invoices, which must be deleted or moved to another project before the project can be deleted.',
+                $invoiceCount,
+                ['count' => $invoiceCount]
+            ));
+        }
+
         $projectTitle = $project->title;
         $project->logActivity('deleted', "Project '{$projectTitle}' deleted");
         $project->delete();
 
         return redirect()->route('projects.index');
+    }
+
+    /**
+     * Linked-record counts for the delete confirmation dialog.
+     */
+    public function deletionSummary(Project $project): \Illuminate\Http\JsonResponse
+    {
+        $this->authorizePermission('project_delete');
+
+        $workspace = auth()->user()->currentWorkspace;
+        if (!$workspace || $project->workspace_id != $workspace->id) {
+            abort(404);
+        }
+
+        $counts = $project->deletionSummary();
+
+        return response()->json([
+            'counts' => $counts,
+            'blocked' => $counts['invoices'] > 0,
+        ]);
     }
 
     public function createBudget(Request $request, Project $project)
@@ -552,7 +592,7 @@ class ProjectController extends Controller
         }
 
         $validated = $request->validate([
-            'total_budget' => 'required|numeric|min:0',
+            'total_budget' => 'required|numeric|gt:0',
             'currency' => 'required|string|size:3',
             'period_type' => 'required|in:project,monthly,quarterly',
             'start_date' => 'required|date',
@@ -1084,7 +1124,7 @@ class ProjectController extends Controller
         ])->findOrFail($projectId);
 
         // Load budget with computed attributes
-        $budget = \App\Models\ProjectBudget::with(['categories', 'creator'])
+        $budget = !$sharedWithClient('budget') ? null : \App\Models\ProjectBudget::with(['categories', 'creator:' . self::USER_PUBLIC_COLUMNS])
             ->where('project_id', $project->id)
             ->first();
 

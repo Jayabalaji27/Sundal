@@ -194,7 +194,7 @@ class ProjectBudgetController extends Controller
         
         $validated = $request->validate([
             'project_id' => 'required|exists:projects,id',
-            'total_budget' => 'required|numeric|min:0',
+            'total_budget' => 'required|numeric|gt:0',
             'period_type' => 'required|in:project,monthly,quarterly,yearly',
             'start_date' => 'required|date',
             'end_date' => 'nullable|date|after:start_date|after_or_equal:today',
@@ -260,7 +260,7 @@ class ProjectBudgetController extends Controller
         
         $validated = $request->validate([
             'project_id' => 'required|exists:projects,id',
-            'total_budget' => 'required|numeric|min:0',
+            'total_budget' => 'required|numeric|gt:0',
             'period_type' => 'required|in:project,monthly,quarterly,yearly',
             'description' => 'nullable|string',
             'status' => 'required|in:active,completed,cancelled',

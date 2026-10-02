@@ -335,8 +335,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('workspaces/{workspace}/team/{user}/reactivate', [\App\Http\Controllers\TeamController::class, 'reactivate'])->middleware('permission:team_deactivate')->name('team.reactivate');
         Route::delete('workspaces/{workspace}/members/{user}', [WorkspaceController::class, 'removeMember'])->middleware('permission:workspace_manage_members')->name('workspace.remove-member');
         Route::post('workspaces/{workspace}/leave', [WorkspaceController::class, 'leaveWorkspace'])->middleware('permission:workspace_leave')->name('workspaces.leave');
-        Route::post('invitations/{invitation}/resend', [WorkspaceInvitationController::class, 'resend'])->middleware('permission:workspace_invite_members')->name('invitations.resend');
-        Route::delete('invitations/{invitation}', [WorkspaceInvitationController::class, 'destroy'])->middleware('permission:workspace_invite_members')->name('invitations.destroy');
+        Route::post('invitations/{invitation}/resend', [WorkspaceInvitationController::class, 'resend'])->middleware('permission:team_invite')->name('invitations.resend');
+        Route::delete('invitations/{invitation}', [WorkspaceInvitationController::class, 'destroy'])->middleware('permission:team_invite')->name('invitations.destroy');
         // dashboard branches internally for superadmin (its own admin dashboard),
         // so it opts out of the workspace-only guard applied to this group.
         Route::get('dashboard', [DashboardController::class, 'index'])->withoutMiddleware('block.superadmin.workspace')->name('dashboard');
@@ -707,6 +707,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('projects/{project}', [\App\Http\Controllers\ProjectController::class, 'update'])->middleware('permission:project_update')->name('projects.update');
         Route::patch('projects/{project}', [\App\Http\Controllers\ProjectController::class, 'update'])->middleware('permission:project_update');
         Route::delete('projects/{project}', [\App\Http\Controllers\ProjectController::class, 'destroy'])->middleware('permission:project_delete')->name('projects.destroy');
+        Route::get('projects/{project}/deletion-summary', [\App\Http\Controllers\ProjectController::class, 'deletionSummary'])->middleware('permission:project_delete')->name('projects.deletion-summary');
 
         Route::post('projects/{project}/members', [\App\Http\Controllers\ProjectController::class, 'assignMember'])->middleware('permission:project_assign_members')->name('projects.assign-member');
         Route::delete('projects/{project}/members/{user}', [\App\Http\Controllers\ProjectController::class, 'removeMember'])->middleware('permission:project_assign_members')->name('projects.remove-member');

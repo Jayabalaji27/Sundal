@@ -46,10 +46,12 @@ class TimesheetEntryController extends Controller
                 'date' => 'required|date',
                 'start_time' => 'nullable',
                 'end_time' => 'nullable',
-                'hours' => 'required|numeric|min:0.1|max:24',
+                'hours' => 'required|numeric|min:' . TimesheetEntry::MIN_HOURS . '|max:' . TimesheetEntry::MAX_HOURS_PER_DAY,
                 'description' => 'nullable|string',
                 'is_billable' => 'boolean'
             ]);
+
+            $this->ensureValidHours($validated, auth()->id());
 
             // The timesheet is derived from the entry's own date, not trusted from the
             // client — Weekly/Monthly/Daily view previously passed whichever timesheet
@@ -103,10 +105,12 @@ class TimesheetEntryController extends Controller
                 'date' => 'required|date',
                 'start_time' => 'nullable',
                 'end_time' => 'nullable',
-                'hours' => 'required|numeric|min:0.1|max:24',
+                'hours' => 'required|numeric|min:' . TimesheetEntry::MIN_HOURS . '|max:' . TimesheetEntry::MAX_HOURS_PER_DAY,
                 'description' => 'nullable|string',
                 'is_billable' => 'boolean'
             ]);
+
+            $this->ensureValidHours($validated, $timesheetEntry->user_id, $timesheetEntry->id);
 
             $oldTimesheet = $timesheetEntry->timesheet;
 
@@ -235,6 +239,31 @@ class TimesheetEntryController extends Controller
             return redirect()->back()->withErrors($e->errors());
         } catch (\Exception $e) {
             return redirect()->back()->with('error', __('Failed to delete entries. Please try again.'));
+        }
+    }
+
+    /**
+     * End time must be after start time (when both are given), and the user's total
+     * for the day can't go over 24h.
+     */
+    private function ensureValidHours(array $validated, int $userId, ?int $ignoreEntryId = null): void
+    {
+        if (!empty($validated['start_time']) && !empty($validated['end_time'])
+            && \Carbon\Carbon::parse($validated['end_time'])->lte(\Carbon\Carbon::parse($validated['start_time']))) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'end_time' => __('The end time must be after the start time.'),
+            ]);
+        }
+
+        $alreadyLogged = TimesheetEntry::hoursLoggedOn($userId, $validated['date'], array_filter([$ignoreEntryId]));
+        if ($alreadyLogged + (float) $validated['hours'] > TimesheetEntry::MAX_HOURS_PER_DAY) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'hours' => __('This would bring your total for :date to :total hours. A day can have at most 24 hours (:logged already logged).', [
+                    'date' => \Carbon\Carbon::parse($validated['date'])->toDateString(),
+                    'total' => round($alreadyLogged + (float) $validated['hours'], 2),
+                    'logged' => round($alreadyLogged, 2),
+                ]),
+            ]);
         }
     }
 }

@@ -33,9 +33,15 @@ class CompanyController extends Controller
             });
         }
         
-        // Apply status filter
-        if ($request->has('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
+        // Apply status filter. "expired" = plan expiry date has passed (shown and
+        // counted separately from the login-enabled active/inactive flag).
+        if ($request->status === 'expired') {
+            $query->whereNotNull('plan_expire_date')->where('plan_expire_date', '<', now());
+        } elseif ($request->has('status') && $request->status !== 'all') {
+            $query->where('status', $request->status)
+                ->when($request->status === 'active', fn ($q) => $q->where(fn ($q) => $q
+                    ->whereNull('plan_expire_date')
+                    ->orWhere('plan_expire_date', '>=', now())));
         }
         
         // Apply date filters
@@ -67,11 +73,12 @@ class CompanyController extends Controller
                 'created_at' => $company->created_at,
                 'plan_name' => $company->plan ? $company->plan->name : __('No Plan'),
                 'plan_expiry_date' => $company->plan_expire_date,
+                'plan_expired' => $company->isPlanExpired(),
             ];
         });
         
         // Get plans for dropdown
-        $plans = Plan::all(['id', 'name']);
+        $plans = Plan::orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'is_default']);
         
         return Inertia::render('companies/index', [
             'companies' => $companies,
@@ -84,9 +91,12 @@ class CompanyController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            // email:rfc,filter rejects addresses without a dotted domain (e.g. test@test)
+            'email' => 'required|string|email:rfc,filter|max:255|unique:users',
             'password' => 'nullable|string|min:8',
             'status' => 'required|in:active,inactive',
+            'plan_id' => 'nullable|exists:plans,id',
+            'billing_cycle' => 'nullable|in:monthly,yearly',
         ]);
         
         $company = new User();
@@ -108,17 +118,16 @@ class CompanyController extends Controller
             $company->lang = $creator->lang;
         }
         
-        // Assign default plan
-        $defaultPlan = Plan::where('is_default', true)->first();
-        if ($defaultPlan) {
-            $company->plan_id = $defaultPlan->id;
-            
-            // Set plan expiry date based on plan duration
-            if ($defaultPlan->duration === 'yearly') {
-                $company->plan_expire_date = now()->addYear();
-            } else {
-                $company->plan_expire_date = now()->addMonth();
-            }
+        // Assign the chosen plan (falls back to the default plan)
+        $plan = !empty($validated['plan_id'])
+            ? Plan::find($validated['plan_id'])
+            : Plan::where('is_default', true)->first();
+        if ($plan) {
+            $company->plan_id = $plan->id;
+
+            // Expiry follows the chosen billing cycle, else the plan's own duration
+            $cycle = $validated['billing_cycle'] ?? ($plan->duration === 'yearly' ? 'yearly' : 'monthly');
+            $company->plan_expire_date = $cycle === 'yearly' ? now()->addYear() : now()->addMonth();
             
             // Set plan is active
             $company->plan_is_active = 1;
@@ -151,7 +160,7 @@ class CompanyController extends Controller
         
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $company->id,
+            'email' => 'required|string|email:rfc,filter|max:255|unique:users,email,' . $company->id,
             'status' => 'required|in:active,inactive',
         ]);
         
@@ -244,7 +253,8 @@ class CompanyController extends Controller
                 'features' => $features,
                 'business' => $plan->business,
                 'max_users' => $plan->max_users,
-                'storage_limit' => $plan->storage_limit . ' ' . __('GB'),
+                'storage_limit' => $plan->formattedStorage(),
+                'yearly_savings_percent' => $plan->yearlySavingsPercent(),
                 'is_current' => $company->plan_id === $plan->id,
                 'is_default' => $plan->is_default
             ];

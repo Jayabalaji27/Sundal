@@ -540,6 +540,9 @@ export default function NotesIndex() {
                                 {combined_notes?.total || 0}
                             </Badge>
                         </div>
+                        <p className="text-sm text-gray-500 -mt-2 mb-4">
+                            {t("Personal notes are only visible to you. Shared notes are visible only to the people they are shared with, so a teammate's note shows up here once they share it with you.")}
+                        </p>
 
                         {(combined_notes?.data?.length || 0) > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

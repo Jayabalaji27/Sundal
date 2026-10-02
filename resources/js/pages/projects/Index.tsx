@@ -13,7 +13,8 @@ import { AiProjectModal } from '@/components/AiProjectModal';
 import { EmptyState, EMPTY_STATES } from '@/components/EmptyState';
 import { PageTemplate } from '@/components/page-template';
 import { CrudFormModal } from '@/components/CrudFormModal';
-import { CrudDeleteModal } from '@/components/CrudDeleteModal';
+import { EnhancedDeleteModal } from '@/components/EnhancedDeleteModal';
+import axios from 'axios';
 import { toast } from '@/components/custom-toast';
 import { CrudTable } from '@/components/CrudTable';
 import { hasPermission } from '@/utils/authorization';
@@ -49,6 +50,7 @@ export default function ProjectIndex() {
     const [showFilters, setShowFilters] = useState(false);
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [deleteSummary, setDeleteSummary] = useState<{ counts: Record<string, number>; blocked: boolean } | null>(null);
     const [currentItem, setCurrentItem] = useState<any>(null);
     const [formMode, setFormMode] = useState<'create' | 'edit' | 'view'>('create');
     const [isAiModalOpen, setIsAiModalOpen] = useState(false);
@@ -119,7 +121,11 @@ export default function ProjectIndex() {
                 setIsFormModalOpen(true);
                 break;
             case 'delete':
+                setDeleteSummary(null);
                 setIsDeleteModalOpen(true);
+                axios.get(route('projects.deletion-summary', item.id))
+                    .then(({ data }) => setDeleteSummary(data))
+                    .catch(() => setDeleteSummary(null));
                 break;
         }
     };
@@ -933,20 +939,36 @@ export default function ProjectIndex() {
             />
 
             {/* Delete Modal */}
-            <CrudDeleteModal
+            <EnhancedDeleteModal
                 isOpen={isDeleteModalOpen}
                 onClose={() => setIsDeleteModalOpen(false)}
                 onConfirm={handleDeleteConfirm}
                 itemName={currentItem?.title || ''}
                 entityName={t('project')}
-                warningMessage={t('All project data including tasks, files, and progress will be permanently lost.')}
-                additionalInfo={[
-                    t('All tasks and subtasks'),
-                    t('Project files and attachments'),
-                    t('Time tracking records'),
-                    t('Project comments and notes'),
-                    t('Budget and expense data')
-                ]}
+                confirmDisabled={!deleteSummary || deleteSummary.blocked}
+                warningMessage={
+                    !deleteSummary
+                        ? t('Checking linked records...')
+                        : deleteSummary.blocked
+                            ? t('This project has :count invoice(s). Delete them or move them to another project before deleting the project.').replace(':count', String(deleteSummary.counts.invoices))
+                            : t('All project data will be permanently lost. This action cannot be undone.')
+                }
+                additionalInfo={
+                    deleteSummary && !deleteSummary.blocked
+                        ? ([
+                            ['tasks', t('tasks')],
+                            ['bugs', t('bugs')],
+                            ['milestones', t('milestones')],
+                            ['budgets', t('budgets')],
+                            ['expenses', t('expenses')],
+                            ['timesheet_entries', t('timesheet entries')],
+                            ['attachments', t('attachments')],
+                            ['notes', t('notes')],
+                        ] as const)
+                            .filter(([key]) => (deleteSummary.counts[key] ?? 0) > 0)
+                            .map(([key, label]) => `${deleteSummary.counts[key]} ${label}`)
+                        : []
+                }
             />
             
             {/* AI Project Generator */}

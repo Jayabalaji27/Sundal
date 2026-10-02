@@ -111,10 +111,12 @@ class Plan extends Model
         $defaultPlan = self::getDefaultPlan();
         
         if ($defaultPlan) {
+            // Same expiry rule as every other plan assignment (CheckPlanAccess,
+            // order/request approval) - previously this left it null.
             $user->update([
                 'plan_id' => $defaultPlan->id,
                 'plan_is_active' => 1,
-                'plan_expire_date' => null
+                'plan_expire_date' => $defaultPlan->duration === 'yearly' ? now()->addYear() : now()->addMonth(),
             ]);
             return true;
         }
@@ -170,6 +172,31 @@ class Plan extends Model
         return !$this->storage_limit;
     }
     
+    /**
+     * Storage limit for display. 0/empty means unlimited - shared by the admin plan
+     * cards, the company plan picker and the public landing page so they agree.
+     */
+    public function formattedStorage(): string
+    {
+        return $this->storage_limit ? $this->storage_limit . ' ' . __('GB') : __('Unlimited');
+    }
+
+    /**
+     * Whole-percent saving of paying yearly vs. 12 monthly payments; 0 when
+     * there's no saving (or yearly costs more), so callers can hide the badge.
+     */
+    public function yearlySavingsPercent(): int
+    {
+        $monthlyTotal = (float) $this->price * 12;
+        $yearly = (float) $this->yearly_price;
+
+        if ($monthlyTotal <= 0 || $yearly <= 0) {
+            return 0;
+        }
+
+        return max(0, (int) round((1 - $yearly / $monthlyTotal) * 100));
+    }
+
     /**
      * Get storage limit in bytes
      */

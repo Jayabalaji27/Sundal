@@ -108,7 +108,7 @@ class PlanLimitService
             if ($totalUsers >= $plan->max_users_per_workspace) {
                 return [
                     'allowed' => false,
-                    'message' => __('User limit reached. Your plan allows :limit users per workspace, you currently have :current active users and :pending pending invitations.', ['limit' => $plan->max_users_per_workspace, 'current' => $currentUsers, 'pending' => $pendingInvitations])
+                    'message' => __('User limit reached. Your plan allows :limit users per workspace (managers, members and clients, not counting the owner). You currently have :current active users and :pending pending invitations.', ['limit' => $plan->max_users_per_workspace, 'current' => $currentUsers, 'pending' => $pendingInvitations])
                 ];
             }
         }

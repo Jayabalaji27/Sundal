@@ -286,11 +286,11 @@ class TaskController extends Controller
             'milestones' => $milestones,
             'workspace_role' => $workspaceRole,
             'permissions' => [
-                'update' => $this->checkPermission('task_update'),
-                'delete' => $this->checkPermission('task_delete'),
+                'update' => $this->checkPermission('task_update') && $this->canModifyTask($task, $currentUser),
+                'delete' => $this->checkPermission('task_delete') && $this->canModifyTask($task, $currentUser),
                 'duplicate' => $this->checkPermission('task_duplicate'),
-                'change_status' => $this->checkPermission('task_change_status'),
-                'assign_users' => $this->checkPermission('task_assign_users'),
+                'change_status' => $this->checkPermission('task_change_status') && $this->canModifyTask($task, $currentUser),
+                'assign_users' => $this->checkPermission('task_assign_users') && $this->canModifyTask($task, $currentUser),
                 'add_comments' => $this->checkPermission('task_add_comments'),
                 'add_attachments' => $this->checkPermission('task_add_attachments'),
                 'manage_checklists' => $this->checkPermission('task_manage_checklists'),
@@ -314,7 +314,7 @@ class TaskController extends Controller
             'project_id' => 'required|exists:projects,id',
             'milestone_id' => 'nullable|exists:project_milestones,id',
             'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|max:10000',
             'priority' => 'required|in:low,medium,high,critical',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after:start_date',
@@ -375,9 +375,11 @@ class TaskController extends Controller
         if (!$workspace || $task->project->workspace_id != $workspace->id) {
             abort(403, 'Task not found in current workspace.');
         }
+        abort_unless($this->canModifyTask($task, $user), 403, __('You can only edit tasks you created or are assigned to.'));
+
         $validated = $request->validate([
             'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
+            'description' => 'nullable|string|max:10000',
             'priority' => 'required|in:low,medium,high,critical',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after:start_date',
@@ -389,6 +391,13 @@ class TaskController extends Controller
         // Check if assigned_to changed
         $oldAssignedTo = $task->assigned_to;
         $newAssignedTo = $validated['assigned_to'] ?? null;
+
+        // Reassigning a task needs task_assign_users (owners/managers).
+        if (array_key_exists('assigned_to', $validated)
+            && (int) $oldAssignedTo !== (int) $newAssignedTo
+            && !$this->checkPermission('task_assign_users')) {
+            abort(403, __('You do not have permission to reassign tasks.'));
+        }
 
         $task->update($validated);
 
@@ -425,6 +434,7 @@ class TaskController extends Controller
         if (!$workspace || $task->project->workspace_id != $workspace->id) {
             abort(403, 'Task not found in current workspace.');
         }
+        abort_unless($this->canModifyTask($task, $user), 403, __('You can only delete tasks you created or are assigned to.'));
 
         // Delete Google Calendar event
         if ($task->google_calendar_event_id) {
@@ -483,6 +493,10 @@ class TaskController extends Controller
 
         if (!$workspace || $task->project->workspace_id != $workspace->id) {
             abort(403, 'Task not found in current workspace.');
+        }
+        // Back with a message rather than a 403 page: this is usually a kanban drag.
+        if (!$this->canModifyTask($task, $user)) {
+            return back()->with('error', __('You can only move tasks you created or are assigned to.'));
         }
         $validated = $request->validate([
             'task_stage_id' => 'required|exists:task_stages,id'
@@ -557,5 +571,34 @@ class TaskController extends Controller
             'tasks' => $tasks,
             'calendar_view' => $calendarView
         ]);
+    }
+
+    /**
+     * Owners and managers can change any task in the workspace. Members may only
+     * change tasks they created, are assigned to, or are listed as a member of.
+     * Clients (who only hold task_change_status) may only move tasks on their own
+     * projects whose shared settings expose tasks to them.
+     */
+    private function canModifyTask(Task $task, User $user): bool
+    {
+        $workspace = $user->currentWorkspace;
+        if (!$workspace || $workspace->isOwner($user)) {
+            return true;
+        }
+
+        $role = $workspace->getMemberRole($user);
+
+        if ($role === 'client') {
+            return !empty($task->project?->shared_settings['task'])
+                && $task->project->clients()->where('user_id', $user->id)->exists();
+        }
+
+        if ($role !== 'member') {
+            return true;
+        }
+
+        return (int) $task->created_by === (int) $user->id
+            || (int) $task->assigned_to === (int) $user->id
+            || $task->members()->where('users.id', $user->id)->exists();
     }
 }

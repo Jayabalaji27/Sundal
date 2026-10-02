@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import { ArrowRight, Play, CheckCircle, Users, Zap, Shield } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { isRegistrationEnabled } from '@/utils/helpers';
 
 interface HeroSectionProps {
   brandColor?: string;
@@ -25,6 +26,7 @@ interface HeroSectionProps {
 
 export default function HeroSection({ settings, sectionData, brandColor = '#3b82f6' }: HeroSectionProps) {
   const { t } = useTranslation();
+  const pageProps = usePage().props as any;
   // Helper to get full URL for images
   const getImageUrl = (path: string) => {
     if (!path) return null;
@@ -83,7 +85,7 @@ export default function HeroSection({ settings, sectionData, brandColor = '#3b82
             </div>
             
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
-              {((usePage().props as any).isSaas) && (
+              {(pageProps.isSaas && isRegistrationEnabled(pageProps)) && (
                 <a
                   href={route('register')}
                   className="text-white px-8 py-4 rounded-xl transition-all duration-300 font-semibold text-base flex items-center justify-center gap-2 hover:scale-105 hover:shadow-lg transform"

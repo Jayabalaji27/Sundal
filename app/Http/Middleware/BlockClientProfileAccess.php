@@ -8,9 +8,8 @@ use Illuminate\Http\Request;
 class BlockClientProfileAccess
 {
     /**
-     * The Client role has no self-service profile page (avatar/name/email/password are
-     * managed by the workspace owner) — block direct navigation to profile.* routes,
-     * not just the nav link, so a client can't bypass the removed UI by URL.
+     * Client accounts are managed by the workspace owner - clients may edit their own
+     * profile and password, but can't delete their account (profile.destroy).
      */
     public function handle(Request $request, Closure $next)
     {

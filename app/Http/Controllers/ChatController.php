@@ -41,8 +41,9 @@ class ChatController extends Controller
                 ];
             });
 
-        // Users in the same workspace for starting new conversations
-        $workspaceUsers = User::whereHas('workspaces', fn($q) => $q->where('workspace_id', $workspaceId))
+        // Users in the same workspace for starting new conversations - only people
+        // whose workspace role can actually open Chat (clients can't).
+        $workspaceUsers = User::whereIn('id', $this->chatEnabledUserIds($workspaceId))
             ->where('id', '!=', $user->id)
             ->select('id', 'name', 'avatar')
             ->get();
@@ -126,7 +127,10 @@ class ChatController extends Controller
             'created_by'   => $user->id,
         ]);
 
-        // Add creator + selected/derived participants
+        // Add creator + selected/derived participants. Anyone whose workspace role has
+        // no chat access (e.g. a project's clients) is left out - they couldn't open
+        // the conversation and would only get notifications that lead to a 403.
+        $participantIds = array_intersect($participantIds, $this->chatEnabledUserIds($workspaceId));
         $conversation->participants()->attach(array_unique(array_merge([$user->id], $participantIds)));
 
         return redirect()->route('chat.index', ['conversation' => $conversation->id]);
@@ -195,8 +199,10 @@ class ChatController extends Controller
 
         $message->load('sender:id,name,avatar');
 
+        $chatUserIds = $this->chatEnabledUserIds($conversation->workspace_id);
         $conversation->participants()
             ->where('user_id', '!=', $user->id)
+            ->whereIn('users.id', $chatUserIds)
             ->get()
             ->each(fn (User $participant) => $participant->notify(new NewChatMessageNotification($message)));
 
@@ -208,5 +214,26 @@ class ChatController extends Controller
             'created_at' => $message->created_at,
             'is_mine'    => true,
         ]);
+    }
+
+    /**
+     * IDs of the workspace's owner and active members whose workspace role grants chat_view.
+     */
+    private function chatEnabledUserIds(int $workspaceId): array
+    {
+        $chatRoles = \Spatie\Permission\Models\Role::whereHas('permissions', fn ($q) => $q->where('name', 'chat_view'))
+            ->pluck('name');
+
+        $ownerId = \App\Models\Workspace::whereKey($workspaceId)->value('owner_id');
+
+        return \App\Models\WorkspaceMember::where('workspace_id', $workspaceId)
+            ->where('status', 'active')
+            ->whereIn('role', $chatRoles)
+            ->pluck('user_id')
+            ->push($ownerId)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 }

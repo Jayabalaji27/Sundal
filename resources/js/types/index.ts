@@ -62,6 +62,7 @@ export interface TaskStage {
     color: string;
     order: number;
     is_default: boolean;
+    is_completed?: boolean;
     tasks_count: number;
     tasks?: Task[];
     created_at: string;

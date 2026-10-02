@@ -67,6 +67,15 @@ export const couponsConfig: CrudConfig = {
         label: t('Status'), 
         render: (value, row) => {
           const [isChecked, setIsChecked] = React.useState(!!value);
+
+          // Past its expiry date: can't be applied regardless of the switch
+          if (row.is_expired) {
+            return React.createElement('div', { className: 'flex items-center justify-center' },
+              React.createElement('span', {
+                className: 'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset bg-red-50 text-red-700 ring-red-600/20'
+              }, t('Expired'))
+            );
+          }
           
           const handleToggle = async () => {
             const { router } = await import('@inertiajs/react');
@@ -131,7 +140,8 @@ export const couponsConfig: CrudConfig = {
       options: [
         { value: 'all', label: t('All Status') },
         { value: '1', label: t('Active') },
-        { value: '0', label: t('Inactive') }
+        { value: '0', label: t('Inactive') },
+        { value: 'expired', label: t('Expired') }
       ]
     }
   ],

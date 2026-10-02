@@ -17,7 +17,6 @@ export function ProfileMenu() {
   const { t } = useTranslation();
   const { auth } = usePage().props as any;
   const user = auth?.user;
-  const isClient = user?.workspace_role === 'client';
 
   const handleLogout = () => {
     router.post(route('logout'));
@@ -52,17 +51,14 @@ export function ProfileMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {!isClient && (
-          <DropdownMenuGroup>
-            <DropdownMenuItem asChild>
-              <Link href={route('profile')}>
-                <User className="mr-2 h-4 w-4" />
-                <span>{t("Profile")}</span>
-              </Link>
-            </DropdownMenuItem>
-
-          </DropdownMenuGroup>
-        )}
+        <DropdownMenuGroup>
+          <DropdownMenuItem asChild>
+            <Link href={route('profile')}>
+              <User className="mr-2 h-4 w-4" />
+              <span>{t("Profile")}</span>
+            </Link>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />

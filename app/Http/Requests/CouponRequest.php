@@ -15,6 +15,13 @@ class CouponRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->code)) {
+            $this->merge(['code' => trim($this->code)]);
+        }
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
@@ -46,6 +53,7 @@ class CouponRequest extends FormRequest
                 'required_if:code_type,manual',
                 'string',
                 'max:50',
+                'regex:/^[A-Za-z0-9_-]+$/',
                 Rule::unique('coupons', 'code')->ignore($couponId)
             ],
             'code_type' => 'required|in:manual,auto',
@@ -68,6 +76,7 @@ class CouponRequest extends FormRequest
             'expiry_date.after' => __('The expiry date must be a future date.'),
             'code.required_if' => __('The coupon code is required when manual entry is selected.'),
             'code.unique' => __('This coupon code is already taken.'),
+            'code.regex' => __('The coupon code may only contain letters, numbers, dashes and underscores (no spaces).'),
             'code_type.required' => __('Please select a code generation method.'),
         ];
     }

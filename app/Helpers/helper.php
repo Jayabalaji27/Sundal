@@ -30,6 +30,22 @@ if (!function_exists('getCacheSize')) {
     }
 }
 
+if (! function_exists('platformSettingsUserId')) {
+    /**
+     * Platform (SaaS-level) settings - landing page, registration, email, branding -
+     * belong to the platform, not to whichever superadmin account saved them. All
+     * superadmins read and write them under one canonical account (the oldest
+     * superadmin), which is also the account guests' settings are read from.
+     * Before this, a second superadmin's saves were never seen by guests.
+     */
+    function platformSettingsUserId(): ?int
+    {
+        return \Illuminate\Support\Facades\Cache::remember('settings_platform_user_id', 60, function () {
+            return User::where('type', 'superadmin')->orderBy('id')->value('id');
+        });
+    }
+}
+
 if (! function_exists('settings')) {
     function settings($user_id = null, $workspace_id = null)
     {
@@ -74,6 +90,7 @@ if (! function_exists('settings')) {
         });
         if ($user && $user->type === 'superadmin') {
             $workspace_id = null;
+            $user_id = platformSettingsUserId() ?? $user_id;
         } elseif (auth()->user() && auth()->user()->type === 'company' && is_null($workspace_id)) {
             $workspace_id = auth()->user()->current_workspace_id;
         }
@@ -147,6 +164,12 @@ if (! function_exists('updateSetting')) {
 
         if (!$user_id) {
             return false;
+        }
+
+        // Superadmin saves go to the shared platform settings account (see platformSettingsUserId)
+        if (User::whereKey($user_id)->value('type') === 'superadmin') {
+            $user_id = platformSettingsUserId() ?? $user_id;
+            $workspace_id = null;
         }
 
         // For superadmin, workspace_id is always null
@@ -859,10 +882,12 @@ if (! function_exists('calculatePlanPricing')) {
         $couponId = null;
         
         if ($couponCode) {
+            // usable(): enabled AND not past its expiry date - an expired coupon must
+            // never discount a real payment, even if the UI let it through.
             $coupon = Coupon::where('code', $couponCode)
-                ->where('status', 1)
+                ->usable()
                 ->first();
-            
+
             if ($coupon) {
                 if ($coupon->type === 'percentage') {
                     $discountAmount = ($originalPrice * $coupon->discount_amount) / 100;

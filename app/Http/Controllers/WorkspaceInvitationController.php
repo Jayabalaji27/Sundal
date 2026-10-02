@@ -177,6 +177,7 @@ class WorkspaceInvitationController extends Controller
         if (!auth()->user()->canAccessWorkspace($invitation->workspace)) {
             abort(403);
         }
+        $this->ensureCanManageInvitation($invitation);
 
         // Check if email is properly configured before resending
         $userId = $invitation->workspace->owner_id ?? auth()->id();
@@ -203,8 +204,27 @@ class WorkspaceInvitationController extends Controller
         if (!auth()->user()->canAccessWorkspace($invitation->workspace)) {
             abort(403);
         }
+        $this->ensureCanManageInvitation($invitation);
 
         $invitation->delete();
         return back()->with('success', __('Invitation deleted successfully'));
+    }
+
+    /**
+     * Resending or cancelling an invitation follows the same rule as sending one:
+     * a manager may only act on Member invitations, not the owner's Manager/Client
+     * invitations.
+     */
+    private function ensureCanManageInvitation(WorkspaceInvitation $invitation): void
+    {
+        $user = auth()->user();
+        $workspace = $invitation->workspace;
+
+        if ($workspace->isOwner($user)) {
+            return;
+        }
+
+        $allowedRoles = $workspace->getMemberRole($user) === 'manager' ? ['member'] : [];
+        abort_unless(in_array($invitation->role, $allowedRoles, true), 403, __('You can only manage invitations for roles you are allowed to invite.'));
     }
 }

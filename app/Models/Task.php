@@ -94,9 +94,24 @@ class Task extends Model
         return $query->where('priority', $priority);
     }
 
+    public function isCompleted(): bool
+    {
+        return $this->progress >= 100 || (bool) $this->taskStage?->is_completed;
+    }
+
     public function isOverdue(): bool
     {
-        return $this->end_date && $this->end_date->isPast() && $this->progress < 100;
+        return $this->end_date && $this->end_date->lt(now()->startOfDay()) && !$this->isCompleted();
+    }
+
+    /** Tasks that aren't finished: not at 100% and not sitting in a completed stage. */
+    public function scopeOpen($query)
+    {
+        return $query->where('progress', '<', 100)
+            ->where(function ($q) {
+                $q->whereNull('task_stage_id')
+                    ->orWhereIn('task_stage_id', TaskStage::withoutGlobalScopes()->where('is_completed', false)->select('id'));
+            });
     }
 
     public function calculateProgress(): int
@@ -156,6 +171,25 @@ class Task extends Model
 
     protected static function booted()
     {
+        // Moving a task into a completed stage ("Done") completes it; moving it back
+        // out of one re-opens it. Covers every path that changes the stage (kanban
+        // drag, edit form, dashboard quick-update).
+        static::saving(function (Task $task) {
+            if (!$task->task_stage_id || !$task->isDirty('task_stage_id')) {
+                return;
+            }
+
+            $isCompletedStage = (bool) TaskStage::withoutGlobalScopes()->whereKey($task->task_stage_id)->value('is_completed');
+
+            if ($isCompletedStage) {
+                $task->progress = 100;
+            } elseif ($task->getOriginal('task_stage_id')
+                && (int) $task->progress === 100
+                && TaskStage::withoutGlobalScopes()->whereKey($task->getOriginal('task_stage_id'))->value('is_completed')) {
+                $task->progress = 0;
+            }
+        });
+
         static::updated(function ($task) {
             $task->updateMilestoneProgress();
         });
