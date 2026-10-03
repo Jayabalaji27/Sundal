@@ -246,29 +246,25 @@ class MercadoPagoController extends Controller
                 return redirect()->route('plans.index')->with('error', __('Plan not found'));
             }
             
-            // Create plan order
-            $planOrder = new PlanOrder();
-            $planOrder->plan_id = $planId;
-            $planOrder->user_id = $userId;
-            $planOrder->payment_method = 'mercadopago';
-            $planOrder->payment_id = $paymentId;
-            $planOrder->amount = $plan->getPriceForCycle($billingCycle);
-            $planOrder->billing_cycle = $billingCycle;
-            $planOrder->status = 'completed';
-            $planOrder->coupon_code = $couponCode ?? null;
-            $planOrder->save();
-            
-            // Activate subscription
-            $planOrder->activateSubscription();
-            
+            // The redirect's query string isn't proof of payment (it's never checked
+            // against Mercado Pago here), so record a pending order for a
+            // superadmin to approve instead of activating the plan.
+            recordUnverifiedPlanPayment([
+                'user_id' => $userId,
+                'plan_id' => $plan->id,
+                'billing_cycle' => $billingCycle,
+                'payment_method' => 'mercadopago',
+                'coupon_code' => $couponCode ?? null,
+                'payment_id' => $paymentId,
+            ]);
+
+            $message = __('Payment received. Your plan will be activated once the payment is confirmed.');
+
             if ($request->expectsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => __('Payment successful! Your subscription has been activated.')
-                ]);
+                return response()->json(['success' => true, 'message' => $message]);
             }
-            
-            return redirect()->route('plans.index')->with('success', __('Payment successful! Your subscription has been activated.'));
+
+            return redirect()->route('plans.index')->with('warning', $message);
         } catch (\Exception $e) {
             if ($request->expectsJson()) {
                 return response()->json([

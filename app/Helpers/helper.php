@@ -968,6 +968,96 @@ if (! function_exists('processPaymentSuccess')) {
     }
 }
 
+if (! function_exists('platformPaymentSettings')) {
+    /**
+     * Payment gateway credentials that plan purchases are paid with - the
+     * superadmin's (same account the plans page reads the public keys from).
+     */
+    function platformPaymentSettings(): array
+    {
+        $superAdminId = User::where('type', 'superadmin')->orderBy('id')->value('id');
+
+        return $superAdminId ? PaymentSetting::getUserSettings($superAdminId, null) : [];
+    }
+}
+
+if (! function_exists('createPendingPlanOrder')) {
+    /**
+     * Record a plan purchase that has been started but not yet confirmed by the
+     * payment provider. The plan is only assigned once completePlanOrderPayment()
+     * confirms it (or a superadmin approves the order by hand).
+     */
+    function createPendingPlanOrder(array $data): PlanOrder
+    {
+        return createPlanOrder(array_merge($data, ['status' => 'pending']));
+    }
+}
+
+if (! function_exists('completePlanOrderPayment')) {
+    /**
+     * Approve a pending plan order once the provider has confirmed $paidAmount was
+     * paid for it. Idempotent: an already-approved order is left as is. Returns
+     * false when the order isn't pending or the amount doesn't cover the price.
+     */
+    function completePlanOrderPayment(PlanOrder $order, float $paidAmount, ?string $providerPaymentId = null): bool
+    {
+        if ($order->status === 'approved') {
+            return true;
+        }
+        if ($order->status !== 'pending') {
+            return false;
+        }
+        if (round($paidAmount, 2) + 0.009 < round((float) $order->final_price, 2)) {
+            \Log::warning('Plan order payment amount mismatch', [
+                'order' => $order->order_number, 'paid' => $paidAmount, 'expected' => $order->final_price,
+            ]);
+            return false;
+        }
+
+        if ($providerPaymentId && $providerPaymentId !== $order->payment_id) {
+            $order->update(['notes' => trim(($order->notes ?? '') . ' provider_payment_id:' . $providerPaymentId)]);
+        }
+
+        $order->approve();
+
+        return true;
+    }
+}
+
+if (! function_exists('recordUnverifiedPlanPayment')) {
+    /**
+     * For gateways whose result we can't confirm with the provider on the server
+     * yet: record the purchase as a pending plan order instead of activating the
+     * plan. A superadmin approves it from Plan Orders once the money has arrived.
+     * Idempotent per provider payment ID.
+     */
+    function recordUnverifiedPlanPayment(array $data): PlanOrder
+    {
+        if (!empty($data['payment_id'])) {
+            $existing = PlanOrder::where('payment_id', $data['payment_id'])
+                ->where('payment_method', $data['payment_method'] ?? null)
+                ->first();
+            if ($existing) {
+                return $existing;
+            }
+        }
+
+        \Log::info('Plan payment recorded as pending (not verified with provider)', [
+            'method' => $data['payment_method'] ?? null, 'user_id' => $data['user_id'] ?? null, 'plan_id' => $data['plan_id'] ?? null,
+        ]);
+
+        return createPendingPlanOrder($data);
+    }
+}
+
+if (! function_exists('planPaymentAlreadyUsed')) {
+    /** A provider payment ID can only ever pay for one plan order. */
+    function planPaymentAlreadyUsed(string $paymentId): bool
+    {
+        return PlanOrder::where('payment_id', $paymentId)->where('status', 'approved')->exists();
+    }
+}
+
 if (! function_exists('isSaasMode')) {
     /**
      * Check if the application is running in SaaS mode

@@ -64,6 +64,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'payments/paytabs/callback',
             'payments/iyzipay/success',
             'payments/iyzipay/callback',
+            // Gateway webhooks - verified in their controllers, not by session.
+            'payments/payhere/callback',
+            'payments/sspay/callback',
+            'payments/yookassa/callback',
+            'payments/easebuzz/callback',
             'api/media/batch'
             ],
         );

@@ -23,7 +23,7 @@ class MidtransPaymentController extends Controller
             }
 
             if (in_array($validated['transaction_status'], ['capture', 'settlement'])) {
-                processPaymentSuccess([
+                recordUnverifiedPlanPayment([
                     'user_id' => auth()->id(),
                     'plan_id' => $plan->id,
                     'billing_cycle' => $validated['billing_cycle'],
@@ -32,7 +32,7 @@ class MidtransPaymentController extends Controller
                     'payment_id' => $validated['order_id'],
                 ]);
 
-                return back()->with('success', __('Payment successful and plan activated'));
+                return back()->with('warning', __('Payment received. Your plan will be activated once the payment is confirmed.'));
             }
 
             return back()->withErrors(['error' => __('Payment failed or cancelled')]);
@@ -122,7 +122,7 @@ class MidtransPaymentController extends Controller
                     $user = \App\Models\User::find($userId);
                     
                     if ($plan && $user) {
-                        processPaymentSuccess([
+                        recordUnverifiedPlanPayment([
                             'user_id' => $user->id,
                             'plan_id' => $plan->id,
                             'billing_cycle' => 'monthly',

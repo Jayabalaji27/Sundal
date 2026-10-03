@@ -26,7 +26,7 @@ class CinetPayPaymentController extends Controller
             }
 
             if ($validated['cpm_result'] === '00') { // Success status
-                processPaymentSuccess([
+                recordUnverifiedPlanPayment([
                     'user_id' => auth()->id(),
                     'plan_id' => $plan->id,
                     'billing_cycle' => $validated['billing_cycle'],
@@ -35,7 +35,7 @@ class CinetPayPaymentController extends Controller
                     'payment_id' => $validated['cpm_trans_id'],
                 ]);
 
-                return back()->with('success', __('Payment successful and plan activated'));
+                return back()->with('warning', __('Payment received. Your plan will be activated once the payment is confirmed.'));
             }
 
             return back()->withErrors(['error' => __('Payment failed or cancelled')]);
@@ -137,7 +137,7 @@ class CinetPayPaymentController extends Controller
                     if ($plan && $user) {
                         $customData = json_decode($request->input('cpm_custom'), true);
                         
-                        processPaymentSuccess([
+                        recordUnverifiedPlanPayment([
                             'user_id' => $user->id,
                             'plan_id' => $plan->id,
                             'billing_cycle' => $customData['billing_cycle'] ?? 'monthly',
@@ -171,15 +171,10 @@ class CinetPayPaymentController extends Controller
                     'payment_method' => 'cinetpay',
                     'payment_date' => now(),
                     'transaction_id' => $request->cpm_trans_id,
-                    'status' => 'completed',
+                    'status' => Payment::STATUS_PENDING, // not verified with CinetPay: owner approves
                     'created_by' => $invoice->created_by
                 ]);
 
-                // Update invoice status
-                $totalPaid = $invoice->payments()->sum('amount');
-                if ($totalPaid >= $invoice->total_amount) {
-                    $invoice->update(['status' => 'paid']);
-                }
 
                 return redirect()->route('invoices.show', $invoice->id)
                     ->with('success', __('Payment successful!'));
@@ -298,15 +293,10 @@ class CinetPayPaymentController extends Controller
                             'payment_method' => 'cinetpay',
                             'payment_date' => now(),
                             'transaction_id' => $transactionId,
-                            'status' => 'completed',
+                            'status' => Payment::STATUS_PENDING, // not verified with CinetPay: owner approves
                             'created_by' => $invoice->created_by
                         ]);
 
-                        // Update invoice status
-                        $totalPaid = $invoice->payments()->sum('amount');
-                        if ($totalPaid >= $invoice->total_amount) {
-                            $invoice->update(['status' => 'paid']);
-                        }
                     }
 
                     $message = $request->has('test') ? 'Payment completed successfully (Test Mode)!' : 'Payment completed successfully!';
@@ -348,15 +338,10 @@ class CinetPayPaymentController extends Controller
                             'payment_method' => 'cinetpay',
                             'payment_date' => now(),
                             'transaction_id' => $transactionId,
-                            'status' => 'completed',
+                            'status' => Payment::STATUS_PENDING, // not verified with CinetPay: owner approves
                             'created_by' => $invoice->created_by
                         ]);
 
-                        // Update invoice status
-                        $totalPaid = $invoice->payments()->sum('amount');
-                        if ($totalPaid >= $invoice->total_amount) {
-                            $invoice->update(['status' => 'paid']);
-                        }
                     }
                 }
             }

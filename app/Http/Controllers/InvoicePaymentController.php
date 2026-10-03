@@ -102,7 +102,9 @@ class InvoicePaymentController extends Controller
     public function processPayment(Request $request, $token)
     {
         $invoice = Invoice::where('payment_token', $token)->firstOrFail();
-        $remainingAmount = $invoice->remaining_amount ?: $invoice->total_amount;
+        // remaining_amount is 0 for a fully paid invoice; the old `?: total_amount`
+        // fallback let a paid invoice be paid again in full.
+        $remainingAmount = (float) $invoice->remaining_amount;
         $pendingTotal = $invoice->payments()->where('status', 'pending')->sum('amount');
         $maxAmount = max(0, $remainingAmount - $pendingTotal);
 

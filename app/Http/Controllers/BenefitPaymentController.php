@@ -171,43 +171,15 @@ class BenefitPaymentController extends Controller
         }
     }
 
+    /**
+     * Return URL. It used to activate whatever plan/user the query string named,
+     * with no payment check. Benefit can't confirm payments yet (see
+     * verifyBenefitPayment()), so nothing is activated here.
+     */
     public function success(Request $request)
     {
-        try {
-            $planId = $request->input('plan_id');
-            $userId = $request->input('user_id');
-            $amount = $request->input('amount');
-            $coupon = $request->input('coupon');
-            $billingCycle = $request->input('billing_cycle', 'monthly');
-            
-            if ($planId && $userId) {
-                $plan = Plan::find($planId);
-                $user = User::find($userId);
-                
-                if ($plan && $user) {
-                    processPaymentSuccess([
-                        'user_id' => $user->id,
-                        'plan_id' => $plan->id,
-                        'billing_cycle' => $billingCycle,
-                        'payment_method' => 'benefit',
-                        'coupon_code' => $coupon,
-                        'payment_id' => $request->input('tap_id', 'benefit_' . time()),
-                    ]);
-                    
-                    // Log the user in if not already authenticated
-                    if (!auth()->check()) {
-                        auth()->login($user);
-                    }
-                    
-                    return redirect()->route('plans.index')->with('success', __('Payment completed successfully and plan activated'));
-                }
-            }
-            
-            return redirect()->route('plans.index')->with('error', __('Payment verification failed'));
-            
-        } catch (\Exception $e) {
-            return redirect()->route('plans.index')->with('error', __('Payment processing failed'));
-        }
+        return redirect()->route('plans.index')
+            ->with('error', __('Benefit payments cannot be confirmed automatically. Please contact support with your payment reference.'));
     }
 
     public function webhook(Request $request)
@@ -260,11 +232,15 @@ class BenefitPaymentController extends Controller
         }
     }
 
+    /**
+     * Benefit is not integrated with the real Benefit API yet (session creation,
+     * retrieval and webhook checks below are placeholders), so a payment can never
+     * be confirmed here. Fail closed: nothing is activated or marked paid through
+     * Benefit until a real integration replaces these methods.
+     */
     private function verifyBenefitPayment($paymentId, $transactionId, $settings)
     {
-        // This is a simplified verification - in production, use Benefit API
-        // For now, we'll assume the payment is valid if we have the required parameters
-        return !empty($paymentId) && !empty($transactionId);
+        return false;
     }
 
     private function createBenefitSession($paymentData, $settings)
@@ -281,23 +257,19 @@ class BenefitPaymentController extends Controller
         ];
     }
 
+    /** Placeholder - see verifyBenefitPayment(). Never reports a payment as completed. */
     private function retrieveBenefitPayment($paymentId, $settings)
     {
-        // This is a simplified retrieval - in production, use Benefit API
-        // For now, return a mock successful response
         return [
-            'status' => 'completed',
+            'status' => 'unverified',
             'payment_id' => $paymentId,
-            'amount' => '10.000',
-            'currency' => 'BHD'
         ];
     }
 
+    /** Placeholder - see verifyBenefitPayment(). Webhooks are never trusted. */
     private function verifyBenefitWebhook($payload, $signature, $settings)
     {
-        // This is a simplified webhook verification - in production, verify the signature
-        // using Benefit's webhook secret and HMAC
-        return true;
+        return false;
     }
 
     public function createInvoicePayment(Request $request)
