@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Plan;
+use App\Models\PlanOrder;
 use Illuminate\Http\Request;
 use YooKassa\Client;
 
@@ -16,17 +17,26 @@ class YooKassaPaymentController extends Controller
             $plan = Plan::findOrFail($validated['plan_id']);
             $pricing = calculatePlanPricing($plan, $validated['coupon_code'] ?? null, $validated['billing_cycle'] ?? 'monthly');
             $settings = getPaymentGatewaySettings();
-            
+
             if (!isset($settings['payment_settings']['yookassa_shop_id'])) {
                 return response()->json(['error' => 'YooKassa not configured'], 400);
             }
 
             $client = new Client();
             $client->setAuth((int)$settings['payment_settings']['yookassa_shop_id'], $settings['payment_settings']['yookassa_secret_key']);
-            
-            $orderID = strtoupper(str_replace('.', '', uniqid('', true)));
             $user = auth()->user();
-            
+
+            // Pending until YooKassa itself reports the payment as succeeded
+            // (success() / callback() re-fetch it from the API).
+            $order = createPendingPlanOrder([
+                'user_id' => $user->id,
+                'plan_id' => $plan->id,
+                'billing_cycle' => $validated['billing_cycle'],
+                'payment_method' => 'yookassa',
+                'coupon_code' => $validated['coupon_code'] ?? null,
+                'payment_id' => null,
+            ]);
+
             $payment = $client->createPayment([
                 'amount' => [
                     'value' => number_format($pricing['final_price'], 2, '.', ''),
@@ -34,23 +44,19 @@ class YooKassaPaymentController extends Controller
                 ],
                 'confirmation' => [
                     'type' => 'redirect',
-                    'return_url' => route('yookassa.success', [
-                        'plan_id' => $plan->id, 
-                        'order_id' => $orderID, 
-                        'billing_cycle' => $validated['billing_cycle'],
-                        'coupon_code' => $validated['coupon_code'] ?? null
-                    ]),
+                    'return_url' => route('yookassa.success', ['order' => $order->order_number]),
                 ],
                 'capture' => true,
                 'description' => 'Plan: ' . $plan->name,
                 'metadata' => [
+                    'plan_order' => $order->order_number,
                     'plan_id' => $plan->id,
                     'user_id' => $user->id,
                     'billing_cycle' => $validated['billing_cycle'],
-                    'coupon_code' => $validated['coupon_code'] ?? null,
-                    'order_id' => $orderID
                 ]
             ], uniqid('', true));
+
+            $order->update(['payment_id' => $payment['id']]);
 
             if ($payment['confirmation']['confirmation_url'] != null) {
                 return response()->json([
@@ -58,96 +64,54 @@ class YooKassaPaymentController extends Controller
                     'payment_url' => $payment['confirmation']['confirmation_url'],
                     'payment_id' => $payment['id']
                 ]);
-            } else {
-                return response()->json(['error' => __('Payment creation failed')], 500);
             }
 
+            return response()->json(['error' => __('Payment creation failed')], 500);
         } catch (\Exception $e) {
             return response()->json(['error' => __('Payment creation failed')], 500);
         }
     }
 
+    /**
+     * Return URL after YooKassa checkout. Public route: the plan order is looked
+     * up by its order number and only activated if YooKassa's API says the
+     * payment succeeded for the right amount.
+     */
     public function success(Request $request)
     {
         try {
-            $planId = $request->input('plan_id');
-            $billingCycle = $request->input('billing_cycle');
-            $couponCode = $request->input('coupon_code');
-            $orderId = $request->input('order_id');
-            
-            if ($planId && $orderId) {
-                $plan = Plan::find($planId);
-                
-                // Find user by session or create temporary assignment
-                $user = null;
-                if (auth()->check()) {
-                    $user = auth()->user();
-                } else {
-                    // Try to find user from recent plan orders
-                    $recentOrder = \App\Models\PlanOrder::where('payment_id', 'like', '%' . substr($orderId, -8))
-                        ->where('created_at', '>=', now()->subHours(1))
-                        ->first();
-                    if ($recentOrder) {
-                        $user = \App\Models\User::find($recentOrder->user_id);
-                    }
-                }
-                
-                if ($plan && $user) {
-                    // Assign plan to user immediately
-                    $user->plan_id = $plan->id;
-                    $user->plan_expire_date = $billingCycle === 'yearly' ? now()->addYear() : now()->addMonth();
-                    $user->save();
-                    
-                    // Create plan order record
-                    processPaymentSuccess([
-                        'user_id' => $user->id,
-                        'plan_id' => $plan->id,
-                        'billing_cycle' => $billingCycle,
-                        'payment_method' => 'yookassa',
-                        'coupon_code' => $couponCode,
-                        'payment_id' => $orderId,
-                    ]);
-                    
-                    return redirect()->route('plans.index')->with('success', 'Payment successful and plan activated');
-                }
+            $order = PlanOrder::where('order_number', (string) $request->input('order'))
+                ->where('payment_method', 'yookassa')
+                ->first();
+
+            if ($order && $this->confirmPlanOrder($order)) {
+                return redirect()->route('plans.index')->with('success', __('Payment successful and plan activated'));
             }
-            return redirect()->route('plans.index')->with('error', __('Payment verification failed'));
+
+            return redirect()->route('plans.index')->with('warning', __('Your plan will be activated as soon as YooKassa confirms the payment.'));
         } catch (\Exception $e) {
             return redirect()->route('plans.index')->with('error', __('Payment processing failed'));
         }
     }
 
+    /**
+     * YooKassa webhook. The request body is only used to find our order; the
+     * payment itself is re-fetched from YooKassa's API before anything happens.
+     */
     public function callback(Request $request)
     {
         try {
-            $paymentId = $request->input('object.id');
-            $status = $request->input('object.status');
-            $metadata = $request->input('object.metadata');
-            
-            if ($paymentId && $status === 'succeeded' && $metadata) {
-                $planId = $metadata['plan_id'];
-                $userId = $metadata['user_id'];
-                
-                $plan = Plan::find($planId);
-                $user = \App\Models\User::find($userId);
-                
-                if ($plan && $user) {
-                    // Assign plan to user
-                    $user->plan_id = $plan->id;
-                    $user->plan_expire_date = $metadata['billing_cycle'] === 'yearly' ? now()->addYear() : now()->addMonth();
-                    $user->save();
-                    
-                    processPaymentSuccess([
-                        'user_id' => $user->id,
-                        'plan_id' => $plan->id,
-                        'billing_cycle' => $metadata['billing_cycle'] ?? 'monthly',
-                        'payment_method' => 'yookassa',
-                        'coupon_code' => $metadata['coupon_code'] ?? null,
-                        'payment_id' => $paymentId,
-                    ]);
-                }
+            $paymentId = (string) $request->input('object.id');
+            $order = $paymentId !== ''
+                ? PlanOrder::where('payment_id', $paymentId)->where('payment_method', 'yookassa')->first()
+                : null;
+
+            if ($order) {
+                $this->confirmPlanOrder($order);
             }
-            return response()->json(['status' => 'success']);
+
+            // Always 200 so YooKassa doesn't keep retrying notifications we ignore.
+            return response()->json(['status' => 'ok']);
         } catch (\Exception $e) {
             return response()->json(['error' => __('Callback processing failed')], 500);
         }
@@ -270,21 +234,23 @@ class YooKassaPaymentController extends Controller
         }
     }
 
+    /** YooKassa webhook for invoice payments; the payment is re-fetched from the API. */
     public function invoiceCallback(Request $request)
     {
         try {
-            $paymentId = $request->input('object.id');
-            $status = $request->input('object.status');
-            $metadata = $request->input('object.metadata');
+            $paymentId = (string) $request->input('object.id');
+            $invoiceId = $request->input('object.metadata.invoice_id');
+            $invoice = $invoiceId ? \App\Models\Invoice::find($invoiceId) : null;
 
-            if ($paymentId && $status === 'succeeded' && $metadata) {
-                $invoiceId = $metadata['invoice_id'];
-                $amount = $metadata['amount'];
+            if ($paymentId !== '' && $invoice) {
+                $settings = \App\Models\PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+                $payment = $this->fetchSucceededPayment($settings, $paymentId);
 
-                $invoice = \App\Models\Invoice::find($invoiceId);
-
-                if ($invoice) {
-                    $invoice->createPaymentRecord($amount, 'yookassa', $paymentId);
+                if ($payment && (int) ($payment->getMetadata()?->toArray()['invoice_id'] ?? 0) === $invoice->id) {
+                    $amount = (float) $payment->getAmount()->getValue();
+                    if ($amount <= (float) $invoice->remaining_amount + 0.009) {
+                        $invoice->createPaymentRecord($amount, 'yookassa', $paymentId, verified: true);
+                    }
                 }
             }
 
@@ -380,5 +346,38 @@ class YooKassaPaymentController extends Controller
             return redirect()->route('invoices.payment', $token)
                 ->with('error', 'Payment processing failed');
         }
+    }
+
+
+    /** Activate a pending plan order if YooKassa reports its payment as succeeded. */
+    private function confirmPlanOrder(PlanOrder $order): bool
+    {
+        if ($order->status === 'approved') {
+            return true;
+        }
+        if (!$order->payment_id) {
+            return false;
+        }
+
+        $payment = $this->fetchSucceededPayment(platformPaymentSettings(), $order->payment_id);
+        if (!$payment || strtoupper($payment->getAmount()->getCurrency()) !== 'RUB') {
+            return false;
+        }
+
+        return completePlanOrderPayment($order, (float) $payment->getAmount()->getValue());
+    }
+
+    /** The payment from YooKassa's API, or null unless it's paid and succeeded. */
+    private function fetchSucceededPayment(array $settings, string $paymentId)
+    {
+        if (empty($settings['yookassa_shop_id']) || empty($settings['yookassa_secret_key'])) {
+            return null;
+        }
+
+        $client = new Client();
+        $client->setAuth((int) $settings['yookassa_shop_id'], $settings['yookassa_secret_key']);
+        $payment = $client->getPaymentInfo($paymentId);
+
+        return ($payment && $payment->getStatus() === 'succeeded' && $payment->getPaid()) ? $payment : null;
     }
 }

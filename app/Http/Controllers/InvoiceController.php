@@ -141,10 +141,24 @@ class InvoiceController extends Controller
             }
         }
 
+        // Payments waiting for the owner's approval (bank transfers and online
+        // payments that couldn't be verified with the provider).
+        $pendingPayments = $invoice->payments()
+            ->where('status', \App\Models\Payment::STATUS_PENDING)
+            ->latest()
+            ->get()
+            ->map(function ($payment) {
+                $payment->receipt_url = $payment->receipt_path
+                    ? (check_file($payment->receipt_path) ? get_file($payment->receipt_path) : $payment->receipt_path)
+                    : null;
+                return $payment;
+            });
+
         return Inertia::render('invoices/Show', [
             'invoice' => $invoice,
             'userWorkspaceRole' => $userWorkspaceRole,
             'emailNotificationsEnabled' => $this->isEmailConfigured($workspace),
+            'pendingPayments' => in_array($userWorkspaceRole, ['owner', 'manager']) || $workspace->isOwner($user) ? $pendingPayments : [],
         ]);
     }
 

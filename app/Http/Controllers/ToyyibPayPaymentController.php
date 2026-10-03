@@ -166,7 +166,7 @@ class ToyyibPayPaymentController extends Controller
                 $planOrder = \App\Models\PlanOrder::where('payment_id', $order_id)->first();
 
                 if ($planOrder && $planOrder->status === 'pending') {
-                    processPaymentSuccess([
+                    recordUnverifiedPlanPayment([
                         'user_id' => $planOrder->user_id,
                         'plan_id' => $planOrder->plan_id,
                         'billing_cycle' => $planOrder->billing_cycle,

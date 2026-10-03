@@ -55,21 +55,9 @@ export function SSPayPaymentForm({
 
       const data = await response.json();
 
-      if (data.success) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = data.payment_url;
-
-        Object.keys(data.payment_data).forEach(key => {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = key;
-          input.value = data.payment_data[key];
-          form.appendChild(input);
-        });
-
-        document.body.appendChild(form);
-        form.submit();
+      if (data.success && data.redirect_url) {
+        // The bill is created on the server; just go to SSPay's hosted bill page.
+        window.location.href = data.redirect_url;
       } else {
         throw new Error(data.error || t('Payment creation failed'));
       }

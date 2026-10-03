@@ -199,7 +199,7 @@ class Invoice extends Model
 
     public function getRemainingAmountAttribute()
     {
-        $totalPaid = $this->payments()->sum('amount');
+        $totalPaid = $this->payments()->completed()->sum('amount');
         return max(0, $this->total_amount - $totalPaid);
     }
 
@@ -316,7 +316,12 @@ class Invoice extends Model
         ]);
     }
 
-    public function createPaymentRecord($amount, $paymentMethod, $transactionId)
+    /**
+     * Record a payment against this invoice. Pass $verified = true only when the
+     * payment was confirmed with the payment provider on the server; otherwise
+     * it's recorded as pending until the invoice owner approves it.
+     */
+    public function createPaymentRecord($amount, $paymentMethod, $transactionId, bool $verified = false)
     {
         $existingPayment = Payment::where('invoice_id', $this->id)
             ->where('transaction_id', $transactionId)
@@ -330,7 +335,8 @@ class Invoice extends Model
                 'transaction_id' => $transactionId,
                 'payment_date' => now(),
                 'created_by' => $this->created_by,
-                'workspace_id' => $this->workspace_id
+                'workspace_id' => $this->workspace_id,
+                'status' => $verified ? Payment::STATUS_COMPLETED : Payment::STATUS_PENDING,
             ]);
 
             $this->updatePaymentStatus();
@@ -341,7 +347,9 @@ class Invoice extends Model
 
     public function updatePaymentStatus()
     {
-        $totalPaid = $this->payments()->sum('amount');
+        // Pending payments (unapproved bank transfers, unverified gateway
+        // reports) don't count until they're confirmed.
+        $totalPaid = $this->payments()->completed()->sum('amount');
         $oldStatus = $this->status;
         
         if ($totalPaid >= $this->total_amount) {

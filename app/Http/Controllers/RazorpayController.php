@@ -136,10 +136,13 @@ class RazorpayController extends Controller
                 return back()->withErrors(['error' => 'Razorpay not enabled']);
             }
 
+            // Completed only if Razorpay confirms the captured amount; otherwise
+            // pending for the invoice owner to approve.
             $invoice->createPaymentRecord(
                 $request->amount,
                 'razorpay',
-                $request->razorpay_payment_id
+                $request->razorpay_payment_id,
+                verified: $this->isCapturedPayment($settings, $request->razorpay_payment_id, (float) $request->amount)
             );
             
             return redirect()->route('invoices.show', $invoice->id)
@@ -205,14 +208,14 @@ class RazorpayController extends Controller
             ]);
             
             $invoice = Invoice::where('payment_token', $token)->firstOrFail();
-            
-            Payment::create([
-                'invoice_id' => $invoice->id,
-                'amount' => $request->amount,
-                'payment_method' => 'razorpay',
-                'payment_date' => now(),
-                'created_by' => $invoice->created_by
-            ]);
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+
+            $invoice->createPaymentRecord(
+                $request->amount,
+                'razorpay',
+                $request->razorpay_payment_id,
+                verified: $this->isCapturedPayment($settings, $request->razorpay_payment_id, (float) $request->amount)
+            );
             
             return redirect()->route('invoices.payment', $invoice->payment_token)
                 ->with('success', 'Payment processed successfully.');
@@ -223,6 +226,26 @@ class RazorpayController extends Controller
             return back()->withErrors(['error' => 'Invoice not found. Please check the link and try again.']);
         } catch (\Exception $e) {
             return back()->withErrors(['error' => 'Payment processing failed. Please try again or contact support.']);
+        }
+    }
+
+
+    /** Whether Razorpay reports $paymentId as captured for exactly $amount. */
+    private function isCapturedPayment(array $settings, string $paymentId, float $amount): bool
+    {
+        $key = $settings['razorpay_key'] ?? null;
+        $secret = $settings['razorpay_secret'] ?? null;
+        if (!$key || !$secret) {
+            return false;
+        }
+
+        try {
+            $payment = (new Api($key, $secret))->payment->fetch($paymentId);
+
+            return $payment->status === 'captured' && (int) $payment->amount === (int) round($amount * 100);
+        } catch (\Exception $e) {
+            Log::warning('Razorpay payment verification failed', ['payment_id' => $paymentId, 'error' => $e->getMessage()]);
+            return false;
         }
     }
 }

@@ -7,43 +7,32 @@ use App\Models\User;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\PaymentSetting;
+use App\Models\PlanOrder;
 use Illuminate\Http\Request;
 
 class PayHerePaymentController extends Controller
 {
+    /**
+     * Legacy browser endpoint. A PayHere success code posted by the browser proves
+     * nothing, so this never activates a plan - the plan is activated by PayHere's
+     * signed server notification (callback). This only reports the order's state.
+     */
     public function processPayment(Request $request)
     {
         $validated = validatePaymentRequest($request, [
             'payment_id' => 'required|string',
-            'status_code' => 'required|string',
         ]);
 
-        try {
-            $plan = Plan::findOrFail($validated['plan_id']);
-            $settings = getPaymentGatewaySettings();
-            
-            if (!isset($settings['payment_settings']['payhere_merchant_id'])) {
-                return back()->withErrors(['error' => __('PayHere not configured')]);
-            }
+        $order = PlanOrder::where('payment_id', $validated['payment_id'])
+            ->where('user_id', auth()->id())
+            ->where('payment_method', 'payhere')
+            ->first();
 
-            if ($validated['status_code'] === '2') { // Success status
-                processPaymentSuccess([
-                    'user_id' => auth()->id(),
-                    'plan_id' => $plan->id,
-                    'billing_cycle' => $validated['billing_cycle'],
-                    'payment_method' => 'payhere',
-                    'coupon_code' => $validated['coupon_code'] ?? null,
-                    'payment_id' => $validated['payment_id'],
-                ]);
-
-                return back()->with('success', __('Payment successful and plan activated'));
-            }
-
-            return back()->withErrors(['error' => __('Payment failed or cancelled')]);
-
-        } catch (\Exception $e) {
-            return handlePaymentError($e, 'payhere');
+        if ($order?->status === 'approved') {
+            return back()->with('success', __('Payment successful and plan activated'));
         }
+
+        return back()->with('warning', __('Your plan will be activated as soon as PayHere confirms the payment.'));
     }
 
     public function createPayment(Request $request)
@@ -61,6 +50,17 @@ class PayHerePaymentController extends Controller
 
             $user = auth()->user();
             $orderId = 'plan_' . $plan->id . '_' . $user->id . '_' . time();
+
+            // The plan is only assigned when PayHere's signed notification confirms
+            // this order (see callback()).
+            createPendingPlanOrder([
+                'user_id' => $user->id,
+                'plan_id' => $plan->id,
+                'billing_cycle' => $validated['billing_cycle'],
+                'payment_method' => 'payhere',
+                'coupon_code' => $validated['coupon_code'] ?? null,
+                'payment_id' => $orderId,
+            ]);
 
             $paymentData = [
                 'merchant_id' => $settings['payment_settings']['payhere_merchant_id'],
@@ -110,44 +110,51 @@ class PayHerePaymentController extends Controller
 
     public function success(Request $request)
     {
-        return redirect()->route('plans.index')->with('success', __('Payment completed successfully'));
+        $order = PlanOrder::where('payment_id', (string) $request->input('order_id'))
+            ->where('payment_method', 'payhere')
+            ->first();
+
+        if ($order?->status === 'approved') {
+            return redirect()->route('plans.index')->with('success', __('Payment completed successfully'));
+        }
+
+        return redirect()->route('plans.index')->with('warning', __('Your plan will be activated as soon as PayHere confirms the payment.'));
     }
 
+    /**
+     * PayHere server notification (notify_url) for plan purchases. Activates the
+     * pending order only when the md5sig matches, the status is "success" (2) and
+     * the amount/currency match what the order was created for.
+     */
     public function callback(Request $request)
     {
         try {
-            $orderId = $request->input('order_id');
-            $statusCode = $request->input('status_code');
-            
-            if ($orderId && $statusCode === '2') {
-                $parts = explode('_', $orderId);
-                
-                if (count($parts) >= 3) {
-                    $planId = $parts[1];
-                    $userId = $parts[2];
-                    
-                    $plan = Plan::find($planId);
-                    $user = User::find($userId);
-                    
-                    if ($plan && $user) {
-                        processPaymentSuccess([
-                            'user_id' => $user->id,
-                            'plan_id' => $plan->id,
-                            'billing_cycle' => 'monthly',
-                            'payment_method' => 'payhere',
-                            'payment_id' => $request->input('payment_id'),
-                        ]);
-                    }
-                }
+            $settings = platformPaymentSettings();
+
+            if (!$this->hasValidSignature($request, $settings) || $request->input('status_code') !== '2') {
+                return response()->json(['status' => 'ignored'], 400);
             }
 
-            return response()->json(['status' => 'success']);
+            $order = PlanOrder::where('payment_id', (string) $request->input('order_id'))
+                ->where('payment_method', 'payhere')
+                ->first();
 
+            if (!$order || strtoupper((string) $request->input('payhere_currency')) !== 'LKR') {
+                return response()->json(['status' => 'ignored'], 400);
+            }
+
+            $completed = completePlanOrderPayment($order, (float) $request->input('payhere_amount'), $request->input('payment_id'));
+
+            return response()->json(['status' => $completed ? 'success' : 'rejected'], $completed ? 200 : 400);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Callback processing failed'], 500);
         }
     }
 
+    /**
+     * Browser-reported PayHere result for an invoice: recorded as a pending
+     * payment for the invoice owner to approve (it can't be verified here).
+     */
     public function processInvoicePayment(Request $request, Invoice $invoice)
     {
         $request->validate([
@@ -157,25 +164,11 @@ class PayHerePaymentController extends Controller
         ]);
 
         try {
-            if ($request->status_code === '2') { // Success status
-                Payment::create([
-                    'invoice_id' => $invoice->id,
-                    'amount' => $request->amount,
-                    'payment_method' => 'payhere',
-                    'payment_date' => now(),
-                    'transaction_id' => $request->order_id,
-                    'status' => 'completed',
-                    'created_by' => $invoice->created_by
-                ]);
-
-                // Update invoice status
-                $totalPaid = $invoice->payments()->sum('amount');
-                if ($totalPaid >= $invoice->total_amount) {
-                    $invoice->update(['status' => 'paid']);
-                }
+            if ($request->status_code === '2') {
+                $invoice->createPaymentRecord((float) $request->amount, 'payhere', $request->order_id);
 
                 return redirect()->route('invoices.show', $invoice->id)
-                    ->with('success', __('Payment successful!'));
+                    ->with('success', __('Payment received. It will be applied once it is confirmed.'));
             }
 
             return back()->withErrors(['error' => __('Payment failed or cancelled')]);
@@ -254,93 +247,55 @@ class PayHerePaymentController extends Controller
     public function invoiceSuccess(Request $request)
     {
         try {
-            $orderId = $request->input('order_id');
+            $orderId = (string) $request->input('order_id');
             $invoiceToken = $request->input('custom_1');
-            $amount = $request->input('custom_2');
-            $statusCode = $request->input('status_code');
+            $invoice = $invoiceToken ? Invoice::where('payment_token', $invoiceToken)->first() : null;
 
-            if ($orderId && $statusCode === '2') {
-                if ($invoiceToken) {
-                    $invoice = Invoice::where('payment_token', $invoiceToken)->first();
-                } else {
-                    $parts = explode('_', $orderId);
-                    if (count($parts) >= 2 && $parts[0] === 'invoice') {
-                        $invoiceId = $parts[1];
-                        $invoice = Invoice::find($invoiceId);
-                    }
+            if ($invoice) {
+                // The signed notification (invoiceCallback) confirms the payment;
+                // a browser redirect alone only leaves it pending.
+                if ($orderId && $request->input('status_code') === '2') {
+                    $invoice->createPaymentRecord((float) $request->input('custom_2'), 'payhere', $orderId);
                 }
 
-                if ($invoice) {
-                    // Check if payment already exists
-                    $existingPayment = Payment::where('invoice_id', $invoice->id)
-                        ->where('transaction_id', $orderId)
-                        ->first();
-
-                    if (!$existingPayment) {
-                        Payment::create([
-                            'invoice_id' => $invoice->id,
-                            'amount' => $amount,
-                            'payment_method' => 'payhere',
-                            'payment_date' => now(),
-                            'transaction_id' => $orderId,
-                            'status' => 'completed',
-                            'created_by' => $invoice->created_by
-                        ]);
-
-                        // Update invoice status
-                        $totalPaid = $invoice->payments()->sum('amount');
-                        if ($totalPaid >= $invoice->total_amount) {
-                            $invoice->update(['status' => 'paid']);
-                        }
-                    }
-
-                    return redirect()->route('invoices.show', $invoice->id)
-                        ->with('success', 'Payment completed successfully!');
-                }
+                return redirect()->route('invoices.show', $invoice->id)
+                    ->with('success', __('Payment received. It will be applied once it is confirmed.'));
             }
 
-            return redirect()->route('invoices.index')
-                ->with('error', 'Payment verification failed.');
+            return redirect()->route('invoices.index')->with('error', __('Payment verification failed'));
         } catch (\Exception $e) {
-            return redirect()->route('invoices.index')
-                ->with('error', 'Payment processing failed.');
+            return redirect()->route('invoices.index')->with('error', __('Payment processing failed'));
         }
     }
 
+    /**
+     * PayHere server notification for invoice payments: signature-checked against
+     * the invoice owner's merchant secret, then recorded as a completed payment.
+     */
     public function invoiceCallback(Request $request)
     {
         try {
-            $orderId = $request->input('order_id');
-            $statusCode = $request->input('status_code');
-            $invoiceToken = $request->input('custom_1');
-            $amount = $request->input('custom_2');
+            $invoice = Invoice::where('payment_token', (string) $request->input('custom_1'))->first();
+            if (!$invoice) {
+                return response('IGNORED', 400);
+            }
 
-            if ($orderId && $statusCode === '2' && $invoiceToken) {
-                $invoice = Invoice::where('payment_token', $invoiceToken)->first();
+            $settings = PaymentSetting::where('user_id', $invoice->created_by)->pluck('value', 'key')->toArray();
+            if (!$this->hasValidSignature($request, $settings) || $request->input('status_code') !== '2') {
+                return response('IGNORED', 400);
+            }
 
-                if ($invoice) {
-                    $existingPayment = Payment::where('invoice_id', $invoice->id)
-                        ->where('transaction_id', $orderId)
-                        ->first();
+            $orderId = (string) $request->input('order_id');
+            $amount = (float) $request->input('payhere_amount');
 
-                    if (!$existingPayment) {
-                        Payment::create([
-                            'invoice_id' => $invoice->id,
-                            'amount' => $amount,
-                            'payment_method' => 'payhere',
-                            'payment_date' => now(),
-                            'transaction_id' => $orderId,
-                            'status' => 'completed',
-                            'created_by' => $invoice->created_by
-                        ]);
-
-                        // Update invoice status
-                        $totalPaid = $invoice->payments()->sum('amount');
-                        if ($totalPaid >= $invoice->total_amount) {
-                            $invoice->update(['status' => 'paid']);
-                        }
-                    }
+            $existing = Payment::where('invoice_id', $invoice->id)->where('transaction_id', $orderId)->first();
+            if ($existing) {
+                // A pending record from the browser redirect: confirm it.
+                if ($existing->status !== Payment::STATUS_COMPLETED && abs((float) $existing->amount - $amount) < 0.01) {
+                    $existing->update(['status' => Payment::STATUS_COMPLETED]);
                 }
+            } else {
+                $invoice->createPaymentRecord($amount, 'payhere', $orderId, verified: true);
             }
 
             return response('OK', 200);
@@ -426,18 +381,15 @@ class PayHerePaymentController extends Controller
             $orderId = $request->input('order_id');
             $amount = $request->input('amount');
             $statusCode = $request->input('status_code');
-            
             $invoice = Invoice::where('payment_token', $token)->firstOrFail();
 
             if ($orderId && $amount && $statusCode === '2') {
-                $invoice->createPaymentRecord(
-                    (float)$amount,
-                    'payhere',
-                    $orderId
-                );
+                // Unverified browser redirect: pending until PayHere's signed
+                // notification or the invoice owner confirms it.
+                $invoice->createPaymentRecord((float) $amount, 'payhere', $orderId);
 
                 return redirect()->route('invoices.payment', $token)
-                    ->with('success', 'Payment processed successfully.');
+                    ->with('success', __('Payment received. It will be applied once it is confirmed.'));
             }
 
             return redirect()->route('invoices.payment', $token)
@@ -446,5 +398,32 @@ class PayHerePaymentController extends Controller
             return redirect()->route('invoices.payment', $token)
                 ->with('error', 'Payment processing failed');
         }
+    }
+
+
+    /**
+     * PayHere notify signature:
+     * md5sig = UPPER(md5(merchant_id . order_id . payhere_amount . payhere_currency . status_code . UPPER(md5(merchant_secret))))
+     */
+    private function hasValidSignature(Request $request, array $settings): bool
+    {
+        $merchantId = $settings['payhere_merchant_id'] ?? null;
+        $secret = $settings['payhere_merchant_secret'] ?? null;
+        $received = (string) $request->input('md5sig');
+
+        if (!$merchantId || !$secret || $received === '' || (string) $request->input('merchant_id') !== (string) $merchantId) {
+            return false;
+        }
+
+        $expected = strtoupper(md5(
+            $merchantId
+            . $request->input('order_id')
+            . $request->input('payhere_amount')
+            . $request->input('payhere_currency')
+            . $request->input('status_code')
+            . strtoupper(md5($secret))
+        ));
+
+        return hash_equals($expected, strtoupper($received));
     }
 }

@@ -140,6 +140,12 @@ Route::match(['GET', 'POST'], 'payments/fedapay/callback', [FedaPayPaymentContro
 Route::get('payments/yookassa/success', [YooKassaPaymentController::class, 'success'])->name('yookassa.success');
 Route::post('payments/yookassa/callback', [YooKassaPaymentController::class, 'callback'])->name('yookassa.callback');
 
+// Server-to-server payment notifications must be public: the gateway has no
+// session. They're CSRF-exempt (bootstrap/app.php) and verified in the
+// controller (signature or a re-fetch from the gateway's API).
+Route::post('payments/payhere/callback', [PayHerePaymentController::class, 'callback'])->name('payhere.callback');
+Route::post('payments/sspay/callback', [SSPayPaymentController::class, 'callback'])->name('sspay.callback');
+
 // Nepalste success/callback (public routes)
 Route::get('payments/nepalste/success', [NepalstePaymentController::class, 'success'])->name('nepalste.success');
 Route::post('payments/nepalste/callback', [NepalstePaymentController::class, 'callback'])->name('nepalste.callback');
@@ -292,7 +298,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('payments/ozow/success', [OzowPaymentController::class, 'success'])->name('ozow.success');
         Route::post('payments/ozow/callback', [OzowPaymentController::class, 'callback'])->name('ozow.callback');
         Route::get('payments/payhere/success', [PayHerePaymentController::class, 'success'])->name('payhere.success');
-        Route::post('payments/payhere/callback', [PayHerePaymentController::class, 'callback'])->name('payhere.callback');
         Route::get('payments/cinetpay/success', [CinetPayPaymentController::class, 'success'])->name('cinetpay.success');
         Route::post('payments/cinetpay/callback', [CinetPayPaymentController::class, 'callback'])->name('cinetpay.callback');
         Route::get('payments/paiement/success', [PaiementPaymentController::class, 'success'])->name('paiement.success');
@@ -300,7 +305,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('payments/midtrans/callback', [MidtransPaymentController::class, 'callback'])->name('midtrans.callback');
         Route::post('paymentwall/process', [PaymentWallPaymentController::class, 'processPayment'])->name('paymentwall.process');
         Route::get('payments/sspay/success', [SSPayPaymentController::class, 'success'])->name('sspay.success');
-        Route::post('payments/sspay/callback', [SSPayPaymentController::class, 'callback'])->name('sspay.callback');
         Route::get('mercadopago/success', [MercadoPagoController::class, 'success'])->name('mercadopago.success');
         Route::get('mercadopago/failure', [MercadoPagoController::class, 'failure'])->name('mercadopago.failure');
         Route::get('mercadopago/pending', [MercadoPagoController::class, 'pending'])->name('mercadopago.pending');

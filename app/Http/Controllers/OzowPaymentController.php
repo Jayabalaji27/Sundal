@@ -24,7 +24,7 @@ class OzowPaymentController extends Controller
             }
 
             if ($validated['status'] === 'Complete') {
-                processPaymentSuccess([
+                recordUnverifiedPlanPayment([
                     'user_id' => auth()->id(),
                     'plan_id' => $plan->id,
                     'billing_cycle' => $validated['billing_cycle'],
@@ -33,7 +33,7 @@ class OzowPaymentController extends Controller
                     'payment_id' => $validated['transaction_id'],
                 ]);
 
-                return back()->with('success', __('Payment successful and plan activated'));
+                return back()->with('warning', __('Payment received. Your plan will be activated once the payment is confirmed.'));
             }
 
             return back()->withErrors(['error' => __('Payment failed or cancelled')]);
@@ -145,7 +145,7 @@ class OzowPaymentController extends Controller
                     $user = User::find($userId);
 
                     if ($plan && $user) {
-                        processPaymentSuccess([
+                        recordUnverifiedPlanPayment([
                             'user_id' => $user->id,
                             'plan_id' => $plan->id,
                             'billing_cycle' => 'monthly',

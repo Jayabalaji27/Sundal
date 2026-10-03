@@ -23,7 +23,7 @@ class NepalstePaymentController extends Controller
             }
 
             if ($validated['status'] === 'completed') {
-                processPaymentSuccess([
+                recordUnverifiedPlanPayment([
                     'user_id' => auth()->id(),
                     'plan_id' => $plan->id,
                     'billing_cycle' => $validated['billing_cycle'],
@@ -32,7 +32,7 @@ class NepalstePaymentController extends Controller
                     'payment_id' => $validated['payment_id'],
                 ]);
 
-                return back()->with('success', __('Payment successful and plan activated'));
+                return back()->with('warning', __('Payment received. Your plan will be activated once the payment is confirmed.'));
             }
 
             return back()->withErrors(['error' => __('Payment failed or cancelled')]);
@@ -106,12 +106,8 @@ class NepalstePaymentController extends Controller
                 $user = auth()->user();
                 
                 if ($plan && $user) {
-                    // Assign plan to user
-                    $user->plan_id = $plan->id;
-                    $user->plan_expire_date = $billingCycle === 'yearly' ? now()->addYear() : now()->addMonth();
-                    $user->save();
-                    
-                    processPaymentSuccess([
+                    // Not verified with Nepalste: pending until a superadmin approves it.
+                    recordUnverifiedPlanPayment([
                         'user_id' => $user->id,
                         'plan_id' => $plan->id,
                         'billing_cycle' => $billingCycle,
@@ -119,7 +115,7 @@ class NepalstePaymentController extends Controller
                         'payment_id' => $orderId,
                     ]);
                     
-                    return redirect()->route('plans.index')->with('success', 'Payment successful and plan activated');
+                    return redirect()->route('plans.index')->with('warning', __('Payment received. Your plan will be activated once the payment is confirmed.'));
                 }
             }
             
@@ -148,11 +144,7 @@ class NepalstePaymentController extends Controller
                     $user = \App\Models\User::find($userId);
                     
                     if ($plan && $user) {
-                        $user->plan_id = $plan->id;
-                        $user->plan_expire_date = now()->addMonth();
-                        $user->save();
-                        
-                        processPaymentSuccess([
+                        recordUnverifiedPlanPayment([
                             'user_id' => $user->id,
                             'plan_id' => $plan->id,
                             'billing_cycle' => 'monthly',

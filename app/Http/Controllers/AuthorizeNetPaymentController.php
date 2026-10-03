@@ -429,7 +429,7 @@ class AuthorizeNetPaymentController extends Controller
             $result = $this->createInvoiceAuthorizeNetTransaction($validated, $pricing, $settings);
 
             if ($result['success'] && isset($result['transaction_id'])) {
-                $invoice->createPaymentRecord($validated['amount'], 'authorizenet', $result['transaction_id']);
+                $invoice->createPaymentRecord($validated['amount'], 'authorizenet', $result['transaction_id'], verified: true);
 
                 if ($request->expectsJson()) {
                     return response()->json([
@@ -621,7 +621,7 @@ class AuthorizeNetPaymentController extends Controller
             $result = $this->createInvoiceAuthorizeNetTransaction($validated, $pricing, $settings);
 
             if ($result && $result['success'] && $result['transaction_id']) {
-                $invoice->createPaymentRecord($validated['amount'], 'authorizenet', $result['transaction_id']);
+                $invoice->createPaymentRecord($validated['amount'], 'authorizenet', $result['transaction_id'], verified: true);
 
                 return response()->json([
                     'success' => true,

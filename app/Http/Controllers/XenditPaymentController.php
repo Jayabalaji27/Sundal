@@ -82,7 +82,7 @@ class XenditPaymentController extends Controller
                 $user = \App\Models\User::find($userId);
                 
                 if ($plan && $user) {
-                    processPaymentSuccess([
+                    recordUnverifiedPlanPayment([
                         'user_id' => $user->id,
                         'plan_id' => $plan->id,
                         'billing_cycle' => $billingCycle,
@@ -95,7 +95,7 @@ class XenditPaymentController extends Controller
                         auth()->login($user);
                     }
                     
-                    return redirect()->route('plans.index')->with('success', __('Payment completed successfully and plan activated'));
+                    return redirect()->route('plans.index')->with('warning', __('Payment received. Your plan will be activated once the payment is confirmed.'));
                 }
             }
             

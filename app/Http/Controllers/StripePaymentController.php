@@ -133,10 +133,12 @@ class StripePaymentController extends Controller
                 ],
             ]);
             if ($paymentIntent->status === 'succeeded') {
+                // Charged and confirmed by Stripe on the server.
                 $invoice->createPaymentRecord(
                     $request->amount,
                     'stripe',
-                    $paymentIntent->id
+                    $paymentIntent->id,
+                    verified: true
                 );
 
                 return redirect()->route('invoices.show', $invoice->id)
@@ -204,6 +206,7 @@ class StripePaymentController extends Controller
 
             if ($paymentIntent->status === 'succeeded') {
                 Payment::create([
+                    'status' => Payment::STATUS_COMPLETED, // confirmed by Stripe on the server
                     'invoice_id' => $invoice->id,
                     'amount' => $request->amount,
                     'payment_method' => 'stripe',
