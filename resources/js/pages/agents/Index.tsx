@@ -237,7 +237,7 @@ export default function AgentsIndex() {
 
             <EnhancedDeleteModal isOpen={deleteModal} onClose={() => setDeleteModal(false)}
                 onConfirm={() => { if (current) router.delete(route('agents.destroy', current.id), { onSuccess: () => setDeleteModal(false) }); }}
-                title={t('Delete Agent')} description={t('This agent will be permanently deleted.')}
+                entityName={t('agent')} warningMessage={t('This agent will be permanently deleted.')}
                 itemName={current?.name || ''} />
         </PageTemplate>
     );

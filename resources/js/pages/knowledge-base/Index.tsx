@@ -210,7 +210,7 @@ export default function KnowledgeBaseIndex() {
             </Dialog>
 
             <EnhancedDeleteModal isOpen={deleteModal} onClose={() => setDeleteModal(false)} onConfirm={confirmDelete}
-                title={t(`Delete ${deleteType}`)} description={deleteType === 'category' ? t('All articles in this category will also be deleted.') : t('This article will be permanently deleted.')}
+                entityName={t(deleteType)} warningMessage={deleteType === 'category' ? t('All articles in this category will also be deleted.') : t('This article will be permanently deleted.')}
                 itemName={current?.name || current?.title || ''} />
         </PageTemplate>
     );

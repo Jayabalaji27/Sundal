@@ -36,31 +36,34 @@ export function EnhancedDeleteModal({
             <AlertTriangle className="h-5 w-5" />
             {t("Delete")} {entityName}
           </DialogTitle>
-          <DialogDescription className="space-y-3">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p className="text-red-800 font-medium">
-                {t("Are you sure you want to delete")} "{itemName}"?
-              </p>
-              <p className="text-red-700 text-sm mt-1">
-                {warningMessage || t("This action cannot be undone.")}
-              </p>
-            </div>
-            
-            {additionalInfo.length > 0 && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <p className="text-yellow-800 font-medium text-sm mb-2">
-                  {t("This will also delete:")}
+          {/* Rendered as a div: the description holds block content, which a <p> can't */}
+          <DialogDescription asChild>
+            <div className="space-y-3">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-red-800 font-medium">
+                  {t("Are you sure you want to delete")} "{itemName}"?
                 </p>
-                <ul className="text-yellow-700 text-sm space-y-1">
-                  {additionalInfo.map((info, index) => (
-                    <li key={index} className="flex items-center gap-2">
-                      <span className="w-1 h-1 bg-yellow-600 rounded-full"></span>
-                      {info}
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-red-700 text-sm mt-1">
+                  {warningMessage || t("This action cannot be undone.")}
+                </p>
               </div>
-            )}
+            
+              {additionalInfo.length > 0 && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-yellow-800 font-medium text-sm mb-2">
+                    {t("This will also delete:")}
+                  </p>
+                  <ul className="text-yellow-700 text-sm space-y-1">
+                    {additionalInfo.map((info, index) => (
+                      <li key={index} className="flex items-center gap-2">
+                        <span className="w-1 h-1 bg-yellow-600 rounded-full"></span>
+                        {info}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="sm:justify-end gap-2">

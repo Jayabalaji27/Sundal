@@ -28,6 +28,26 @@ class InvoiceItem extends Model
         'sort_order' => 'integer',
     ];
 
+    /**
+     * Of the given tasks, those already billed on another invoice. A draft or
+     * cancelled invoice hasn't billed anyone, so it doesn't count.
+     */
+    public static function billedTaskIds(iterable $taskIds, ?int $exceptInvoiceId = null): array
+    {
+        $taskIds = collect($taskIds)->filter()->unique()->values();
+        if ($taskIds->isEmpty()) {
+            return [];
+        }
+
+        return static::whereIn('task_id', $taskIds)
+            ->whereHas('invoice', fn ($q) => $q->whereNotIn('status', ['draft', 'cancelled'])
+                ->when($exceptInvoiceId, fn ($q) => $q->whereKeyNot($exceptInvoiceId)))
+            ->distinct()
+            ->pluck('task_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);

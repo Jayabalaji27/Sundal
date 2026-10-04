@@ -187,7 +187,7 @@ export default function SprintsIndex() {
 
             <EnhancedDeleteModal isOpen={deleteModal} onClose={() => setDeleteModal(false)}
                 onConfirm={() => { if (current) router.delete(route('sprints.destroy', current.id), { onSuccess: () => setDeleteModal(false) }); }}
-                title={t('Delete Sprint')} description={t('Tasks will be moved back to the backlog.')}
+                entityName={t('sprint')} warningMessage={t('Tasks will be moved back to the backlog.')}
                 itemName={current?.name || ''} />
         </PageTemplate>
     );

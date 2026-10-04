@@ -408,7 +408,13 @@ export default function ProjectShow() {
             onSuccess: () => {
                 setIsFormModalOpen(false);
                 toast.dismiss();
-                toast.success(`${modalType} ${formMode === 'create' ? 'created' : 'updated'} successfully`);
+                // Client/member/manager forms assign existing users, they don't create them
+                const assignedMessages: Record<string, string> = {
+                    client: t('Client added to project'),
+                    member: t('Member added to project'),
+                    manager: t('Manager added to project'),
+                };
+                toast.success(assignedMessages[modalType] ?? `${modalType} ${formMode === 'create' ? 'created' : 'updated'} successfully`);
             },
             onError: (errors) => {
                 toast.dismiss();

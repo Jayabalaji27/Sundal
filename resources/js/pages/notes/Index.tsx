@@ -498,7 +498,7 @@ export default function NotesIndex() {
                     {combined_notes?.links && (
                         <div className="p-4 border-t flex items-center justify-between bg-[#F0F0F1] dark:bg-gray-800">
                             <div className="text-sm text-muted-foreground">
-                                {t('Showing')} <span className="font-medium">{combined_notes.from || 1}</span> {t('to')} <span className="font-medium">{combined_notes.to || 0}</span> {t('of')} <span className="font-medium">{combined_notes.total}</span> {t('notes')}
+                                {t('Showing')} <span className="font-medium">{combined_notes.from || 0}</span> {t('to')} <span className="font-medium">{combined_notes.to || 0}</span> {t('of')} <span className="font-medium">{combined_notes.total}</span> {t('notes')}
                             </div>
                             
                             <div className="flex gap-1">
@@ -568,7 +568,7 @@ export default function NotesIndex() {
             {activeView === 'grid' && combined_notes?.links && (
                 <div className="mt-6 bg-[#F0F0F1] dark:bg-gray-800 p-4 rounded-lg shadow flex flex-wrap items-center justify-between gap-3">
                     <div className="text-sm text-muted-foreground">
-                        {t('Showing')} <span className="font-medium">{combined_notes.from || 1}</span> {t('to')} <span className="font-medium">{combined_notes.to || 0}</span> {t('of')} <span className="font-medium">{combined_notes.total}</span> {t('notes')}
+                        {t('Showing')} <span className="font-medium">{combined_notes.from || 0}</span> {t('to')} <span className="font-medium">{combined_notes.to || 0}</span> {t('of')} <span className="font-medium">{combined_notes.total}</span> {t('notes')}
                     </div>
 
                     <div className="flex flex-wrap gap-1">

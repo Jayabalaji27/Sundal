@@ -36,18 +36,9 @@ class TaskController extends Controller
 
         $userWorkspaceRole = $workspace->getMemberRole($user);
 
+        // Members only see their own tasks, except when viewing a specific project
         $query = Task::with(['project', 'taskStage', 'assignedTo', 'creator', 'milestone'])
-            ->whereHas('project', function ($q) use ($user) {
-                $q->forWorkspace($user->current_workspace_id)->visibleTo($user);
-            });
-
-        // Filter tasks by assignment for members only (but not when viewing specific project)
-        if ($userWorkspaceRole === 'member' && !$request->project_id) {
-            $query->where(function ($taskQuery) use ($user) {
-                $taskQuery->where('assigned_to', $user->id)
-                    ->orWhere('created_by', $user->id);
-            });
-        }
+            ->visibleTo($user, !$request->project_id);
 
         if ($request->project_id) {
             $query->forProject($request->project_id);

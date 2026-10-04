@@ -57,10 +57,7 @@ class TaskChecklist extends Model
     {
         $this->update(['is_completed' => !$this->is_completed]);
 
-        // Update parent task progress
-        $this->task->update([
-            'progress' => $this->task->calculateProgress()
-        ]);
+        $this->task->syncProgressFromChecklists();
     }
 
     public function canBeUpdatedBy(User $user): bool

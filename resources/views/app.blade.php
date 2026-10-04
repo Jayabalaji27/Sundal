@@ -37,7 +37,8 @@
             }
         </style>
 
-        <title inertia>{{ config('app.name', 'Laravel') }}</title>
+        {{-- Same brand as the client-side "<page> - <titleText>" titles, so the first paint doesn't flash APP_NAME --}}
+        <title inertia>{{ $page['props']['globalSettings']['titleText'] ?? config('app.name', 'Laravel') }}</title>
         
         {{-- SEO Meta Tags --}}
         @php

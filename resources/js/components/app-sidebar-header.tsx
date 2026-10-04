@@ -21,7 +21,7 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
         <>
             <header className="border-sidebar-border/50 flex min-h-14 shrink-0 items-center gap-2 border-b px-4 py-2 transition-[width,height] ease-linear sm:px-6 lg:px-[50px] group-has-data-[collapsible=icon]/sidebar-wrapper:min-h-12">
             <div className="flex w-full flex-wrap items-center justify-between gap-y-2">
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
                     {position === 'left' && <SidebarTrigger className="-ml-1 shrink-0" />}
                     {auth?.user?.type === 'company' && (
                         <div className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
@@ -31,7 +31,7 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                                 className="flex items-center gap-1 hover:text-foreground transition-colors"
                             >
                                 <Building2 className="h-4 w-4" />
-                                <span>{currentWorkspace?.name || 'No Workspace'}</span>
+                                <span className="max-w-[10rem] truncate" title={currentWorkspace?.name}>{currentWorkspace?.name || 'No Workspace'}</span>
                             </button>
                             {breadcrumbs.length > 0 && <span className="mx-1">/</span>}
                         </div>

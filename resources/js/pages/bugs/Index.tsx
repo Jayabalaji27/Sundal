@@ -454,7 +454,7 @@ export default function Index({ bugs, projects, statuses, members, filters, user
                         <div>
                             <p className="text-sm font-medium text-gray-500">{t('Critical')}</p>
                             <h3 className="text-xl font-bold text-gray-900">
-                                {bugsData?.filter((bug: any) => bug.priority === 'critical' || bug.severity === 'blocker').length || 0}
+                                {bugsData?.filter((bug: any) => bug.priority === 'critical' || bug.severity === 'critical' || bug.severity === 'blocker').length || 0}
                             </h3>
                         </div>
                     </CardContent>

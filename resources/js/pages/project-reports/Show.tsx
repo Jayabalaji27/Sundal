@@ -385,6 +385,7 @@ export default function Show({ project, stats, userStats, users, stages, workspa
                                     </svg>
                                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                                         <span className="text-xl font-bold">{stats.completion_percentage || 0}%</span>
+                                        <span className="text-xs text-gray-500">{t('Project Progress')}</span>
                                     </div>
                                 </div>
                             </div>
@@ -419,8 +420,14 @@ export default function Show({ project, stats, userStats, users, stages, workspa
                                     />
                                 </svg>
                                 <div className="absolute inset-0 flex flex-col items-center justify-center mt-6">
-                                    <span className="text-xl font-bold text-gray-900">{stats.milestone_completion_percentage || 0}%</span>
-                                    <span className="text-xl text-green-600 font-medium">{t('Progress')}</span>
+                                    {stats.total_milestones > 0 ? (
+                                        <>
+                                            <span className="text-xl font-bold text-gray-900">{stats.milestone_completion_percentage || 0}%</span>
+                                            <span className="text-xl text-green-600 font-medium">{t('Progress')}</span>
+                                        </>
+                                    ) : (
+                                        <span className="text-sm text-gray-500">{t('No milestones')}</span>
+                                    )}
                                 </div>
                             </div>
                         </div>

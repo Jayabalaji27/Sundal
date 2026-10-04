@@ -27,8 +27,10 @@ interface Props {
 
 export default function Approvals({ expenses, stats, projects, filters, permissions }: Props) {
     const { t } = useTranslation();
-    const { flash, permissions: pagePermissions } = usePage().props as any;
+    const { flash, auth, permissions: pagePermissions } = usePage().props as any;
     const approvalPermissions = permissions || pagePermissions;
+    // Only the workspace owner reviews their own expenses (the server enforces this too)
+    const canReview = (expense: any) => approvalPermissions?.review_own || expense.submitted_by !== auth?.user?.id;
     const [searchTerm, setSearchTerm] = useState(filters?.search || '');
     const [selectedStatus, setSelectedStatus] = useState(filters?.status || 'all');
     const [selectedProject, setSelectedProject] = useState(filters?.project_id || 'all');
@@ -390,13 +392,14 @@ export default function Approvals({ expenses, stats, projects, filters, permissi
                                             </div>
 
                                             <div className="flex gap-1 mt-auto">
-                                                {approvalPermissions?.approve && (
+                                                {canReview(expense) && approvalPermissions?.approve && (
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
                                                             <Button
                                                                 size="icon"
                                                                 variant="ghost"
                                                                 onClick={() => processApproval(expense.id, 'approve')}
+                                                                aria-label={t('Approve')}
                                                                 className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
                                                             >
                                                                 <Check className="h-4 w-4" />
@@ -405,13 +408,14 @@ export default function Approvals({ expenses, stats, projects, filters, permissi
                                                         <TooltipContent>Approve</TooltipContent>
                                                     </Tooltip>
                                                 )}
-                                                {approvalPermissions?.reject && (
+                                                {canReview(expense) && approvalPermissions?.reject && (
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
                                                             <Button
                                                                 size="icon"
                                                                 variant="ghost"
                                                                 onClick={() => processApproval(expense.id, 'reject')}
+                                                                aria-label={t('Reject')}
                                                                 className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                                                             >
                                                                 <X className="h-4 w-4" />
@@ -420,13 +424,14 @@ export default function Approvals({ expenses, stats, projects, filters, permissi
                                                         <TooltipContent>Reject</TooltipContent>
                                                     </Tooltip>
                                                 )}
-                                                {approvalPermissions?.request_info && expense.status === 'pending' && (
+                                                {canReview(expense) && approvalPermissions?.request_info && expense.status === 'pending' && (
                                                     <Tooltip>
                                                         <TooltipTrigger asChild>
                                                             <Button
                                                                 size="icon"
                                                                 variant="ghost"
                                                                 onClick={() => processApproval(expense.id, 'request_info')}
+                                                                aria-label={t('Request Info')}
                                                                 className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                                             >
                                                                 <AlertCircle className="h-4 w-4" />
@@ -546,21 +551,21 @@ export default function Approvals({ expenses, stats, projects, filters, permissi
                                     icon: 'Check',
                                     action: 'approve',
                                     className: 'text-green-600 hover:text-green-700',
-                                    condition: () => approvalPermissions?.approve
+                                    condition: (row: any) => canReview(row) && approvalPermissions?.approve
                                 },
                                 {
                                     label: t('Reject'),
                                     icon: 'X',
                                     action: 'reject',
                                     className: 'text-red-600 hover:text-red-700',
-                                    condition: () => approvalPermissions?.reject
+                                    condition: (row: any) => canReview(row) && approvalPermissions?.reject
                                 },
                                 {
                                     label: t('Request Info'),
                                     icon: 'AlertCircle',
                                     action: 'request_info',
                                     className: 'text-blue-600 hover:text-blue-700',
-                                    condition: (row: any) => approvalPermissions?.request_info && row.status === 'pending'
+                                    condition: (row: any) => canReview(row) && approvalPermissions?.request_info && row.status === 'pending'
                                 }
                             ]}
                             data={expenses.data || []}

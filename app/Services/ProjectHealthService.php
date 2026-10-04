@@ -19,9 +19,11 @@ class ProjectHealthService
         $metrics = [];
 
         // ── 1. Task completion ──────────────────────────────────────────────
+        // "Done" means the task sits in a completed stage, not that its checklist hit 100%.
         $taskStats = DB::table('tasks')
-            ->where('project_id', $project->id)
-            ->selectRaw('COUNT(*) as total, SUM(CASE WHEN progress = 100 THEN 1 ELSE 0 END) as done')
+            ->leftJoin('task_stages', 'tasks.task_stage_id', '=', 'task_stages.id')
+            ->where('tasks.project_id', $project->id)
+            ->selectRaw('COUNT(*) as total, SUM(CASE WHEN task_stages.is_completed = 1 THEN 1 ELSE 0 END) as done')
             ->first();
 
         $totalTasks = (int) ($taskStats->total ?? 0);

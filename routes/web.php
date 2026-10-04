@@ -562,7 +562,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('currencies/{currency}', [CurrencyController::class, 'destroy'])->middleware('permission:currency_delete')->name('currencies.destroy');
 
         // ChatGPT routes
-        Route::post('api/chatgpt/generate', [\App\Http\Controllers\ChatGptController::class, 'generate'])->name('chatgpt.generate');
+        Route::post('api/chatgpt/generate', [\App\Http\Controllers\ChatGptController::class, 'generate'])->middleware('module.access')->name('chatgpt.generate');
 
         // Language management
         Route::get('manage-language/{lang?}', [LanguageController::class, 'managePage'])->middleware('permission:language_manage')->withoutMiddleware('block.superadmin.workspace')->name('manage-language');
@@ -612,9 +612,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('agents/{agent}/chat', [AgentController::class, 'chat'])->middleware(['permission:agent_use', 'module.access'])->name('agents.chat');
         Route::post('agents/{agent}/ask', [AgentController::class, 'ask'])->middleware(['permission:agent_use', 'module.access'])->name('agents.ask');
 
-        // Chatbot (legacy, keep for backward compat)
-        Route::get('chatbot', [ChatbotController::class, 'index'])->name('chatbot.index');
-        Route::post('chatbot/ask', [ChatbotController::class, 'ask'])->name('chatbot.ask');
+        // Chatbot (legacy, keep for backward compat) - plan-gated like agents.*
+        Route::get('chatbot', [ChatbotController::class, 'index'])->middleware('module.access')->name('chatbot.index');
+        Route::post('chatbot/ask', [ChatbotController::class, 'ask'])->middleware('module.access')->name('chatbot.ask');
 
         // ── AI UVP Modules ────────────────────────────────────────────────
         // Gated behind the Pro Add-on plan. ai/projects/* (Projects → AI Generate)

@@ -33,6 +33,7 @@ interface Timesheet {
 }
 
 // Draft, or rejected and sent back after fixing - only by the person who logged it.
+// Also the statuses a timesheet can still be edited or deleted in
 const SUBMITTABLE_STATUSES = ['draft', 'rejected'];
 
 interface User {
@@ -335,7 +336,7 @@ export default function TimesheetsIndex({ timesheets, members, projects = [], ov
             icon: 'Edit',
             action: 'edit',
             className: 'text-amber-500 hover:text-amber-700',
-            condition: () => hasPermission(userPermissions, 'timesheet_update')
+            condition: (row: any) => hasPermission(userPermissions, 'timesheet_update') && SUBMITTABLE_STATUSES.includes(row.status)
         },
         {
             label: t('Submit'),
@@ -350,7 +351,7 @@ export default function TimesheetsIndex({ timesheets, members, projects = [], ov
             icon: 'Trash2',
             action: 'delete',
             className: 'text-red-500 hover:text-red-700',
-            condition: () => hasPermission(userPermissions, 'timesheet_delete')
+            condition: (row: any) => hasPermission(userPermissions, 'timesheet_delete') && SUBMITTABLE_STATUSES.includes(row.status)
         }
     ];
 
@@ -670,13 +671,14 @@ export default function TimesheetsIndex({ timesheets, members, projects = [], ov
                                 </div>
                                 
                                 <div className="flex gap-1 mt-4">
-                                    {hasPermission(userPermissions, 'timesheet_update') && (
+                                    {hasPermission(userPermissions, 'timesheet_update') && SUBMITTABLE_STATUSES.includes(timesheet.status) && (
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <Button 
                                                     variant="ghost" 
                                                     size="icon"
                                                     onClick={() => handleAction('edit', timesheet.id)}
+                                                    aria-label={t('Edit')}
                                                     className="text-amber-500 hover:text-amber-700 h-8 w-8"
                                                 >
                                                     <Edit className="h-4 w-4" />
@@ -686,13 +688,14 @@ export default function TimesheetsIndex({ timesheets, members, projects = [], ov
                                         </Tooltip>
                                     )}
                                     
-                                    {hasPermission(userPermissions, 'timesheet_delete') && (
+                                    {hasPermission(userPermissions, 'timesheet_delete') && SUBMITTABLE_STATUSES.includes(timesheet.status) && (
                                         <Tooltip>
                                             <TooltipTrigger asChild>
                                                 <Button 
                                                     variant="ghost" 
                                                     size="icon"
                                                     onClick={() => handleAction('delete', timesheet.id)}
+                                                    aria-label={t('Delete')}
                                                     className="text-red-500 hover:text-red-700 h-8 w-8"
                                                 >
                                                     <Trash2 className="h-4 w-4" />

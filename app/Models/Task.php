@@ -79,6 +79,22 @@ class Task extends Model
         return $this->hasMany(TimesheetEntry::class);
     }
 
+    /**
+     * Tasks the user can see (the Tasks page's rule, shared with the dashboard):
+     * tasks in projects visible to them, and for members only the tasks they're
+     * assigned to or created unless they're looking inside one project.
+     */
+    public function scopeVisibleTo($query, User $user, bool $onlyOwnForMembers = true)
+    {
+        $query->whereHas('project', fn ($q) => $q->forWorkspace($user->current_workspace_id)->visibleTo($user));
+
+        if ($onlyOwnForMembers && $user->currentWorkspace?->getMemberRole($user) === 'member') {
+            $query->where(fn ($q) => $q->where('assigned_to', $user->id)->orWhere('created_by', $user->id));
+        }
+
+        return $query;
+    }
+
     public function scopeForProject($query, $projectId)
     {
         return $query->where('project_id', $projectId);
@@ -123,6 +139,13 @@ class Task extends Model
 
         $completed = $checklists->where('is_completed', true)->count();
         return (int) (($completed / $checklists->count()) * 100);
+    }
+
+    /** Re-derive progress from the checklist after an item is added, removed or toggled. */
+    public function syncProgressFromChecklists(): void
+    {
+        $this->unsetRelation('checklists');
+        $this->update(['progress' => $this->calculateProgress()]);
     }
 
     protected function getActivityDescription(string $action): string

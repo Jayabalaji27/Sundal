@@ -28,6 +28,9 @@ class TaskChecklistController extends Controller
             'created_by' => auth()->id()
         ]);
 
+        // A new unchecked item lowers the completion ratio
+        $task->syncProgressFromChecklists();
+
         return back();
     }
 
@@ -59,9 +62,7 @@ class TaskChecklistController extends Controller
         $taskChecklist->delete();
 
         // Update parent task progress
-        $taskChecklist->task->update([
-            'progress' => $taskChecklist->task->calculateProgress()
-        ]);
+        $taskChecklist->task->syncProgressFromChecklists();
 
         return back();
     }
