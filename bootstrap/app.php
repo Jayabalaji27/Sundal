@@ -75,6 +75,22 @@ return Application::configure(basePath: dirname(__DIR__))
 
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // Laravel's default guest redirect stores any unauthenticated GET as
+        // url.intended. A background fetch() polling after logout (e.g. the
+        // timer's /timer/status) then becomes the next user's post-login page.
+        // Only remember real page loads (Sec-Fetch-Dest: document) and Inertia
+        // visits; other fetches just go to login. Without Sec-Fetch headers
+        // the default behaviour applies.
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, \Illuminate\Http\Request $request) {
+            $dest = $request->header('Sec-Fetch-Dest');
+
+            if ($request->expectsJson() || $dest === null || $dest === 'document' || $request->header('X-Inertia')) {
+                return null;
+            }
+
+            return redirect()->to($e->redirectTo($request) ?? route('login'));
+        });
+
         // Without this, a 403/404/419/500 response to an Inertia XHR request
         // (e.g. a stale double-submit hitting an already-deleted model, or a
         // permission-gate abort() on a unified-shell redirect route) comes back
@@ -83,9 +99,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // overlay / a full page reload, which reads as a false error even when
         // the underlying action already succeeded.
         $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, \Throwable $exception, \Illuminate\Http\Request $request) {
+            // As a validation-style error, not a plain redirect: Inertia treats a
+            // redirect as success, so forms cleared themselves and showed their
+            // success toast although nothing was saved (QA CI1/CI2).
             if ($response->getStatusCode() === 419) {
-                return back()->with([
-                    'message' => 'The page expired, please try again.',
+                return back()->withErrors([
+                    'error' => 'The page expired, please try again.',
                 ]);
             }
 

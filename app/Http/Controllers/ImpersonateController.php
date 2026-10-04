@@ -23,6 +23,18 @@ class ImpersonateController extends Controller
             $originalUserId = session('impersonated_by');
         }
 
+        // Authorize against the original identity (not the impersonated one),
+        // using the rules on User: only Super Admin may impersonate, and only
+        // company accounts may be impersonated.
+        $impersonator = User::find($originalUserId);
+        abort_unless($impersonator && $impersonator->canImpersonate(), 403);
+        abort_unless($user->canBeImpersonated(), 403);
+
+        if ($user->status !== 'active') {
+            return redirect()->route('companies.index')
+                ->with('error', __('This company is suspended. Reactivate it before logging in as the company.'));
+        }
+
         Log::info('Impersonation started', [
             'session_id' => $request->session()->getId(),
             'original_user_id' => $originalUserId,

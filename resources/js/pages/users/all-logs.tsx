@@ -126,9 +126,22 @@ export default function AllUserLogs() {
       label: t('IP Address'),
       render: (value: string) => <span className="text-gray-900 font-mono">{value}</span>
     },
+    {
+      key: 'details.event',
+      label: t('Event'),
+      // Logouts are recorded with details.event = 'logout'; older rows have no event and are logins.
+      render: (_: any, row: any) => {
+        const isLogout = row.details?.event === 'logout';
+        return (
+          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${isLogout ? 'bg-gray-50 text-gray-700 ring-gray-600/20' : 'bg-green-50 text-green-700 ring-green-600/20'}`}>
+            {isLogout ? t('Logout') : t('Login')}
+          </span>
+        );
+      }
+    },
     { 
       key: 'created_at', 
-      label: t('Login Date'),
+      label: t('Date'),
       render: (value: string) => (
         <span className="text-gray-900">
           {window.appSettings.formatDateTime(new Date(value),true)}

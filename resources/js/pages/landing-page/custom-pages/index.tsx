@@ -162,7 +162,8 @@ export default function CustomPagesIndex() {
       key: 'content', 
       label: t('Content'),
       render: (value: string) => {
-        const strippedContent = value.replace(/<[^>]*>/g, '');
+        // Parse rather than regex-strip so entities (&amp;) decode too; DOMParser doesn't run scripts.
+        const strippedContent = (new DOMParser().parseFromString(value || '', 'text/html').body.textContent || '').trim();
         return (
           <div className="max-w-xs truncate" title={strippedContent}>
             {strippedContent.substring(0, 100)}...
@@ -344,6 +345,7 @@ export default function CustomPagesIndex() {
             onSubmit={handleSubmit}
             onCancel={resetForm}
             isEditing={true}
+            slug={editingPage?.slug}
           />
         </DialogContent>
       </Dialog>

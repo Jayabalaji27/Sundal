@@ -213,9 +213,9 @@ class LandingPageSetting extends Model
                     'newsletter_subtitle' => 'Get project management tips and product updates',
                     'links' => [
                         'product' => [['name' => 'Features', 'href' => '#features'], ['name' => 'Pricing', 'href' => '#pricing']],
-                        'company' => [['name' => 'About Us', 'href' => '#about'], ['name' => 'Contact', 'href' => '#contact']],
-                        'support' => [['name' => 'Help Center', 'href' => '#help'], ['name' => 'Terms of Service', 'href' => '#terms']],
-                        'legal' => [['name' => 'Privacy Policy', 'href' => '#privacy'], ['name' => 'Terms of Service', 'href' => '#terms']],
+                        'company' => [['name' => 'About Us', 'href' => '/page/about-us'], ['name' => 'Contact', 'href' => '#contact']],
+                        'support' => [['name' => 'Help Center', 'href' => '/page/help-support'], ['name' => 'Terms of Service', 'href' => '#terms']],
+                        'legal' => [['name' => 'Privacy Policy', 'href' => '/page/privacy-policy'], ['name' => 'Terms of Service', 'href' => '#terms']],
                     ],
                     'social_links' => [
                         ['name' => 'Facebook', 'icon' => 'Facebook', 'href' => '#'],
@@ -425,9 +425,9 @@ class LandingPageSetting extends Model
                     'newsletter_subtitle' => 'Join our newsletter for updates',
                     'links' => [
                         'product' => [['name' => 'Features', 'href' => '#features'], ['name' => 'Pricing', 'href' => '#pricing']],
-                        'company' => [['name' => 'About Us', 'href' => '#about'], ['name' => 'Contact', 'href' => '#contact']],
-                        'support' => [['name' => 'Help Center', 'href' => '#help'], ['name' => 'Terms of Service', 'href' => '#terms']],
-                        'legal' => [['name' => 'Privacy Policy', 'href' => '#privacy'], ['name' => 'Terms of Service', 'href' => '#terms']],
+                        'company' => [['name' => 'About Us', 'href' => '/page/about-us'], ['name' => 'Contact', 'href' => '#contact']],
+                        'support' => [['name' => 'Help Center', 'href' => '/page/help-support'], ['name' => 'Terms of Service', 'href' => '#terms']],
+                        'legal' => [['name' => 'Privacy Policy', 'href' => '/page/privacy-policy'], ['name' => 'Terms of Service', 'href' => '#terms']],
                     ],
                     'social_links' => [
                         ['name' => 'Facebook', 'icon' => 'Facebook', 'href' => '#'],

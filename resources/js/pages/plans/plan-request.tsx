@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Filter, Search, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { getImagePath } from '@/utils/helpers';
 
 export default function PlanRequestsPage() {
@@ -27,6 +28,8 @@ export default function PlanRequestsPage() {
     return initial;
   });
   const [showFilters, setShowFilters] = useState(false);
+  // Approve/Reject take effect immediately, so they go through a confirm dialog.
+  const [pendingDecision, setPendingDecision] = useState<{ action: 'approve' | 'reject'; item: any } | null>(null);
   
   useEffect(() => {
     const isDemo = (window as any).isDemo || false;
@@ -46,20 +49,29 @@ export default function PlanRequestsPage() {
     setFilterValues(initialFilters);
   }, []);
 
-  const handleAction = (action: string, item: any) => {
-    const isDemo = (window as any).isDemo || false;
+  const confirmDecision = () => {
+    if (!pendingDecision) return;
+    const { action, item } = pendingDecision;
+    setPendingDecision(null);
     if (action === 'approve') {
       router.post(route("plan-requests.approve", item.id), {}, {
         onError: () => {
           toast.error(t('Failed to approve plan request'));
         }
       });
-    } else if (action === 'reject') {
+    } else {
       router.post(route("plan-requests.reject", item.id), {}, {
         onError: () => {
           toast.error(t('Failed to reject plan request'));
         }
       });
+    }
+  };
+
+  const handleAction = (action: string, item: any) => {
+    const isDemo = (window as any).isDemo || false;
+    if (action === 'approve' || action === 'reject') {
+      setPendingDecision({ action, item });
     } else if (action === 'cancel') {
       router.delete(route("my-plan-requests.cancel", item.id), {
         onError: () => {
@@ -208,10 +220,7 @@ export default function PlanRequestsPage() {
                   target.src = getImagePath('users/avatar.png');
                 }}
               />
-              <div>
-                <div className="font-medium">{row.user?.name || '-'}</div>
-                <div className="text-xs text-gray-500">{row.user?.email || ''}</div>
-              </div>
+              <div className="font-medium">{row.user?.name || '-'}</div>
             </div>
           );
         }
@@ -407,6 +416,32 @@ export default function PlanRequestsPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={!!pendingDecision} onOpenChange={(open) => { if (!open) setPendingDecision(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {pendingDecision?.action === 'approve' ? t('Approve Plan Request') : t('Reject Plan Request')}
+            </DialogTitle>
+            <DialogDescription>
+              {pendingDecision?.action === 'approve'
+                ? t('Approve {{plan}} for {{name}}? Their plan changes immediately.', { plan: pendingDecision?.item?.plan?.name, name: pendingDecision?.item?.user?.name })
+                : t('Reject the {{plan}} request from {{name}}? This cannot be undone.', { plan: pendingDecision?.item?.plan?.name, name: pendingDecision?.item?.user?.name })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setPendingDecision(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button
+              variant={pendingDecision?.action === 'reject' ? 'destructive' : 'default'}
+              onClick={confirmDecision}
+            >
+              {pendingDecision?.action === 'approve' ? t('Approve') : t('Reject')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageTemplate>
   );
 }

@@ -172,7 +172,9 @@ export default function Settings() {
         {/* ── Integrations ─────────────────────────────────────────────── */}
         <TabsContent value="integrations" className="space-y-8 mt-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {hasPermission('zapier_view_any') && (
+            {/* Zapier and API keys are per-workspace; Super Admin has no workspace
+                (block.superadmin.workspace 403s these routes for it). */}
+            {!isSuperAdmin && hasPermission('zapier_view_any') && (
               <LinkCard
                 href={route('zapier.index')}
                 icon={<Zap className="h-5 w-5" />}
@@ -180,7 +182,7 @@ export default function Settings() {
                 description={t('Connect workflows to Zapier via webhooks.')}
               />
             )}
-            {hasPermission('api_key_view_any') && (
+            {!isSuperAdmin && hasPermission('api_key_view_any') && (
               <LinkCard
                 href={route('api-keys.index')}
                 icon={<Key className="h-5 w-5" />}
@@ -258,7 +260,7 @@ export default function Settings() {
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-1.5">
                   {role.modules.map(module => (
-                    <Badge key={module} variant="secondary" className="capitalize">{module}</Badge>
+                    <Badge key={module} variant="secondary" className="capitalize">{t(module.replace(/[_-]+/g, ' '))}</Badge>
                   ))}
                 </CardContent>
               </Card>

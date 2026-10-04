@@ -95,7 +95,11 @@ interface Props {
   hasActiveAddon?: boolean;
 }
 
-export default function Plans({ plans: initialPlans, billingCycle: initialBillingCycle = 'monthly', hasDefaultPlan, isAdmin = false, currentPlan, userTrialUsed, paymentMethods = [], trialExpired = false, addonPlans: initialAddonPlans = [], hasActiveAddon = false }: Props) {
+// Stable default: a fresh `[]` each render re-ran the effect that copies addon
+// plans into state, so admin pages (no addonPlans prop) re-rendered forever.
+const NO_ADDON_PLANS: AddonPlan[] = [];
+
+export default function Plans({ plans: initialPlans, billingCycle: initialBillingCycle = 'monthly', hasDefaultPlan, isAdmin = false, currentPlan, userTrialUsed, paymentMethods = [], trialExpired = false, addonPlans: initialAddonPlans = NO_ADDON_PLANS, hasActiveAddon = false }: Props) {
   const { t } = useTranslation();
   // const { flash } = usePage().props as any;
   const { flash, globalSettings } = usePage().props as any;
@@ -192,17 +196,12 @@ export default function Plans({ plans: initialPlans, billingCycle: initialBillin
       return;
     }
 
+    // No local patching on success: the response's plans (synced into state by
+    // the initialPlans effect) already mark the trial plan as current. Patching
+    // from this closure's stale list left the old plan marked "Current" too.
     router.post(route('plans.trial'), {
       plan_id: planId
     }, {
-      onSuccess: () => {
-        // Update local state to reflect trial started and hide all trial buttons
-        setPlans(plans.map(plan =>
-          plan.id === planId
-            ? { ...plan, is_current: true, is_trial_available: false }
-            : { ...plan, is_trial_available: false }
-        ));
-      },
       onError: (errors) => {
         if (errors.error) {
           toast.error(errors.error);

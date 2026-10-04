@@ -3,11 +3,16 @@ import { Brain } from 'lucide-react';
 import { ChatGptModal } from '@/components/chatgpt';
 import { Button } from '@/components/ui/button';
 import { usePage } from '@inertiajs/react';
+import { useModalStack } from '@/contexts/ModalStackContext';
 
 export function FloatingChatGpt() {
   const { auth, isSaasMode, globalSettings } = usePage().props as any;
   const [isOpen, setIsOpen] = useState(false);
   const [generatedContent, setGeneratedContent] = useState('');
+  // Stays above dialogs on purpose (usable from inside a form), so while one is
+  // open move it to the top-right, clear of dialog footer buttons.
+  const { modalStack } = useModalStack();
+  const dialogOpen = modalStack.length > 0 && !isOpen;
   
   // Check if user can access ChatGPT
   const userRole = auth?.roles?.[0] || auth?.user?.type;
@@ -60,7 +65,7 @@ export function FloatingChatGpt() {
   return (
     <>
       <div 
-        className="fixed bottom-6 right-6 z-[9999]"
+        className={`fixed right-6 z-[9999] ${dialogOpen ? 'top-20' : 'bottom-6'}`}
         onClickCapture={(e) => {
           e.preventDefault();
           e.stopPropagation();

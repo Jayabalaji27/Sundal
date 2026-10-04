@@ -56,7 +56,7 @@ export function PageForm({
           {errors.title && <p className="text-red-600 text-xs mt-1">{errors.title}</p>}
           {isEditing && slug && (
             <p className="text-xs text-muted-foreground">
-              {t('Current slug')}: <span className="font-mono">/page/{slug}</span>
+              {t('Page URL')}: <span className="font-mono">/page/{slug}</span> {t('(stays the same if you change the title)')}
             </p>
           ) || (
             <p className="text-xs text-muted-foreground">
