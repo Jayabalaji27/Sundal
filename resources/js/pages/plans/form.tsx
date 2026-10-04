@@ -208,7 +208,11 @@ export default function PlanForm({ plan, hasDefaultPlan = false, otherDefaultPla
                   placeholder='e.g. 14'
                   value={formData.trial_day}
                   onChange={handleChange}
+                  disabled={formData.is_trial !== 'on'}
                 />
+                {formData.is_trial !== 'on' && (
+                  <p className="text-xs text-muted-foreground mt-1">{t("Turn on \"Enable Trial\" to set trial days.")}</p>
+                )}
               </div>
 
               <div>

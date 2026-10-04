@@ -230,6 +230,18 @@ class PlanController extends Controller
             'is_plan_enable' => 'nullable|in:on,off',
             'is_default' => 'nullable|boolean',
         ]);
+
+        // The edit form pre-fills yearly_price, so an auto-calculated value comes
+        // back as if typed and never followed a monthly price change. If it is
+        // unchanged and still the auto value for the old monthly price, keep it
+        // automatic so it is recalculated below.
+        $autoYearly = fn ($monthly) => round((float) $monthly * 12 * 0.8, 2);
+        if (isset($validated['yearly_price'])
+            && round((float) $validated['yearly_price'], 2) === round((float) $plan->yearly_price, 2)
+            && round((float) $plan->yearly_price, 2) === $autoYearly($plan->price)) {
+            $validated['yearly_price'] = null;
+        }
+
         $this->ensureYearlyPriceNotAboveMonthly($validated);
 
         // Set default values for nullable fields

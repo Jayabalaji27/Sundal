@@ -70,6 +70,11 @@ export function UpgradePlanModal({
   };
   
   const isYearly = billingCycle === 'yearly';
+
+  // Nothing to change when the selection is the company's current plan and cycle.
+  const currentPlan = plans?.find(plan => plan.is_current === true);
+  const isUnchanged = !!currentPlan && selectedPlanId === currentPlan.id
+    && billingCycle === currentPlan.duration?.toLowerCase();
   const maxYearlySavings = Math.max(0, ...(plans || []).map(plan => plan.yearly_savings_percent ?? 0));
 
   return (
@@ -201,7 +206,7 @@ export function UpgradePlanModal({
           </Button>
           <Button 
             onClick={handleConfirm} 
-            disabled={!selectedPlanId}
+            disabled={!selectedPlanId || isUnchanged}
             className="bg-primary hover:bg-primary/90 text-sm font-medium"
           >
             {t("Upgrade Plan")}

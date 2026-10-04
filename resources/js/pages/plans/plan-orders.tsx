@@ -33,6 +33,8 @@ export default function PlanOrdersPage() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingOrder, setRejectingOrder] = useState<any>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  // Approving activates the plan immediately, so it is confirmed first (Reject has its own dialog).
+  const [approvingOrder, setApprovingOrder] = useState<any>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   
@@ -47,11 +49,7 @@ export default function PlanOrdersPage() {
 
   const handleAction = (action: string, item: any) => {
     if (action === 'approve') {
-      router.post(route("plan-orders.approve", item.id), {}, {
-        onError: () => {
-          toast.error(t('Failed to approve plan order'));
-        }
-      });
+      setApprovingOrder(item);
     } else if (action === 'reject') {
       setRejectingOrder(item);
       setShowRejectModal(true);
@@ -401,6 +399,40 @@ export default function PlanOrdersPage() {
       {/* Order Details Modal */}
       <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
         {selectedOrder && <ViewPopup record={selectedOrder} />}
+      </Dialog>
+
+      {/* Approve Order Confirmation */}
+      <Dialog open={!!approvingOrder} onOpenChange={(open) => { if (!open) setApprovingOrder(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('Approve Plan Order')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {t('Approve order {{number}} for {{name}}? The {{plan}} plan is activated immediately.', {
+              number: approvingOrder?.order_number,
+              name: approvingOrder?.user?.name,
+              plan: approvingOrder?.plan?.name,
+            })}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApprovingOrder(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button onClick={() => {
+              const order = approvingOrder;
+              setApprovingOrder(null);
+              if (order) {
+                router.post(route("plan-orders.approve", order.id), {}, {
+                  onError: () => {
+                    toast.error(t('Failed to approve plan order'));
+                  }
+                });
+              }
+            }}>
+              {t('Approve')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
       {/* Reject Order Modal */}

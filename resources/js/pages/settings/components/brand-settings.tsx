@@ -39,7 +39,7 @@ export const DEFAULT_BRAND_SETTINGS: BrandSettings = {
   logoLight: 'images/logos/logo-light.png',
   favicon: 'images/logos/favicon.png',
   titleText: 'Taskly',
-  footerText: '© 2026 Taskly. All rights reserved.',
+  footerText: `© ${new Date().getFullYear()} Taskly. All rights reserved.`,
   themeColor: 'green',
   customColor: '#10B77f',
   sidebarVariant: 'inset',
@@ -244,6 +244,15 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
     const storageIndex = url.indexOf('/storage/');
     if (storageIndex !== -1) {
       return url.substring(storageIndex);
+    }
+
+    // Same-site files (e.g. the bundled /images/logos/*) are stored as paths,
+    // otherwise the saved setting is pinned to whichever domain it was saved on.
+    const origins = [(window as any).__APP_URL__, (userSettings as any)?.base_url, window.location.origin];
+    for (const origin of origins) {
+      if (origin && url.startsWith(`${origin.replace(/\/$/, '')}/`)) {
+        return url.substring(origin.replace(/\/$/, '').length);
+      }
     }
 
     return url;

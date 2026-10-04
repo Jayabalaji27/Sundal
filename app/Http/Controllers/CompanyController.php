@@ -44,13 +44,22 @@ class CompanyController extends Controller
                     ->orWhere('plan_expire_date', '>=', now())));
         }
         
-        // Apply date filters
+        // Apply date filters. Dates are shown in the viewer's timezone, so the
+        // picked days are taken in that timezone (sent as `tz`) and converted
+        // to the stored timezone, rather than compared as UTC dates (QA C2).
+        $viewerTz = in_array($request->input('tz'), timezone_identifiers_list(), true)
+            ? $request->input('tz')
+            : config('app.timezone');
+        $storedTz = config('app.timezone');
+
         if ($request->has('start_date') && !empty($request->start_date)) {
-            $query->whereDate('created_at', '>=', $request->start_date);
+            $from = \Carbon\Carbon::parse($request->start_date, $viewerTz)->startOfDay()->setTimezone($storedTz);
+            $query->where('created_at', '>=', $from->format('Y-m-d H:i:s'));
         }
-        
+
         if ($request->has('end_date') && !empty($request->end_date)) {
-            $query->whereDate('created_at', '<=', $request->end_date);
+            $to = \Carbon\Carbon::parse($request->end_date, $viewerTz)->endOfDay()->setTimezone($storedTz);
+            $query->where('created_at', '<=', $to->format('Y-m-d H:i:s'));
         }
         
         // Apply sorting
@@ -282,28 +291,50 @@ class CompanyController extends Controller
         
         $validated = $request->validate([
             'plan_id' => 'required|exists:plans,id',
+            'duration' => 'nullable|in:monthly,yearly',
         ]);
-        
+
         $plan = Plan::find($validated['plan_id']);
         if (!$plan) {
             return back()->with('error', __('Plan not found'));
         }
-        
+
+        // The dialog's Monthly/Yearly choice; previously ignored in favour of the plan's own duration.
+        $billingCycle = $validated['duration'] ?? (strtolower((string) $plan->duration) === 'yearly' ? 'yearly' : 'monthly');
+
         // Update company plan
         $company->plan_id = $plan->id;
-        
-        // Set plan expiry date based on plan duration
-        if ($plan->duration === 'yearly') {
+
+        // Set plan expiry date based on the billing cycle
+        if ($billingCycle === 'yearly') {
             $company->plan_expire_date = now()->addYear();
         } else {
             $company->plan_expire_date = now()->addMonth();
         }
-        
+
         // Set plan is active
         $company->plan_is_active = 1;
-        
+
         $company->save();
-        
+
+        // Record the change as an order (QA R3): nothing is charged, but Plan
+        // Orders and plan stats should show admin plan changes too.
+        $listPrice = $billingCycle === 'yearly' ? $plan->yearly_price : $plan->price;
+        \App\Models\PlanOrder::create([
+            'user_id' => $company->id,
+            'plan_id' => $plan->id,
+            'billing_cycle' => $billingCycle,
+            'original_price' => $listPrice ?? 0,
+            'discount_amount' => 0,
+            'final_price' => 0,
+            'payment_method' => 'admin',
+            'status' => 'approved',
+            'ordered_at' => now(),
+            'processed_at' => now(),
+            'processed_by' => auth()->id(),
+            'notes' => __('Plan changed by Super Admin'),
+        ]);
+
         return back()->with('success', __('Plan upgraded successfully'));
     }
 

@@ -8,7 +8,6 @@ import { usePage, router } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import { ShieldAlert } from 'lucide-react';
 import FlashMessages from '@/components/FlashMessages';
-import { CustomToast } from '@/components/custom-toast';
 
 declare const route: any;
 
@@ -19,7 +18,6 @@ export default function AppSidebarLayout({ children, breadcrumbs = [] }: PropsWi
     return (
         <AppShell variant="sidebar">
             <FlashMessages />
-            <CustomToast />
             <AppSidebar />
             <AppContent id="main-content" variant="sidebar">
                 {isImpersonating && (

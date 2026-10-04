@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import {
     Search, FolderKanban, CheckSquare, Bug, Clock, FileText,
     MessageSquare, BookOpen, Users, Settings, LayoutDashboard,
-    Plus, Activity, AlertTriangle, Radio, ArrowRight
+    Plus, Activity, AlertTriangle, Radio, ArrowRight, History
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { hasPermission } from '@/utils/authorization';
@@ -134,6 +134,9 @@ export function CommandPalette() {
         // Settings
         ...(hasPermission(permissions, 'settings_view') ? [
             { id: 'settings', label: t('Settings'), icon: <Settings className="h-4 w-4" />, group: t('Settings'), action: () => navigate(route('settings')) },
+        ] : []),
+        ...(hasPermission(permissions, 'user_view_logs') ? [
+            { id: 'login-history', label: t('Login History'), icon: <History className="h-4 w-4" />, group: t('Settings'), keywords: 'login logout sign in audit log history', action: () => navigate(route('users.all-logs')) },
         ] : []),
         ...(hasPermission(permissions, 'workspace_view_any') ? [
             { id: 'workspace', label: t('Workspaces'), icon: <Users className="h-4 w-4" />, group: t('Settings'), action: () => navigate(route('workspaces.index')) },

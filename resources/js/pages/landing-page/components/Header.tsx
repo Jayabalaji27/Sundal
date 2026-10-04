@@ -180,7 +180,7 @@ export default function Header({ settings, sectionData, customPages = [], brandC
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-8" role="navigation" aria-label="Main navigation">
+          <nav className="hidden lg:flex items-center space-x-8" role="navigation" aria-label="Main navigation">
             <Link
               href={route('home')}
               className="text-gray-600 dark:text-gray-300 text-sm font-medium transition-colors relative group"
@@ -235,7 +235,7 @@ export default function Header({ settings, sectionData, customPages = [], brandC
           </nav>
 
           {/* Auth Buttons */}
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden lg:flex items-center gap-4">
             {pageProps.auth?.user ? (
               <Link
                 href={route('dashboard')}
@@ -292,7 +292,7 @@ export default function Header({ settings, sectionData, customPages = [], brandC
           </div>
 
           {/* Mobile menu button */}
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="p-2 text-gray-600 dark:text-gray-300 cursor-pointer hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
@@ -307,7 +307,7 @@ export default function Header({ settings, sectionData, customPages = [], brandC
 
         {/* Mobile Navigation */}
         {isMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 dark:border-gray-700" id="mobile-menu">
+          <div className="lg:hidden border-t border-gray-200 dark:border-gray-700" id="mobile-menu">
             <div 
               className="px-4 py-6 space-y-4 bg-white dark:bg-gray-900"
               style={isTransparent ? {} : { backgroundColor }}

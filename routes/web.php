@@ -989,7 +989,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('api/payment-settings/enabled', [\App\Http\Controllers\Settings\PaymentSettingController::class, 'getEnabledMethods'])->name('api.payment-settings.enabled');
 
         Route::middleware('auth')->group(function () {
-            Route::get('impersonate/{userId}', [ImpersonateController::class, 'start'])->name('impersonate.start');
+            // Impersonate is Super Admin's sanctioned way into a workspace, so it
+            // must skip the block; ImpersonateController::start authorizes it.
+            Route::get('impersonate/{userId}', [ImpersonateController::class, 'start'])->withoutMiddleware('block.superadmin.workspace')->name('impersonate.start');
         });
 
         Route::post('impersonate/leave', [ImpersonateController::class, 'leave'])->name('impersonate.leave');

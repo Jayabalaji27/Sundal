@@ -110,7 +110,7 @@ function hexToAdjustedRgba(hex, opacity = 1, adjust = 0) {
 
     return (
         <div className="flex min-h-screen w-full bg-slate-50 dark:bg-slate-900">
-            <Head title={title} />
+            <Head title={`${title} - ${globalSettings?.titleText || 'Taskly'}`} />
 
             {/* Left side - SVG illustration */}
             <div
@@ -778,16 +778,17 @@ function hexToAdjustedRgba(hex, opacity = 1, adjust = 0) {
                 >
                     {/* Mobile branding - only visible on small screens */}
                     <div className="flex flex-col items-center mb-8 lg:hidden">
-                        <div
-                            className="p-4 rounded-xl shadow-lg inline-flex mb-4"
-                            style={{ backgroundColor: primaryColor }}
-                        >
-                            {currentLogo ? (
-                                <img src={currentLogo} alt="Logo" className="h-8 w-8 object-contain" />
-                            ) : (
+                        {currentLogo ? (
+                            // The logo is a wordmark: size it like the sidebar logo, not into a square tile.
+                            <img src={currentLogo} alt="Logo" className="h-10 w-auto max-w-[180px] object-contain mb-4" />
+                        ) : (
+                            <div
+                                className="p-4 rounded-xl shadow-lg inline-flex mb-4"
+                                style={{ backgroundColor: primaryColor }}
+                            >
                                 <CreditCard className="h-8 w-8 text-white" />
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 border border-slate-200 dark:border-slate-700">

@@ -104,6 +104,11 @@ export default function Companies() {
       params.end_date = endDate.toISOString().split('T')[0];
     }
     
+    // Dates are shown in the viewer's timezone; filter them in it too.
+    if (params.start_date || params.end_date) {
+      params.tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+
     // Add per_page if it exists
     if (pageFilters.per_page) {
       params.per_page = pageFilters.per_page;
@@ -145,6 +150,11 @@ export default function Companies() {
       params.end_date = endDate.toISOString().split('T')[0];
     }
     
+    // Dates are shown in the viewer's timezone; filter them in it too.
+    if (params.start_date || params.end_date) {
+      params.tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+
     // Add per_page if it exists
     if (pageFilters.per_page) {
       params.per_page = pageFilters.per_page;
@@ -174,6 +184,11 @@ export default function Companies() {
       params.end_date = endDate.toISOString().split('T')[0];
     }
     
+    // Dates are shown in the viewer's timezone; filter them in it too.
+    if (params.start_date || params.end_date) {
+      params.tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+
     // Add per_page if it exists
     if (pageFilters.per_page) {
       params.per_page = pageFilters.per_page;
@@ -223,6 +238,11 @@ export default function Companies() {
       params.end_date = endDate.toISOString().split('T')[0];
     }
     
+    // Dates are shown in the viewer's timezone; filter them in it too.
+    if (params.start_date || params.end_date) {
+      params.tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+
     // Add per_page if it exists
     if (pageFilters.per_page) {
       params.per_page = pageFilters.per_page;
@@ -236,6 +256,10 @@ export default function Companies() {
     
     switch (action) {
       case 'login-as':
+        if (company.status !== 'active') {
+          toast.error(t('This company is suspended. Reactivate it before logging in as the company.'));
+          break;
+        }
         setCompanyToImpersonate(company);
         setIsImpersonateConfirmOpen(true);
         break;
@@ -799,6 +823,7 @@ export default function Companies() {
                     ))}
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
+                        {company.status === 'active' && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button 
@@ -806,12 +831,14 @@ export default function Companies() {
                               size="icon" 
                               onClick={() => handleAction('login-as', company)}
                               className="text-blue-500 hover:text-blue-700"
+                              aria-label={t("Login as Company")}
                             >
                               <ArrowUpRight className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>{t("Login as Company")}</TooltipContent>
                         </Tooltip>
+                        )}
                         
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -820,6 +847,7 @@ export default function Companies() {
                               size="icon" 
                               onClick={() => handleAction('company-info', company)}
                               className="text-blue-500 hover:text-blue-700"
+                              aria-label={t("Company Info")}
                             >
                               <Info className="h-4 w-4" />
                             </Button>
@@ -835,6 +863,7 @@ export default function Companies() {
                                 size="icon" 
                                 onClick={() => handleAction('upgrade-plan', company)}
                                 className="text-amber-500 hover:text-amber-700"
+                                aria-label={t("Upgrade Plan")}
                               >
                                 <CreditCard className="h-4 w-4" />
                               </Button>
@@ -852,6 +881,7 @@ export default function Companies() {
                               size="icon" 
                               onClick={() => handleAction('reset-password', company)}
                               className="text-blue-500 hover:text-blue-700"
+                              aria-label={t("Reset Password")}
                             >
                               <KeyRound className="h-4 w-4" />
                             </Button>
@@ -866,6 +896,7 @@ export default function Companies() {
                               size="icon" 
                               onClick={() => handleAction('toggle-status', company)}
                               className="text-amber-500 hover:text-amber-700"
+                              aria-label={company.status === 'active' ? t("Disable Login") : t("Enable Login")}
                             >
                               {company.status === 'active' ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
                             </Button>
@@ -880,6 +911,7 @@ export default function Companies() {
                               size="icon" 
                               onClick={() => handleAction('edit', company)}
                               className="text-amber-500 hover:text-amber-700"
+                              aria-label={t("Edit")}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
@@ -894,6 +926,7 @@ export default function Companies() {
                               size="icon"
                               className="text-red-500 hover:text-red-700"
                               onClick={() => handleAction('delete', company)}
+                              aria-label={t("Delete")}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>

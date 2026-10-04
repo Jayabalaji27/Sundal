@@ -1153,7 +1153,7 @@ if (! function_exists('defaultSettings')) {
             'logoLight' => '/images/logos/logo-light.png',
             'favicon' => '/images/logos/favicon.png',
             'titleText' => 'Taskly',
-            'footerText' => '© 2024 Taskly. All rights reserved.',
+            'footerText' => '© ' . date('Y') . ' Taskly. All rights reserved.',
             'themeColor' => 'green',
             'customColor' => '#10b981',
             'sidebarVariant' => 'inset',
@@ -1290,7 +1290,13 @@ if (! function_exists('getFile')) {
                 return \Storage::disk('wasabi')->url($path);
             }
         }
-        
+
+        // Some settings (e.g. branding logos) are stored as full URLs already;
+        // prefixing those produced "https://hosthttps://host/..." (QA L2).
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
         return config('app.url') . $path;
     }
 }

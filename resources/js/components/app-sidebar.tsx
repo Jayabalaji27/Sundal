@@ -13,7 +13,7 @@ import {
     Ticket, Gift, DollarSign, MessageSquare, Globe, FolderOpen,
     ClipboardList, Clock, Bot, Video, Building2, BarChart3, BookOpen,
     TrendingUp, Radio, Bug, ListTodo, Receipt, FileIcon, Zap, AlertTriangle,
-    Bell, Mail, FolderKanban, Users
+    Bell, Mail, FolderKanban, Users, History
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AppLogo from './app-logo';
@@ -72,6 +72,9 @@ export function AppSidebar() {
         if (hasPermission(permissions, 'newsletter_view_any')) landingChildren.push({ title: t('Newsletter'), href: route('newsletters.index') });
         if (landingChildren.length > 0) {
             items.push({ title: t('Landing Page'), icon: Globe, group: t('Management'), children: landingChildren });
+        }
+        if (hasPermission(permissions, 'user_view_logs')) {
+            items.push({ title: t('Login History'), href: route('users.all-logs'), icon: History, group: t('System Control') });
         }
         if (hasPermission(permissions, 'settings_view')) {
             items.push({ title: t('Settings'), href: route('settings'), icon: Settings, group: t('System Control') });
@@ -224,6 +227,9 @@ export function AppSidebar() {
         if (hasPermission(permissions, 'plan_view_any') || hasPermission(permissions, 'plan_view_my_requests') || hasPermission(permissions, 'plan_view_my_orders')) {
             items.push({ title: t('Billing'), href: route('plans.index'), icon: CreditCard, group: t('Account') });
         }
+        if (hasPermission(permissions, 'user_view_logs')) {
+            items.push({ title: t('Login History'), href: route('users.all-logs'), icon: History, group: t('Account') });
+        }
         if (hasPermission(permissions, 'settings_view')) {
             items.push({ title: t('Settings'), href: route('settings'), icon: Settings, group: t('Account') });
         }
@@ -233,6 +239,9 @@ export function AppSidebar() {
     // ─── Non-SaaS ────────────────────────────────────────────────────────────
     const getNonSaasNavItems = (): NavItem[] => {
         const items = buildCommonNavItems();
+        if (hasPermission(permissions, 'user_view_logs')) {
+            items.push({ title: t('Login History'), href: route('users.all-logs'), icon: History, group: t('Account') });
+        }
         if (hasPermission(permissions, 'settings_view')) {
             items.push({ title: t('Settings'), href: route('settings'), icon: Settings, group: t('Account') });
         }

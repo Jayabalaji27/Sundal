@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { usePage } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { toast } from 'sonner';
 import { CheckCircle, AlertTriangle, XCircle, Copy } from 'lucide-react';
 
@@ -10,39 +10,64 @@ interface FlashMessages {
     invitation_link?: string;
 }
 
-export default function FlashMessages() {
-    const { flash } = usePage().props as { flash: FlashMessages };
+/**
+ * Shows a flash's success/error once and clears them on the props object.
+ *
+ * Pages also toast `flash` from their own effects and router callbacks, and the
+ * callbacks read it from a stale closure (the previous response), so they showed
+ * the previous action's message. Every one of those reads the same props object,
+ * so clearing it here leaves them nothing to show. Display waits a tick because
+ * most onSuccess callbacks start with toast.dismiss(), which would remove it.
+ */
+function showFlashOnce(flash: FlashMessages | undefined) {
+    if (!flash) return;
+    const { success, error } = flash;
+    flash.success = undefined;
+    flash.error = undefined;
 
-    useEffect(() => {
-        // Success message
-        if (flash.success) {
+    setTimeout(() => {
+        if (success) {
             toast(
                 <div className="flex items-start">
                     <div className="p-1 rounded-full bg-green-50 dark:bg-green-900/20 mr-3">
                         <CheckCircle className="h-5 w-5 text-green-500 dark:text-green-400" />
                     </div>
                     <div>
-                        <h3 className="font-medium text-gray-900 dark:text-gray-100">{flash.success}</h3>
+                        <h3 className="font-medium text-gray-900 dark:text-gray-100">{success}</h3>
                     </div>
                 </div>,
                 { duration: 4000 }
             );
         }
 
-        // Error message
-        if (flash.error) {
+        if (error) {
             toast(
                 <div className="flex items-start">
                     <div className="p-1 rounded-full bg-red-50 dark:bg-red-900/20 mr-3">
                         <XCircle className="h-5 w-5 text-red-500 dark:text-red-400" />
                     </div>
                     <div>
-                        <h3 className="font-medium text-gray-900 dark:text-gray-100">{flash.error}</h3>
+                        <h3 className="font-medium text-gray-900 dark:text-gray-100">{error}</h3>
                     </div>
                 </div>,
                 { duration: 6000 }
             );
         }
+    }, 0);
+}
+
+export default function FlashMessages() {
+    const { flash } = usePage().props as { flash: FlashMessages };
+
+    // Inertia fires 'success' before the visit's own onSuccess, so the flash is
+    // cleared before any page callback can read it.
+    useEffect(() => router.on('success', (event) => {
+        showFlashOnce((event.detail.page.props as { flash?: FlashMessages }).flash);
+    }), []);
+
+    useEffect(() => {
+        // Full page loads (no Inertia visit) and anything the listener missed.
+        showFlashOnce(flash);
 
         // Warning message with optional invitation link
         if (flash.warning) {

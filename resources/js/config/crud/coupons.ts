@@ -6,6 +6,42 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/custom-toast';
 import { t } from '@/utils/i18n';
 
+function CouponStatusCell({ value, row }: { value: any; row: any }) {
+  const [isChecked, setIsChecked] = React.useState(!!value);
+
+  // Past its expiry date: can't be applied regardless of the switch
+  if (row.is_expired) {
+    return React.createElement('div', { className: 'flex items-center justify-center' },
+      React.createElement('span', {
+        className: 'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset bg-red-50 text-red-700 ring-red-600/20'
+      }, t('Expired'))
+    );
+  }
+
+  const handleToggle = async () => {
+    const { router } = await import('@inertiajs/react');
+    router.put(route('coupons.toggle-status', row.id), {}, {
+      onSuccess: (page: any) => {
+        const data = page.props.flash || {};
+        setIsChecked(!isChecked);
+        row.status = !row.status;
+        toast.success(data.success || 'Status updated successfully');
+      },
+      onError: () => {
+        toast.error('Error updating status');
+      }
+    });
+  };
+
+  return React.createElement('div', { className: 'flex items-center justify-center' }, [
+    React.createElement(Switch, {
+      key: 'status-switch',
+      checked: isChecked,
+      onCheckedChange: handleToggle
+    })
+  ]);
+}
+
 export const couponsConfig: CrudConfig = {
   entity: {
     name: 'coupons',
@@ -65,41 +101,9 @@ export const couponsConfig: CrudConfig = {
       { 
         key: 'status', 
         label: t('Status'), 
-        render: (value, row) => {
-          const [isChecked, setIsChecked] = React.useState(!!value);
-
-          // Past its expiry date: can't be applied regardless of the switch
-          if (row.is_expired) {
-            return React.createElement('div', { className: 'flex items-center justify-center' },
-              React.createElement('span', {
-                className: 'inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset bg-red-50 text-red-700 ring-red-600/20'
-              }, t('Expired'))
-            );
-          }
-          
-          const handleToggle = async () => {
-            const { router } = await import('@inertiajs/react');
-            router.put(route('coupons.toggle-status', row.id), {}, {
-              onSuccess: (page: any) => {
-                const data = page.props.flash || {};
-                setIsChecked(!isChecked);
-                row.status = !row.status;
-                toast.success(data.success || 'Status updated successfully');
-              },
-              onError: () => {
-                toast.error('Error updating status');
-              }
-            });
-          };
-          
-          return React.createElement('div', { className: 'flex items-center justify-center' }, [
-            React.createElement(Switch, {
-              key: 'status-switch',
-              checked: isChecked,
-              onCheckedChange: handleToggle
-            })
-          ]);
-        }
+        // CrudTable calls render() as a plain function, so the stateful switch
+        // must live in its own component rather than calling hooks here.
+        render: (value, row) => React.createElement(CouponStatusCell, { key: row.id, value, row })
       }
     ],
     actions: [

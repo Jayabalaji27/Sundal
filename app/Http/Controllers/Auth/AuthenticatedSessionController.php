@@ -50,6 +50,15 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        // Recording the logout must never stop the user from signing out.
+        if (Auth::check()) {
+            try {
+                $this->logLoginHistory($request, 'logout');
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();
@@ -58,7 +67,8 @@ class AuthenticatedSessionController extends Controller
         return redirect('/');
     }
 
-    private function logLoginHistory(Request $request): void
+    /** Records a login or logout event (details.event) for Login History. */
+    private function logLoginHistory(Request $request, string $event = 'login'): void
     {
         $ip = $request->ip();
         // Skip geolocation lookup — use local data only to avoid external API calls
@@ -71,6 +81,7 @@ class AuthenticatedSessionController extends Controller
         $userAgent = $request->userAgent();
         $browserData = parseBrowserData($userAgent);
         $details = array_merge($locationData, $browserData, [
+            'event' => $event,
             'status' => 'success',
             'referrer_host' => $request->headers->get('referer') ? parse_url($request->headers->get('referer'), PHP_URL_HOST) : null,
             'referrer_path' => $request->headers->get('referer') ? parse_url($request->headers->get('referer'), PHP_URL_PATH) : null,

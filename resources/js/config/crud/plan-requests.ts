@@ -28,12 +28,12 @@ export const planRequestsConfig: CrudConfig = {
       { 
         key: 'subtotal', 
         label: t('Subtotal'), 
-        render: (value) => value !== null && value !== undefined ? `${parseFloat(value).toFixed(2)}` : '-'
+        render: (value) => value !== null && value !== undefined ? (window.appSettings?.formatCurrency(value) || `${parseFloat(value).toFixed(2)}`) : '-'
       },
       { 
         key: 'total', 
         label: t('Total'), 
-        render: (value) => value !== null && value !== undefined ? `${parseFloat(value).toFixed(2)}` : '-'
+        render: (value) => value !== null && value !== undefined ? (window.appSettings?.formatCurrency(value) || `${parseFloat(value).toFixed(2)}`) : '-'
       },
       { 
         key: 'status', 
