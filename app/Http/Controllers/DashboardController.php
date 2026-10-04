@@ -368,50 +368,12 @@ class DashboardController extends Controller
                 return ['total' => 0, 'pending' => 0, 'inProgress' => 0, 'completed' => 0];
             }
             
-            $taskQuery = \App\Models\Task::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            });
-            
-            // Non-company workspace roles only see their own tasks or tasks in their projects
-            if ($role === 'client') {
-                $taskQuery->where(function($q) use ($user) {
-                    $q->where('assigned_to', $user->id)
-                      ->orWhereHas('project.clients', function($pm) use ($user) {
-                          $pm->where('user_id', $user->id);
-                      });
-                });
-            } elseif ($role !== 'company') {
-                $taskQuery->where(function($q) use ($user) {
-                    $q->where('assigned_to', $user->id)
-                      ->orWhereHas('project.members', function($pm) use ($user) {
-                          $pm->where('user_id', $user->id);
-                      });
-                });
-            }
-            
-            $total = (clone $taskQuery)->count();
-            
+            // Same visibility as the Tasks page, so the two never disagree
+            $total = \App\Models\Task::visibleTo($user)->count();
+
             $stages = \App\Models\TaskStage::where('workspace_id', $workspace->id)
-                ->withCount(['tasks' => function($q) use ($workspace, $user, $role) {
-                    $q->whereHas('project', function($pq) use ($workspace) {
-                        $pq->where('workspace_id', $workspace->id);
-                    });
-                    if ($role === 'client') {
-                        $q->where(function($tq) use ($user) {
-                            $tq->where('assigned_to', $user->id)
-                               ->orWhereHas('project.clients', function($pm) use ($user) {
-                                   $pm->where('user_id', $user->id);
-                               });
-                        });
-                    } elseif ($role !== 'company') {
-                        $q->where(function($tq) use ($user) {
-                            $tq->where('assigned_to', $user->id)
-                               ->orWhereHas('project.members', function($pm) use ($user) {
-                                   $pm->where('user_id', $user->id);
-                               });
-                        });
-                    }
-                }])->get();
+                ->withCount(['tasks' => fn ($q) => $q->visibleTo($user)])
+                ->get();
             
             // "Completed" = tasks in a completed stage (TaskStage::is_completed, e.g.
             // Done) - not whichever stage happens to be third. Pending = the first

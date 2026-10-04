@@ -11,6 +11,7 @@ use App\Models\ProjectExpense;
 use App\Models\TimesheetEntry;
 use App\Exports\InvoiceExport;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -201,6 +202,8 @@ class InvoiceController extends Controller
             'items.*.task_id' => 'required|exists:tasks,id',
         ], self::ITEM_AMOUNT_MESSAGES);
 
+        $this->ensureTasksNotBilled($validated['items']);
+
         $project = Project::findOrFail($validated['project_id']);
 
         // Calculate totals
@@ -281,6 +284,8 @@ class InvoiceController extends Controller
             'items.*.timesheet_entry_id' => 'nullable|exists:timesheet_entries,id',
         ], self::ITEM_AMOUNT_MESSAGES);
 
+        $this->ensureTasksNotBilled($validated['items'], $invoice->id);
+
         $appliedTaxes = Tax::whereIn('id', $validated['selected_taxes'] ?? [])->get(['id', 'name', 'rate']);
 
         $invoice->update([
@@ -324,6 +329,23 @@ class InvoiceController extends Controller
         return redirect()->route('invoices.show', $invoice)->with('success', __('Invoice updated successfully!'));
     }
 
+    /** Stops a task from being billed twice (BUG-14). */
+    private function ensureTasksNotBilled(array $items, ?int $exceptInvoiceId = null): void
+    {
+        $billed = InvoiceItem::billedTaskIds(array_column($items, 'task_id'), $exceptInvoiceId);
+
+        $errors = [];
+        foreach ($items as $index => $item) {
+            if (!empty($item['task_id']) && in_array((int) $item['task_id'], $billed, true)) {
+                $errors["items.{$index}.task_id"] = __('This task is already on a sent or paid invoice.');
+            }
+        }
+
+        if ($errors) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
     public function create()
     {
         $user = auth()->user();
@@ -347,13 +369,15 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function getProjectInvoiceData($projectId)
+    public function getProjectInvoiceData(Request $request, $projectId)
     {
         try {
             $project = Project::findOrFail($projectId);
 
-            // Get project tasks
+            // Project tasks not yet billed elsewhere (the invoice being edited keeps its own)
             $tasks = $project->tasks()->get(['id', 'title']);
+            $billed = InvoiceItem::billedTaskIds($tasks->pluck('id'), $request->integer('invoice') ?: null);
+            $tasks = $tasks->whereNotIn('id', $billed)->values();
 
             // Get project clients using the clients relationship
             $clients = $project->clients()->get(['users.id', 'users.name']);

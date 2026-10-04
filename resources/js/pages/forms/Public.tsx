@@ -72,26 +72,31 @@ export default function PublicForm() {
 
                                         {field.type === 'text' && (
                                             <Input value={val ?? ''} onChange={e => set(field.id, e.target.value)}
+                                                required={!!field.required}
                                                 placeholder={field.placeholder}
                                                 className={cn(error && 'border-destructive')} />
                                         )}
                                         {field.type === 'email' && (
                                             <Input type="email" value={val ?? ''} onChange={e => set(field.id, e.target.value)}
+                                                required={!!field.required}
                                                 placeholder={field.placeholder}
                                                 className={cn(error && 'border-destructive')} />
                                         )}
                                         {field.type === 'number' && (
                                             <Input type="number" value={val ?? ''} onChange={e => set(field.id, e.target.value)}
+                                                required={!!field.required}
                                                 placeholder={field.placeholder}
                                                 className={cn(error && 'border-destructive')} />
                                         )}
                                         {field.type === 'textarea' && (
                                             <Textarea value={val ?? ''} onChange={e => set(field.id, e.target.value)}
+                                                required={!!field.required}
                                                 placeholder={field.placeholder} rows={4}
                                                 className={cn(error && 'border-destructive')} />
                                         )}
                                         {field.type === 'date' && (
                                             <Input type="date" value={val ?? ''} onChange={e => set(field.id, e.target.value)}
+                                                required={!!field.required}
                                                 className={cn(error && 'border-destructive')} />
                                         )}
                                         {field.type === 'select' && (

@@ -401,6 +401,62 @@ routes/permissions/seeder touched); needs its own follow-up.
 
 ---
 
+### RP-10 · 2026-10-05 · Manager QA Report (Production-Readiness Pass, BUG-01…21)
+
+**Source:** `taskly-manager-qa-report.md` (manager@test.com, workspace 2). Regression tests:
+`tests/Feature/QaManagerReportFixesTest.php`.
+
+**P1**
+- BUG-01 Checklist progress — `TaskChecklistController::store` never recalculated
+  progress (only toggle/destroy did). New `Task::syncProgressFromChecklists()` used by
+  store/destroy/toggle. `ProjectHealthService` "done" now = task in a completed stage
+  (`task_stages.is_completed`), not `progress = 100`.
+- BUG-02 Submitted timesheets editable — `Timesheet::isLocked()` (submitted/approved).
+  `TimesheetController` update/destroy throw a validation error (422 for JSON); the
+  `TimesheetEntryController` store/update/destroy/bulk routes refuse entries of a locked
+  timesheet too. Card/table Edit+Delete hidden unless draft/rejected. Rejecting reopens it.
+  (Supersedes the RP-9 "by design" note on editing approved timesheets.)
+- BUG-03 AI plan gate — `chatbot.index`, `chatbot.ask`, `chatgpt.generate` now carry
+  `module.access`; `FloatingChatGpt` hidden when `auth.modulesLocked`.
+
+**P2**
+- BUG-04 Own items in approval queues: approve/reject hidden on own submissions (owner
+  excepted), `review_own` flag added to expense approval permissions.
+- BUG-05 Expense approval list + both stats endpoints share `reviewableExpenses()` —
+  managers scoped to assigned/created projects like `/expenses` and timesheet approvals.
+- BUG-06 "Delete undefined": callers passed `title`/`description` to
+  `EnhancedDeleteModal`, which takes `entityName`/`warningMessage`. Fixed Forms plus the
+  same bug in Agents, Knowledge Base, Portfolios, Sprints.
+- BUG-07 Public form errors use field labels (`:attribute is required.`) + native `required`.
+- BUG-08 Forms toggle: optimistic badge update, rolled back on error (server side was fine).
+
+**P3** — 09 notes "Showing 0 to 0"; 10 Critical card counts severity critical/blocker;
+11 report labels the overview ring "Project Progress" and shows "No milestones";
+12 "1 item added"; 13 "Client added to project" toast; 14 a task on a sent/paid invoice
+can't be billed again (`InvoiceItem::billedTaskIds`, validated on store/update, excluded
+from the task picker; drafts/cancelled don't count); 15 `DialogDescription asChild` in
+`EnhancedDeleteModal`; 16 Form Builder null placeholder → `''`; 17 header breadcrumbs
+truncate, intermediate crumbs hidden below `lg`; 18 initial `<title>` uses
+`globalSettings.titleText`; 20 aria-labels on CrudTable row actions + timesheet/expense
+card icons; 21 dashboard task stats use new shared `Task::visibleTo()` (also used by
+`TaskController::index`).
+- BUG-19 Contract Types slow — **not reproduced**: warm requests 87–122ms (38 queries,
+  ~35ms DB); Settings' background XHRs all <140ms. One 23s cold-start spike had only
+  109ms DB time → environment (single-threaded `php artisan serve`, OneDrive-synced
+  project dir), not a query. No code change; re-measure on the deployed instance.
+
+Tests: `QaManagerReportFixesTest` 14/14 pass; `QaRoleReportFixesTest` still passes.
+Full suite 2026-10-05: 176 passed, 35 failed, 1 skipped (212 total, not the 536 recorded
+on 09-27; `RoleAccessTest`/`CheckModuleAccessTest` no longer exist in `tests/`). The 35
+failures are in AiModulesTest, DashboardTest, FunctionalTest (health 403), PlanAccessTest,
+RazorpaySettingsTest, Settings/Password+ProfileUpdateTest. None of them reaches code changed here: most are
+302/404s from middleware or moved routes (e.g. the profile page is `/profile`, tests still
+hit `/settings/profile`), and AiModulesTest "overdue tasks reduce score" expects 3 overdue
+tasks (−20 → 80, "healthy") to be at_risk. There's no git baseline here to prove they
+failed before this change, so triage them separately.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)

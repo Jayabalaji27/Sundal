@@ -131,6 +131,7 @@ export function CrudTable({
                         variant="ghost"
                         size="icon"
                         className={cn("h-8 w-8", action.className)}
+                        aria-label={action.label}
                       >
                         <IconComponent size={16} />
                       </Button>
@@ -153,6 +154,7 @@ export function CrudTable({
                     variant="ghost"
                     size="icon"
                     className={cn("h-8 w-8", action.className)}
+                    aria-label={action.label}
                     onClick={() => onAction(action.action, row)}
                   >
                     <IconComponent size={16} />

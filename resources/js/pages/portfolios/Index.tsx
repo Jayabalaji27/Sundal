@@ -215,8 +215,8 @@ export default function PortfoliosIndex() {
                 isOpen={isDeleteOpen}
                 onClose={() => setIsDeleteOpen(false)}
                 onConfirm={handleDelete}
-                title={t('Delete Portfolio')}
-                description={t('This will remove the portfolio. All projects inside will be unlinked (not deleted).')}
+                entityName={t('portfolio')}
+                warningMessage={t('This will remove the portfolio. All projects inside will be unlinked (not deleted).')}
                 itemName={current?.name ?? ''}
             />
         </PageTemplate>

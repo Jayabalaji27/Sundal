@@ -8,6 +8,7 @@ use App\Models\Project;
 use App\Models\User;
 use App\Traits\HasPermissionChecks;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -433,6 +434,7 @@ class TimesheetController extends Controller
     public function update(Request $request, Timesheet $timesheet)
     {
         $this->authorizePermission('timesheet_update');
+        $this->ensureEditable($timesheet);
         
         $validated = $request->validate([
             'start_date' => 'required|date',
@@ -531,9 +533,19 @@ class TimesheetController extends Controller
     public function destroy(Timesheet $timesheet)
     {
         $this->authorizePermission('timesheet_delete');
-        
+        $this->ensureEditable($timesheet);
+
         $timesheet->delete();
         return back()->with('success', __('Timesheet deleted successfully!'));
+    }
+
+    private function ensureEditable(Timesheet $timesheet): void
+    {
+        if ($timesheet->isLocked()) {
+            throw ValidationException::withMessages([
+                'message' => __('Submitted or approved timesheets cannot be edited or deleted.'),
+            ]);
+        }
     }
 
     public function submit(Timesheet $timesheet)

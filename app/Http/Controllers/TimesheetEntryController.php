@@ -72,6 +72,10 @@ class TimesheetEntryController extends Controller
                 ['status' => 'draft', 'total_hours' => 0, 'billable_hours' => 0]
             );
 
+            if ($timesheet->isLocked()) {
+                return redirect()->back()->with('error', __('Submitted or approved timesheets cannot be edited or deleted.'));
+            }
+
             $entry = TimesheetEntry::create([
                 ...$validated,
                 'timesheet_id' => $timesheet->id,
@@ -125,6 +129,10 @@ class TimesheetEntryController extends Controller
                 ['status' => 'draft', 'total_hours' => 0, 'billable_hours' => 0]
             );
 
+            if ($oldTimesheet?->isLocked() || $newTimesheet->isLocked()) {
+                return redirect()->back()->with('error', __('Submitted or approved timesheets cannot be edited or deleted.'));
+            }
+
             $timesheetEntry->update([...$validated, 'timesheet_id' => $newTimesheet->id]);
 
             // Editing the date can move an entry into a different week's timesheet —
@@ -152,6 +160,10 @@ class TimesheetEntryController extends Controller
             }
 
             $timesheet = $timesheetEntry->timesheet;
+            if ($timesheet?->isLocked()) {
+                return redirect()->back()->with('error', __('Submitted or approved timesheets cannot be edited or deleted.'));
+            }
+
             $timesheetEntry->delete();
             if ($timesheet) {
                 $timesheet->calculateTotals();
@@ -185,6 +197,10 @@ class TimesheetEntryController extends Controller
                 if ($unauthorizedEntries->count() > 0) {
                     return redirect()->back()->with('error', __('You are not authorized to update some of the selected entries.'));
                 }
+            }
+
+            if ($entries->contains(fn ($entry) => $entry->timesheet?->isLocked())) {
+                return redirect()->back()->with('error', __('Submitted or approved timesheets cannot be edited or deleted.'));
             }
 
             $updatedCount = TimesheetEntry::whereIn('id', $validated['entry_ids'])
@@ -223,6 +239,10 @@ class TimesheetEntryController extends Controller
             }
 
             $timesheets = $entries->pluck('timesheet')->unique();
+            if ($timesheets->contains(fn ($timesheet) => $timesheet?->isLocked())) {
+                return redirect()->back()->with('error', __('Submitted or approved timesheets cannot be edited or deleted.'));
+            }
+
             $deletedCount = $entries->count();
 
             TimesheetEntry::whereIn('id', $validated['entry_ids'])->delete();

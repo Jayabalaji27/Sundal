@@ -42,6 +42,9 @@ export default function FormsIndex() {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [copied, setCopied] = useState<number | null>(null);
+    // Toggled status shown right away; rolled back if the request fails
+    const [activeOverrides, setActiveOverrides] = useState<Record<number, boolean>>({});
+    const isActive = (form: Form) => activeOverrides[form.id] ?? form.is_active;
 
     useEffect(() => {
         if (flash?.success) toast.success(flash.success);
@@ -68,10 +71,15 @@ export default function FormsIndex() {
     };
 
     const toggleActive = (form: Form) => {
+        const previous = isActive(form);
+        setActiveOverrides(prev => ({ ...prev, [form.id]: !previous }));
         router.put(route('forms.update', form.id), {
             title: form.title,
             description: form.description,
-            is_active: !form.is_active,
+            is_active: !previous,
+        }, {
+            preserveScroll: true,
+            onError: () => setActiveOverrides(prev => ({ ...prev, [form.id]: previous })),
         });
     };
 
@@ -137,12 +145,12 @@ export default function FormsIndex() {
                                         <td className="px-4 py-3 text-center">
                                             {canManage ? (
                                                 <button onClick={() => toggleActive(f)} title="Toggle active">
-                                                    {f.is_active
+                                                    {isActive(f)
                                                         ? <Badge variant="default" className="gap-1"><ToggleRight className="h-3 w-3" />{t('Active')}</Badge>
                                                         : <Badge variant="secondary" className="gap-1"><ToggleLeft className="h-3 w-3" />{t('Closed')}</Badge>}
                                                 </button>
                                             ) : (
-                                                f.is_active
+                                                isActive(f)
                                                     ? <Badge variant="default" className="gap-1"><ToggleRight className="h-3 w-3" />{t('Active')}</Badge>
                                                     : <Badge variant="secondary" className="gap-1"><ToggleLeft className="h-3 w-3" />{t('Closed')}</Badge>
                                             )}
@@ -216,8 +224,8 @@ export default function FormsIndex() {
                 isOpen={isDeleteOpen}
                 onClose={() => setIsDeleteOpen(false)}
                 onConfirm={() => { if (current) router.delete(route('forms.destroy', current.id), { onSuccess: () => setIsDeleteOpen(false) }); }}
-                title={t('Delete Form')}
-                description={t('This will permanently delete the form and all its submissions.')}
+                entityName={t('form')}
+                warningMessage={t('This will permanently delete the form and all its submissions.')}
                 itemName={current?.title ?? ''}
             />
         </PageTemplate>

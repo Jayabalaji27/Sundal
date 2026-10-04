@@ -32,8 +32,9 @@ class PublicFormController extends Controller
             abort(422, 'This form has no fields configured.');
         }
 
-        // Build validation rules from fields
+        // Build validation rules from fields, reporting errors by the field's label
         $rules = [];
+        $attributes = [];
         foreach ($form->fields as $field) {
             $rule = $field->required ? 'required' : 'nullable';
 
@@ -47,9 +48,10 @@ class PublicFormController extends Controller
             };
 
             $rules['field_' . $field->id] = $rule;
+            $attributes['field_' . $field->id] = $field->label;
         }
 
-        $validated = $request->validate($rules);
+        $validated = $request->validate($rules, ['required' => __(':attribute is required.')], $attributes);
 
         // Store as {field_id => value} map
         $data = [];

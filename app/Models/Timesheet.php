@@ -82,6 +82,12 @@ class Timesheet extends Model
         return $this->status === 'submitted';
     }
 
+    /** Submitted/approved timesheets are frozen; rejecting one reopens it for edits. */
+    public function isLocked(): bool
+    {
+        return in_array($this->status, ['submitted', 'approved'], true);
+    }
+
     public function calculateTotals(): void
     {
         $entries = $this->entries;

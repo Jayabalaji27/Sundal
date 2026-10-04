@@ -51,7 +51,7 @@ export default function FormBuilder() {
     const appUrl = (usePage().props as any).globalSettings?.base_url || window.location.origin;
 
     const [fields, setFields] = useState<Field[]>(
-        (form.fields ?? []).map((f: any) => ({ ...f, options: f.options ?? [], _key: newKey() }))
+        (form.fields ?? []).map((f: any) => ({ ...f, placeholder: f.placeholder ?? '', options: f.options ?? [], _key: newKey() }))
     );
     const [saving, setSaving] = useState(false);
 

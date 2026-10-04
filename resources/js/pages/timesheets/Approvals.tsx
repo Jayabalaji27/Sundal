@@ -27,6 +27,7 @@ interface TimesheetApproval {
     comments?: string;
     timesheet: {
         id: number;
+        user_id: number;
         start_date: string;
         end_date: string;
         total_hours: number;
@@ -90,6 +91,11 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
     
     // Check if user can approve/reject
     const canApprove = hasPermission(userPermissions, 'timesheet_approve');
+    // Only the workspace owner reviews their own timesheets (the server enforces this too)
+    const canReview = (approval: TimesheetApproval): boolean =>
+        canReview(approval)
+        && (userWorkspaceRole === 'owner' || approval.timesheet?.user_id !== auth?.user?.id);
+    const reviewableApprovals = approvals.data.filter(canReview);
 
     const buildParams = (overrides: Record<string, any> = {}, opts: { search?: string; status?: string; view?: string } = {}) => {
         const search = opts.search !== undefined ? opts.search : searchTerm;
@@ -214,11 +220,10 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
     };
 
     const toggleSelectAll = () => {
-        const pendingApprovals = approvals.data.filter(a => a.status === 'pending');
-        if (selectedApprovals.length === pendingApprovals.length) {
+        if (selectedApprovals.length === reviewableApprovals.length) {
             setSelectedApprovals([]);
         } else {
-            setSelectedApprovals(pendingApprovals.map(a => a.id));
+            setSelectedApprovals(reviewableApprovals.map(a => a.id));
         }
     };
 
@@ -531,7 +536,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                     size="sm"
                                     onClick={toggleSelectAll}
                                 >
-                                    {selectedApprovals.length === approvals.data.filter(a => a.status === 'pending').length && approvals.data.filter(a => a.status === 'pending').length > 0
+                                    {selectedApprovals.length === reviewableApprovals.length && reviewableApprovals.length > 0
                                         ? 'Deselect All' 
                                         : 'Select All Pending'
                                     }
@@ -548,7 +553,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                 <CardHeader className="pb-3">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            {approval.status === 'pending' && canApprove && (
+                                            {canReview(approval) && (
                                                 <Checkbox
                                                     checked={selectedApprovals.includes(approval.id)}
                                                     onCheckedChange={() => toggleSelection(approval.id)}
@@ -579,7 +584,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                     </div>
                                     
                                     <div className="flex gap-1 mt-auto">
-                                        {approval.status === 'pending' && canApprove ? (
+                                        {canReview(approval) ? (
                                             <>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
@@ -588,7 +593,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                                                 approval={approval}
                                                                 action="approve"
                                                                 trigger={
-                                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50">
+                                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50" aria-label={t('Approve')}>
                                                                         <Check className="h-4 w-4" />
                                                                     </Button>
                                                                 }
@@ -604,7 +609,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                                                 approval={approval}
                                                                 action="reject"
                                                                 trigger={
-                                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-50" aria-label={t('Reject')}>
                                                                         <X className="h-4 w-4" />
                                                                     </Button>
                                                                 }
@@ -622,6 +627,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                                     variant="ghost"
                                                     className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                                     onClick={() => handleViewDetails(approval)}
+                                                    aria-label={t('View')}
                                                 >
                                                     <Eye className="h-4 w-4" />
                                                 </Button>
@@ -641,7 +647,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                         {canApprove && (
                                             <TableHead className="w-12 py-2.5">
                                                 <Checkbox
-                                                    checked={selectedApprovals.length === approvals.data.filter(a => a.status === 'pending').length && approvals.data.filter(a => a.status === 'pending').length > 0}
+                                                    checked={selectedApprovals.length === reviewableApprovals.length && reviewableApprovals.length > 0}
                                                     onCheckedChange={toggleSelectAll}
                                                 />
                                             </TableHead>
@@ -724,7 +730,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                         <TableRow key={approval.id} className="hover:bg-gray-50 transition-colors">
                                             {canApprove && (
                                                 <TableCell className="py-2.5">
-                                                    {approval.status === 'pending' && (
+                                                    {canReview(approval) && (
                                                         <Checkbox
                                                             checked={selectedApprovals.includes(approval.id)}
                                                             onCheckedChange={() => toggleSelection(approval.id)}
@@ -772,7 +778,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                             </TableCell>
                                             <TableCell className="py-2.5 text-right">
                                                 <div className="flex gap-1 justify-end">
-                                                    {approval.status === 'pending' && canApprove ? (
+                                                    {canReview(approval) ? (
                                                         <>
                                                             <Tooltip>
                                                                 <TooltipTrigger asChild>
@@ -781,7 +787,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                                                             approval={approval}
                                                                             action="approve"
                                                                             trigger={
-                                                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50">
+                                                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50" aria-label={t('Approve')}>
                                                                                     <Check className="h-4 w-4" />
                                                                                 </Button>
                                                                             }
@@ -797,7 +803,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                                                             approval={approval}
                                                                             action="reject"
                                                                             trigger={
-                                                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50">
+                                                                                <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" aria-label={t('Reject')}>
                                                                                     <X className="h-4 w-4" />
                                                                                 </Button>
                                                                             }
@@ -815,6 +821,7 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
                                                                 variant="ghost"
                                                                 className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                                                                 onClick={() => handleViewDetails(approval)}
+                                                                aria-label={t('View')}
                                                             >
                                                                 <Eye className="h-4 w-4" />
                                                             </Button>

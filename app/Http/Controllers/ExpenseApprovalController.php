@@ -182,10 +182,8 @@ class ExpenseApprovalController extends Controller
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
         
-        $query = ProjectExpense::with(['project:id,title', 'budgetCategory:id,name,color', 'submitter:id,name,avatar'])
-            ->whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })
+        $query = $this->reviewableExpenses()
+            ->with(['project:id,title', 'budgetCategory:id,name,color', 'submitter:id,name,avatar'])
             ->whereIn('project_expenses.status', ['pending', 'requires_info']);
             
         // Apply filters
@@ -243,21 +241,13 @@ class ExpenseApprovalController extends Controller
         
         // Get overview stats
         $stats = [
-            'pending_count' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('project_expenses.status', 'pending')->count(),
+            'pending_count' => $this->reviewableExpenses()->where('project_expenses.status', 'pending')->count(),
             
-            'requires_info_count' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('project_expenses.status', 'requires_info')->count(),
+            'requires_info_count' => $this->reviewableExpenses()->where('project_expenses.status', 'requires_info')->count(),
             
-            'approved_today' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('project_expenses.status', 'approved')->whereDate('project_expenses.updated_at', today())->count(),
+            'approved_today' => $this->reviewableExpenses()->where('project_expenses.status', 'approved')->whereDate('project_expenses.updated_at', today())->count(),
             
-            'pending_amount' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('project_expenses.status', 'pending')->sum('project_expenses.amount')
+            'pending_amount' => $this->reviewableExpenses()->where('project_expenses.status', 'pending')->sum('project_expenses.amount')
         ];
 
         return Inertia::render('expenses/Approvals', [
@@ -269,19 +259,16 @@ class ExpenseApprovalController extends Controller
                 'approve' => $this->checkPermission('expense_approval_approve'),
                 'reject' => $this->checkPermission('expense_approval_reject'),
                 'request_info' => $this->checkPermission('expense_approval_request_info'),
+                // Only the workspace owner reviews their own expenses
+                'review_own' => $workspace->isOwner($user),
             ]
         ]);
     }
 
     public function pendingApprovals()
     {
-        $user = auth()->user();
-        $workspace = $user->currentWorkspace;
-        
-        $pendingExpenses = ProjectExpense::with(['project', 'budgetCategory', 'submitter'])
-            ->whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })
+        $pendingExpenses = $this->reviewableExpenses()
+            ->with(['project', 'budgetCategory', 'submitter'])
             ->where('project_expenses.status', 'pending')
             ->latest('project_expenses.created_at')
             ->paginate(12);
@@ -310,29 +297,44 @@ class ExpenseApprovalController extends Controller
      */
     public function getApprovalStats()
     {
-        $user = auth()->user();
-        $workspace = $user->currentWorkspace;
-        
         $stats = [
-            'pending_count' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('project_expenses.status', 'pending')->count(),
+            'pending_count' => $this->reviewableExpenses()->where('project_expenses.status', 'pending')->count(),
             
-            'approved_today' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('project_expenses.status', 'approved')
+            'approved_today' => $this->reviewableExpenses()->where('project_expenses.status', 'approved')
               ->whereDate('project_expenses.updated_at', today())->count(),
               
-            'total_approved_amount' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('project_expenses.status', 'approved')->sum('project_expenses.amount'),
+            'total_approved_amount' => $this->reviewableExpenses()->where('project_expenses.status', 'approved')->sum('project_expenses.amount'),
             
-            'pending_amount' => ProjectExpense::whereHas('project', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            })->where('project_expenses.status', 'pending')->sum('project_expenses.amount')
+            'pending_amount' => $this->reviewableExpenses()->where('project_expenses.status', 'pending')->sum('project_expenses.amount')
         ];
         
         return response()->json($stats);
+    }
+
+    /**
+     * Expenses in the reviewer's queue: the whole workspace for the owner, only
+     * assigned/created projects for a manager (same scope as the Expenses page).
+     * The list and its stats both use this so the numbers match what's shown.
+     */
+    private function reviewableExpenses()
+    {
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+
+        $query = ProjectExpense::whereHas('project', function ($q) use ($workspace) {
+            $q->where('workspace_id', $workspace->id);
+        });
+
+        if (!$workspace->isOwner($user) && $workspace->getMemberRole($user) === 'manager') {
+            $query->whereHas('project', function ($q) use ($user) {
+                $q->where(function ($projectQuery) use ($user) {
+                    $projectQuery->whereHas('members', fn ($memberQuery) => $memberQuery->where('user_id', $user->id))
+                        ->orWhere('created_by', $user->id);
+                });
+            });
+        }
+
+        return $query;
     }
 
     /**

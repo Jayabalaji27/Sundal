@@ -102,7 +102,9 @@ export default function InvoiceForm({ invoice, projects, clients, currencies, ta
 
     const loadProjectData = async (projectId: string) => {
         try {
-            const response = await fetch(route('api.projects.invoice-data', projectId), {
+            // Already-billed tasks are left out; the invoice being edited keeps its own
+            const params = invoice?.id ? { project: projectId, invoice: invoice.id } : { project: projectId };
+            const response = await fetch(route('api.projects.invoice-data', params), {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -538,7 +540,7 @@ export default function InvoiceForm({ invoice, projects, clients, currencies, ta
                 {/* Footer actions */}
                 <div className="flex justify-between items-center py-4 border-t">
                     <div className="text-sm text-muted-foreground">
-                        {items.length} {t('items added')}
+                        {items.length} {items.length === 1 ? t('item added') : t('items added')}
                     </div>
                     <div className="flex gap-3">
                         <Button type="button" variant="outline" onClick={() => router.visit(route('invoices.index'))}>

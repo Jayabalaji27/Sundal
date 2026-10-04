@@ -41,6 +41,11 @@ export function FloatingChatGpt() {
     canUseChatGPT = hasChatGptKey;
   }
   
+  // The generate endpoint is gated behind the Pro Add-on too
+  if (auth?.modulesLocked) {
+    canUseChatGPT = false;
+  }
+
   // Don't render if user doesn't have access
   if (!canUseChatGPT) {
     return null;
