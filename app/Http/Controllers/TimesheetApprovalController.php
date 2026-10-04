@@ -165,6 +165,10 @@ class TimesheetApprovalController extends Controller
         if ($approval->status !== 'pending') {
             return back()->with('error', __('This approval has already been processed.'));
         }
+
+        if ($this->isOwnTimesheet($approval, $user, $isOwner)) {
+            return back()->with('error', __('You cannot approve or reject your own timesheet. The workspace owner reviews it.'));
+        }
         
         $validated = $request->validate([
             'comments' => 'nullable|string'
@@ -203,6 +207,10 @@ class TimesheetApprovalController extends Controller
         // Check if approval is still pending
         if ($approval->status !== 'pending') {
             return back()->with('error', __('This approval has already been processed.'));
+        }
+
+        if ($this->isOwnTimesheet($approval, $user, $isOwner)) {
+            return back()->with('error', __('You cannot approve or reject your own timesheet. The workspace owner reviews it.'));
         }
         
         $validated = $request->validate([
@@ -244,9 +252,10 @@ class TimesheetApprovalController extends Controller
             'comments' => 'nullable|string'
         ]);
 
-        $approvals = TimesheetApproval::whereIn('id', $validated['approval_ids'])
+        $approvals = TimesheetApproval::with('timesheet')->whereIn('id', $validated['approval_ids'])
             ->where('status', 'pending')
-            ->get();
+            ->get()
+            ->reject(fn ($approval) => $this->isOwnTimesheet($approval, $user, $isOwner));
 
         if ($approvals->isEmpty()) {
             return back()->with('error', __('No pending approvals found.'));
@@ -289,9 +298,10 @@ class TimesheetApprovalController extends Controller
             'comments' => 'required|string'
         ]);
 
-        $approvals = TimesheetApproval::whereIn('id', $validated['approval_ids'])
+        $approvals = TimesheetApproval::with('timesheet')->whereIn('id', $validated['approval_ids'])
             ->where('status', 'pending')
-            ->get();
+            ->get()
+            ->reject(fn ($approval) => $this->isOwnTimesheet($approval, $user, $isOwner));
 
         if ($approvals->isEmpty()) {
             return back()->with('error', __('No pending approvals found.'));
@@ -312,6 +322,15 @@ class TimesheetApprovalController extends Controller
         } catch (\Exception $e) {
             return back()->with('error', __('Failed to reject timesheets.'));
         }
+    }
+
+    /**
+     * Nobody reviews their own time, except the workspace owner: there is no one
+     * above them to send it to.
+     */
+    private function isOwnTimesheet(TimesheetApproval $approval, $user, bool $isOwner): bool
+    {
+        return !$isOwner && (int) $approval->timesheet?->user_id === (int) $user->id;
     }
 
     private function updateTimesheetStatus(Timesheet $timesheet)

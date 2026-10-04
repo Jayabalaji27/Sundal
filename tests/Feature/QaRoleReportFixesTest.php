@@ -677,7 +677,7 @@ describe('Superadmin', function () {
 
     test('a plan with subscribers cannot be deleted', function () {
         $admin = qaSuperadmin();
-        $plan = Plan::create(['name' => 'pro', 'price' => 10, 'yearly_price' => 100, 'duration' => 'monthly', 'is_default' => false,
+        $plan = Plan::create(['name' => 'QA subscribed plan', 'price' => 10, 'yearly_price' => 100, 'duration' => 'monthly', 'is_default' => false,
             'max_users_per_workspace' => 5, 'max_clients_per_workspace' => 5, 'max_managers_per_workspace' => 1,
             'max_projects_per_workspace' => 3, 'workspace_limit' => 1, 'storage_limit' => 1]);
         User::factory()->create(['type' => 'company', 'plan_id' => $plan->id]);
@@ -940,5 +940,54 @@ describe('Medium and polish fixes (company owner pass)', function () {
 
         $this->actingAs($owner)->get(route('dashboard'))
             ->assertInertia(fn (Assert $page) => $page->where('dashboardData.taskStages.0.color', '#ef4444'));
+    });
+});
+
+describe('Decisions from the company owner pass', function () {
+    test('a manager cannot review their own timesheet, the owner can', function () {
+        [$owner, $ws] = qaOwner();
+        $manager = qaMember($ws, 'manager');
+        $project = qaProject($ws, $owner);
+        $approvals = [];
+        foreach ([$manager, $owner] as $user) {
+            $ts = Timesheet::create(['user_id' => $user->id, 'workspace_id' => $ws->id, 'start_date' => now()->startOfWeek(),
+                'end_date' => now()->endOfWeek(), 'status' => 'submitted', 'total_hours' => 8, 'billable_hours' => 8]);
+            TimesheetEntry::create(['timesheet_id' => $ts->id, 'project_id' => $project->id, 'user_id' => $user->id,
+                'date' => now()->toDateString(), 'hours' => 8, 'is_billable' => true, 'hourly_rate' => 0]);
+            $approvals[] = \App\Models\TimesheetApproval::create(['timesheet_id' => $ts->id, 'approver_id' => $owner->id, 'status' => 'pending']);
+        }
+        [$managersOwn, $ownersOwn] = $approvals;
+
+        $this->actingAs($manager)->post(route('timesheet-approvals.approve', $managersOwn), ['comments' => ''])->assertSessionHas('error');
+        $this->actingAs($manager)->post(route('timesheet-approvals.bulk-approve'), ['approval_ids' => [$managersOwn->id]])->assertSessionHas('error');
+        expect($managersOwn->fresh()->status)->toBe('pending');
+
+        $this->actingAs($owner)->post(route('timesheet-approvals.approve', $ownersOwn), ['comments' => ''])->assertSessionHas('success');
+        expect($ownersOwn->fresh()->status)->toBe('approved');
+    });
+
+    test('a manager cannot review their own expense, and workflow steps belong to their approver', function () {
+        [$owner, $ws] = qaOwner();
+        $manager = qaMember($ws, 'manager');
+        $project = qaProject($ws, $owner);
+        $expense = ProjectExpense::create(['project_id' => $project->id, 'submitted_by' => $manager->id, 'amount' => 10,
+            'expense_date' => now()->toDateString(), 'title' => 'E', 'status' => 'pending']);
+
+        $this->actingAs($manager)->post(route('expense-approvals.approve', $expense), ['notes' => ''])->assertSessionHas('error');
+        expect($expense->fresh()->status)->toBe('pending');
+        $this->actingAs($owner)->post(route('expense-approvals.approve', $expense), ['notes' => ''])->assertSessionHas('success');
+
+        $other = ProjectExpense::create(['project_id' => $project->id, 'submitted_by' => $owner->id, 'amount' => 5,
+            'expense_date' => now()->toDateString(), 'title' => 'W', 'status' => 'pending']);
+        $step = \App\Models\ExpenseWorkflow::create(['project_expense_id' => $other->id, 'step' => 1, 'approver_id' => $owner->id, 'status' => 'pending']);
+        $this->actingAs($manager)->post(route('expense-workflows.process', $step), ['action' => 'approve'])->assertForbidden();
+        expect($other->fresh()->status)->toBe('pending');
+    });
+
+    test('paid plans and the add-on are seeded', function () {
+        expect(Plan::where('name', 'Starter')->value('plan_type'))->toBe('base')
+            ->and(Plan::where('name', 'Pro')->value('plan_type'))->toBe('base')
+            ->and(Plan::where('name', 'Pro Add-on')->value('plan_type'))->toBe('addon')
+            ->and(Plan::where('is_default', true)->pluck('name')->all())->toBe(['Free']);
     });
 });

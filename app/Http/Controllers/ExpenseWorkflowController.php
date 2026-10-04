@@ -15,6 +15,16 @@ class ExpenseWorkflowController extends Controller
             'notes' => 'nullable|string'
         ]);
 
+        // Only the step's assigned approver acts on it, once, and never on their
+        // own expense (same rule as ExpenseApprovalController).
+        abort_unless((int) $workflow->approver_id === (int) auth()->id(), 403);
+        if ($workflow->status !== 'pending') {
+            return back()->with('error', __('This approval step has already been processed.'));
+        }
+        if ((int) $workflow->projectExpense?->submitted_by === (int) auth()->id()) {
+            return back()->with('error', __('You cannot approve or reject your own expense.'));
+        }
+
         $workflow->update([
             'status' => $validated['action'] === 'approve' ? 'approved' : 
                        ($validated['action'] === 'reject' ? 'rejected' : 'requires_info'),
@@ -63,6 +73,7 @@ class ExpenseWorkflowController extends Controller
 
         $workflows = ExpenseWorkflow::whereIn('id', $validated['workflow_ids'])
             ->where('status', 'pending')
+            ->where('approver_id', auth()->id())
             ->get();
 
         foreach ($workflows as $workflow) {

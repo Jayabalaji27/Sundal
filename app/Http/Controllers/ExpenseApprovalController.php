@@ -23,6 +23,10 @@ class ExpenseApprovalController extends Controller
     public function approve(Request $request, ProjectExpense $expense)
     {
         $this->authorizePermission('expense_approval_approve');
+
+        if ($this->isOwnExpense($expense)) {
+            return back()->with('error', __('You cannot approve or reject your own expense. The workspace owner reviews it.'));
+        }
         
         $validated = $request->validate([
             'notes' => 'nullable|string'
@@ -60,6 +64,10 @@ class ExpenseApprovalController extends Controller
     public function reject(Request $request, ProjectExpense $expense)
     {
         $this->authorizePermission('expense_approval_reject');
+
+        if ($this->isOwnExpense($expense)) {
+            return back()->with('error', __('You cannot approve or reject your own expense. The workspace owner reviews it.'));
+        }
         
         // The submitter needs to know what to fix, as with timesheet rejection.
         // Validated outside the try so a missing reason is a field error, not
@@ -141,7 +149,8 @@ class ExpenseApprovalController extends Controller
 
         $expenses = ProjectExpense::whereIn('id', $validated['expense_ids'])
             ->where('status', 'pending')
-            ->get();
+            ->get()
+            ->reject(fn (ProjectExpense $expense) => $this->isOwnExpense($expense));
 
         DB::transaction(function () use ($expenses, $validated) {
             foreach ($expenses as $expense) {
@@ -324,5 +333,17 @@ class ExpenseApprovalController extends Controller
         ];
         
         return response()->json($stats);
+    }
+
+    /**
+     * Nobody reviews their own expense, except the workspace owner: there is no
+     * one above them to send it to.
+     */
+    private function isOwnExpense(ProjectExpense $expense): bool
+    {
+        $user = auth()->user();
+
+        return (int) $expense->submitted_by === (int) $user->id
+            && !$user->currentWorkspace?->isOwner($user);
     }
 }
