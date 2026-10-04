@@ -14,3 +14,9 @@ app/graphify-out/
 /test-results/
 /blob-report/
 /e2e/ai-qa/output/
+# QA/test docs and local backups: kept locally, not in the repo
+BUG_REPORT.md
+TEST_PLAN.md
+TEST_SUMMARY.md
+test.md
+.env.server.bak
