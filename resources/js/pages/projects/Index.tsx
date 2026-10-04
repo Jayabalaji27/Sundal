@@ -312,13 +312,19 @@ export default function ProjectIndex() {
         });
     }
     
+    // AI Generate is an add-on module: hidden when the plan locks it, by the
+    // same rule (CheckModuleAccess) that blocks its endpoints.
+    const canUseAiGenerate = hasPermission(permissions, 'project_create') && !auth?.modulesLocked;
+
     if (hasPermission(permissions, 'project_create')) {
-        pageActions.push({
-            label: t('AI Generate'),
-            icon: <Sparkles className="h-4 w-4 mr-2" />,
-            variant: 'outline',
-            onClick: () => setIsAiModalOpen(true)
-        });
+        if (canUseAiGenerate) {
+            pageActions.push({
+                label: t('AI Generate'),
+                icon: <Sparkles className="h-4 w-4 mr-2" />,
+                variant: 'outline',
+                onClick: () => setIsAiModalOpen(true)
+            });
+        }
         pageActions.push({
             label: t('Add Project'),
             icon: <Plus className="h-4 w-4 mr-2" />,
@@ -654,7 +660,7 @@ export default function ProjectIndex() {
                 <EmptyState
                     {...EMPTY_STATES.projects}
                     action={hasPermission(permissions, 'project_create') ? { label: 'Create Your First Project', onClick: handleAddNew, icon: <Plus className="h-4 w-4" /> } : undefined}
-                    secondaryAction={hasPermission(permissions, 'project_create') ? { label: 'AI Generate', onClick: () => setIsAiModalOpen(true) } : undefined}
+                    secondaryAction={canUseAiGenerate ? { label: 'AI Generate', onClick: () => setIsAiModalOpen(true) } : undefined}
                 />
             )}
             {(activeView === 'grid' || !activeView) && (projects?.data?.length ?? 0) > 0 ? (

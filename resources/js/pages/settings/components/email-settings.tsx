@@ -26,7 +26,7 @@ export default function EmailSettings() {
     password: settings.email_password ? '••••••••••••' : '',
     encryption: settings.email_encryption || 'tls',
     fromAddress: settings.email_from_address || 'noreply@example.com',
-    fromName: settings.email_from_name || 'WorkDo System'
+    fromName: settings.email_from_name || ''
   });
 
   // Test email state

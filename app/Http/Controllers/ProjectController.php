@@ -185,7 +185,7 @@ class ProjectController extends Controller
             event(new \App\Events\ProjectCreated($project));
         }
 
-        return redirect()->route('projects.show', $project);
+        return redirect()->route('projects.show', $project)->with('success', __('Project created successfully.'));
     }
 
     public function show(Request $request, Project $project): Response
@@ -315,15 +315,10 @@ class ProjectController extends Controller
         // Load project timesheets with related data (team-internal: never sent to clients)
         $projectTimesheets = $isClient ? collect() : \App\Models\Timesheet::with([
             'user:' . self::USER_PUBLIC_COLUMNS,
-            'entries' => function ($query) use ($project) {
-                $query->whereHas('task', function ($taskQuery) use ($project) {
-                    $taskQuery->where('project_id', $project->id);
-                });
-            }
+            // By the entry's own project, so time logged without a task counts too.
+            'entries' => fn ($query) => $query->where('project_id', $project->id),
         ])
-            ->whereHas('entries.task', function ($query) use ($project) {
-                $query->where('project_id', $project->id);
-            })
+            ->whereHas('entries', fn ($query) => $query->where('project_id', $project->id))
             ->latest()
             ->get()
             ->map(function ($timesheet) {
@@ -349,7 +344,14 @@ class ProjectController extends Controller
         $project->billable_rate_percentage = $project->total_project_hours > 0
             ? round(($project->total_billable_hours / $project->total_project_hours) * 100)
             : 0;
-        $project->total_team_members = $projectTimesheets->pluck('user.id')->unique()->count();
+        // Every hours figure on the page comes from the same counted (submitted/
+        // approved) set - rejected and draft time is not "logged" project time.
+        $activeMemberIds = $submittedTimesheets->pluck('user.id')->filter()->unique();
+        $project->total_team_members = $activeMemberIds->count();
+        $project->team_size = $project->members->pluck('user_id')->merge($activeMemberIds)->unique()->count();
+        $project->avg_hours_per_member = $activeMemberIds->count() > 0
+            ? round($project->total_project_hours / $activeMemberIds->count(), 1)
+            : 0;
         $project->approved_timesheets_count = $projectTimesheets->where('status', 'approved')->count();
         $project->submitted_timesheets_percentage = $projectTimesheets->count() > 0
             ? round(($submittedTimesheets->count() / $projectTimesheets->count()) * 100)
@@ -472,7 +474,7 @@ class ProjectController extends Controller
 
         $project->logActivity('updated', "Project '{$project->title}' was updated");
 
-        return redirect()->route('projects.show', $project);
+        return redirect()->route('projects.show', $project)->with('success', __('Project updated successfully.'));
     }
 
     public function health(Project $project): \Illuminate\Http\JsonResponse
@@ -546,7 +548,7 @@ class ProjectController extends Controller
         $project->logActivity('deleted', "Project '{$projectTitle}' deleted");
         $project->delete();
 
-        return redirect()->route('projects.index');
+        return redirect()->route('projects.index')->with('success', __('Project deleted successfully.'));
     }
 
     /**

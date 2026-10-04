@@ -60,11 +60,20 @@ const toLocalDateStr = (date: Date): string => {
     return `${y}-${m}-${d}`;
 };
 
+// "YYYY-MM-DD" as a local calendar day. new Date('YYYY-MM-DD') is UTC
+// midnight, which is the previous day for viewers west of UTC.
+const parseLocalDate = (dateStr: string): Date => {
+    const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+    return new Date(y, m - 1, d);
+};
+
 export default function WeeklyView({ weekData, projects, weekStart, weekEnd, timesheetId, permissions }: Props) {
     const { t } = useTranslation();
     const { flash, auth } = usePage().props as any;
     const userPermissions = auth?.permissions || [];
-    const [currentWeekStart, setCurrentWeekStart] = useState(new Date(weekStart));
+    // Derived from the prop, not kept in state: visits use preserveState, so a
+    // useState copy went stale and flagged the wrong week as "Current Week".
+    const currentWeekStart = parseLocalDate(weekStart);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState<string>('');
 
@@ -81,7 +90,6 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
     const navigateWeek = (direction: 'prev' | 'next') => {
         const newDate = new Date(currentWeekStart);
         newDate.setDate(newDate.getDate() + (direction === 'next' ? 7 : -7));
-        setCurrentWeekStart(newDate);
         
         const weekStartStr = toLocalDateStr(newDate);
         router.get(route('timesheets.weekly-view'), { week_start: weekStartStr }, { preserveState: true });
@@ -89,7 +97,6 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
 
     const goToCurrentWeek = () => {
         const startOfWeek = getMondayOfWeek(new Date());
-        setCurrentWeekStart(startOfWeek);
         const weekStartStr = toLocalDateStr(startOfWeek);
         router.get(route('timesheets.weekly-view'), { week_start: weekStartStr }, { preserveState: true });
     };
@@ -104,22 +111,22 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
     const getWeekEntries = () => weekData.reduce((sum, day) => sum + day.entries.length, 0);
 
     const formatWeekRange = () => {
-        const start = new Date(weekStart);
-        const end = new Date(weekEnd);
+        const start = parseLocalDate(weekStart);
+        const end = parseLocalDate(weekEnd);
         const formatDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         return `${formatDay(start)} - ${formatDay(end)}`;
     };
 
     const getDayName = (dateStr: string) => {
-        return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short' });
+        return parseLocalDate(dateStr).toLocaleDateString('en-US', { weekday: 'short' });
     };
 
     const getDayDate = (dateStr: string) => {
-        return new Date(dateStr).getDate();
+        return parseLocalDate(dateStr).getDate();
     };
 
     const isToday = (dateStr: string) => {
-        return new Date(dateStr).toDateString() === new Date().toDateString();
+        return parseLocalDate(dateStr).toDateString() === new Date().toDateString();
     };
 
     const isCurrentWeek = () => {

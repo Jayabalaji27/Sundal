@@ -44,7 +44,6 @@ class Invoice extends Model
 
     protected $casts = [
         'subtotal' => 'decimal:2',
-        'tax_rate' => 'decimal:2',
         'tax_amount' => 'decimal:2',
         'discount_amount' => 'decimal:2',
         'total_amount' => 'decimal:2',

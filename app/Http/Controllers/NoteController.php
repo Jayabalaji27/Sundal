@@ -131,6 +131,8 @@ class NoteController extends Controller
         $users = User::select('users.*', 'workspace_members.role')
             ->join('workspace_members', 'workspace_members.user_id', '=', 'users.id')
             ->where('workspace_members.workspace_id', '=', $currentWorkspace->id)
+            // Deactivated members can't be shared with (same as task assignees).
+            ->where('workspace_members.status', 'active')
             ->where('users.id', '!=', Auth::user()->id)
             ->get();
 

@@ -62,7 +62,7 @@ class MailConfigService
                     'password' => $userSettings['email_password'] ?? '',
                     'encryption' => $userSettings['email_encryption'] ?? 'tls',
                     'fromAddress' => $userSettings['email_from_address'] ?? $userSettings['email_username'] ?? 'noreply@example.com',
-                    'fromName' => $userSettings['email_from_name'] ?? 'WorkDo System'
+                    'fromName' => $userSettings['email_from_name'] ?? config('app.name')
                 ];
             }
         }
@@ -76,7 +76,7 @@ class MailConfigService
             'password' => getSetting('email_password', ''),
             'encryption' => getSetting('email_encryption', 'tls'),
             'fromAddress' => getSetting('email_from_address', 'noreply@example.com'),
-            'fromName' => getSetting('email_from_name', 'WorkDo System')
+            'fromName' => getSetting('email_from_name', config('app.name'))
         ];
     }
     

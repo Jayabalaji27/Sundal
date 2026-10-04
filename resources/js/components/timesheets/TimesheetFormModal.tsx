@@ -29,6 +29,13 @@ function getWeekEnd(dateStr: string): string {
     return toLocalDateStr(d);
 }
 
+// The Date field is the day the entries are logged on, and saving re-dates
+// every entry to it. start_date is the Monday of the week, so pre-filling from
+// it moved a Tuesday entry to Monday on every edit.
+function entryDateOf(timesheet: { start_date: string; entries?: { date?: string }[] }): string {
+    return timesheet.entries?.find(entry => entry.date)?.date || timesheet.start_date;
+}
+
 interface Timesheet {
     id?: number;
     start_date: string;
@@ -91,7 +98,7 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
                 fetch(route('timesheets.show', timesheet.id))
                     .then(response => response.json())
                     .then(data => {
-                        const startDate = window.appSettings?.formatDateForInput(data.timesheet.start_date) || '';
+                        const startDate = window.appSettings?.formatDateForInput(entryDateOf(data.timesheet)) || '';
                         const endDate = window.appSettings?.formatDateForInput(data.timesheet.end_date) || '';
                         setFormData({
                             start_date: startDate,
@@ -114,7 +121,7 @@ export default function TimesheetFormModal({ isOpen, onClose, timesheet, project
                         })) || []);
                     });
             } else {
-                const startDate = window.appSettings?.formatDateForInput(timesheet.start_date) || '';
+                const startDate = window.appSettings?.formatDateForInput(entryDateOf(timesheet)) || '';
                 const endDate = window.appSettings?.formatDateForInput(timesheet.end_date) || '';
                 setFormData({
                     start_date: startDate,

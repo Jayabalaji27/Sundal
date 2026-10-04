@@ -165,6 +165,10 @@ class TimesheetApprovalController extends Controller
         if ($approval->status !== 'pending') {
             return back()->with('error', __('This approval has already been processed.'));
         }
+
+        if ($this->isOwnTimesheet($approval, $user, $isOwner)) {
+            return back()->with('error', __('You cannot approve or reject your own timesheet. The workspace owner reviews it.'));
+        }
         
         $validated = $request->validate([
             'comments' => 'nullable|string'
@@ -173,7 +177,7 @@ class TimesheetApprovalController extends Controller
         try {
             $approval->update([
                 'status' => 'approved',
-                'comments' => $validated['comments'],
+                'comments' => $validated['comments'] ?? null,
                 'approved_at' => now()
             ]);
 
@@ -204,6 +208,10 @@ class TimesheetApprovalController extends Controller
         if ($approval->status !== 'pending') {
             return back()->with('error', __('This approval has already been processed.'));
         }
+
+        if ($this->isOwnTimesheet($approval, $user, $isOwner)) {
+            return back()->with('error', __('You cannot approve or reject your own timesheet. The workspace owner reviews it.'));
+        }
         
         $validated = $request->validate([
             'comments' => 'required|string'
@@ -212,7 +220,7 @@ class TimesheetApprovalController extends Controller
         try {
             $approval->update([
                 'status' => 'rejected',
-                'comments' => $validated['comments'],
+                'comments' => $validated['comments'] ?? null,
                 'approved_at' => now()
             ]);
 
@@ -244,9 +252,10 @@ class TimesheetApprovalController extends Controller
             'comments' => 'nullable|string'
         ]);
 
-        $approvals = TimesheetApproval::whereIn('id', $validated['approval_ids'])
+        $approvals = TimesheetApproval::with('timesheet')->whereIn('id', $validated['approval_ids'])
             ->where('status', 'pending')
-            ->get();
+            ->get()
+            ->reject(fn ($approval) => $this->isOwnTimesheet($approval, $user, $isOwner));
 
         if ($approvals->isEmpty()) {
             return back()->with('error', __('No pending approvals found.'));
@@ -256,7 +265,7 @@ class TimesheetApprovalController extends Controller
             foreach ($approvals as $approval) {
                 $approval->update([
                     'status' => 'approved',
-                    'comments' => $validated['comments'],
+                    'comments' => $validated['comments'] ?? null,
                     'approved_at' => now()
                 ]);
 
@@ -289,9 +298,10 @@ class TimesheetApprovalController extends Controller
             'comments' => 'required|string'
         ]);
 
-        $approvals = TimesheetApproval::whereIn('id', $validated['approval_ids'])
+        $approvals = TimesheetApproval::with('timesheet')->whereIn('id', $validated['approval_ids'])
             ->where('status', 'pending')
-            ->get();
+            ->get()
+            ->reject(fn ($approval) => $this->isOwnTimesheet($approval, $user, $isOwner));
 
         if ($approvals->isEmpty()) {
             return back()->with('error', __('No pending approvals found.'));
@@ -301,7 +311,7 @@ class TimesheetApprovalController extends Controller
             foreach ($approvals as $approval) {
                 $approval->update([
                     'status' => 'rejected',
-                    'comments' => $validated['comments'],
+                    'comments' => $validated['comments'] ?? null,
                     'approved_at' => now()
                 ]);
 
@@ -314,15 +324,28 @@ class TimesheetApprovalController extends Controller
         }
     }
 
+    /**
+     * Nobody reviews their own time, except the workspace owner: there is no one
+     * above them to send it to.
+     */
+    private function isOwnTimesheet(TimesheetApproval $approval, $user, bool $isOwner): bool
+    {
+        return !$isOwner && (int) $approval->timesheet?->user_id === (int) $user->id;
+    }
+
     private function updateTimesheetStatus(Timesheet $timesheet)
     {
         try {
-            $pendingApprovals = $timesheet->approvals()->where('status', 'pending')->count();
-            
-            if ($pendingApprovals === 0) {
-                $rejectedApprovals = $timesheet->approvals()->where('status', 'rejected')->count();
-                
-                if ($rejectedApprovals > 0) {
+            // Only each approver's newest decision counts. A resubmitted timesheet
+            // keeps its earlier rejection as history, which otherwise flipped it
+            // straight back to rejected when the new round was approved.
+            $currentRound = $timesheet->approvals()
+                ->whereIn('id', fn ($q) => $q->selectRaw('MAX(id)')->from('timesheet_approvals')
+                    ->where('timesheet_id', $timesheet->id)->groupBy('approver_id'))
+                ->pluck('status');
+
+            if (!$currentRound->contains('pending')) {
+                if ($currentRound->contains('rejected')) {
                     $timesheet->update(['status' => 'rejected']);
                 } else {
                     $timesheet->update([

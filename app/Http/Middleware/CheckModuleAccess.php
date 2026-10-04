@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use App\Models\Workspace;
 use Closure;
 use Illuminate\Http\Request;
@@ -23,20 +24,7 @@ class CheckModuleAccess
 
         $user = auth()->user();
 
-        if (!$user || $user->isSuperAdmin()) {
-            return $next($request);
-        }
-
-        $role = $user->getCurrentWorkspaceRole();
-
-        if ($role === 'owner') {
-            $moduleUser = $user;
-        } else {
-            $workspace = Workspace::find($user->current_workspace_id);
-            $moduleUser = $workspace?->owner;
-        }
-
-        if (!$moduleUser || $moduleUser->hasActiveAddon()) {
+        if (!self::locksModulesFor($user)) {
             return $next($request);
         }
 
@@ -62,5 +50,24 @@ class CheckModuleAccess
         }
 
         return redirect()->route('plans.index')->with('error', $message);
+    }
+
+    /**
+     * Whether the add-on modules are locked for this user. Shared with the
+     * frontend too, so gated buttons are hidden by the same rule that blocks
+     * the route.
+     */
+    public static function locksModulesFor(?User $user): bool
+    {
+        if (!isSaasMode() || !$user || $user->isSuperAdmin()) {
+            return false;
+        }
+
+        // Members ride on their workspace owner's add-on.
+        $moduleUser = $user->getCurrentWorkspaceRole() === 'owner'
+            ? $user
+            : Workspace::find($user->current_workspace_id)?->owner;
+
+        return $moduleUser && !$moduleUser->hasActiveAddon();
     }
 }

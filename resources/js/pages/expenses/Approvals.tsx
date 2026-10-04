@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Check, X, AlertCircle, Clock, Search, Filter, LayoutGrid, List, Receipt, CheckCircle, XCircle, DollarSign } from 'lucide-react';
 import { router, usePage } from '@inertiajs/react';
 import { formatCurrency } from '@/utils/currency';
@@ -101,7 +103,16 @@ export default function Approvals({ expenses, stats, projects, filters, permissi
         processApproval(expenseId, action);
     };
     
-    const processApproval = (expenseId: number, action: string) => {
+    // Rejecting asks for a reason first, like timesheet rejection.
+    const [rejectingExpenseId, setRejectingExpenseId] = useState<number | null>(null);
+    const [rejectReason, setRejectReason] = useState('');
+
+    const processApproval = (expenseId: number, action: string, reason?: string) => {
+        if (action === 'reject' && reason === undefined) {
+            setRejectReason('');
+            setRejectingExpenseId(expenseId);
+            return;
+        }
         const actionText = action === 'approve' ? 'Approving' : action === 'reject' ? 'Rejecting' : 'Processing';
         toast.loading(`${actionText} expense...`);
         
@@ -111,9 +122,8 @@ export default function Approvals({ expenses, stats, projects, filters, permissi
         
         const data: any = {};
         
-        // For rejection, we can provide a default note or leave it empty
         if (action === 'reject') {
-            data.notes = 'Expense rejected by approver';
+            data.notes = reason;
         } else if (action === 'request_info') {
             data.notes = 'Additional information required';
         } else {
@@ -600,6 +610,37 @@ export default function Approvals({ expenses, stats, projects, filters, permissi
                     </div>
                 )}
             </div>
+            <Dialog open={rejectingExpenseId !== null} onOpenChange={(open) => { if (!open) setRejectingExpenseId(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{t('Reject Expense')}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="reject-reason">{t('Reason for rejection')} <span className="text-red-500">*</span></Label>
+                        <Textarea
+                            id="reject-reason"
+                            value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)}
+                            placeholder={t('Tell the submitter what to fix...')}
+                            rows={3}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRejectingExpenseId(null)}>{t('Cancel')}</Button>
+                        <Button
+                            variant="destructive"
+                            disabled={!rejectReason.trim()}
+                            onClick={() => {
+                                const id = rejectingExpenseId;
+                                setRejectingExpenseId(null);
+                                if (id !== null) processApproval(id, 'reject', rejectReason.trim());
+                            }}
+                        >
+                            {t('Reject')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </PageTemplate>
     );
 }

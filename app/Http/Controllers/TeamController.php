@@ -69,6 +69,14 @@ class TeamController extends Controller
             'role' => 'required|in:manager,member,client',
         ]);
 
+        // An inactive member is checked again when reactivated.
+        if ($member->role !== $validated['role'] && $member->status === 'active') {
+            $limitCheck = $this->planLimitService->canAssignRole($workspace, $validated['role']);
+            if (!$limitCheck['allowed']) {
+                return back()->with('error', $limitCheck['message']);
+            }
+        }
+
         $member->update(['role' => $validated['role']]);
 
         return back()->with('success', __('Role updated.'));

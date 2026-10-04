@@ -85,16 +85,14 @@ class PlanLimitService
             return ['allowed' => false, 'message' => __('No active plan found')];
         }
 
-        // Check specific role limits first (they have priority)
-        if ($role === 'client') {
-            return $this->canAddClientToWorkspace($workspace);
-        }
-        
-        if ($role === 'manager') {
-            return $this->canAddManagerToWorkspace($workspace);
+        // Managers and clients have their own caps on top of the overall limit.
+        $roleCheck = $this->canAssignRole($workspace, $role);
+        if (!$roleCheck['allowed']) {
+            return $roleCheck;
         }
 
-        // For general members, check overall user limit only if no specific role limits exist
+        // Every non-owner role counts toward the overall user limit - the
+        // message below says so, and invite/reactivate both go through here.
         if ($plan->max_users_per_workspace) {
             $currentUsers = $workspace->activeMembers()->where('role', '!=', 'owner')->count();
             $pendingInvitations = $workspace->invitations()
@@ -114,6 +112,19 @@ class PlanLimitService
         }
 
         return ['allowed' => true];
+    }
+
+    /**
+     * Role-specific cap only (manager/client), for moving an existing active
+     * member to another role: they already count toward the overall limit.
+     */
+    public function canAssignRole(Workspace $workspace, string $role): array
+    {
+        return match ($role) {
+            'client' => $this->canAddClientToWorkspace($workspace),
+            'manager' => $this->canAddManagerToWorkspace($workspace),
+            default => ['allowed' => true],
+        };
     }
 
     /**

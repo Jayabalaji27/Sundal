@@ -29,7 +29,11 @@ interface Timesheet {
     billable_hours: number;
     user?: { name: string };
     entries?: any[];
+    latest_approval?: { status: string; comments?: string | null } | null;
 }
+
+// Draft, or rejected and sent back after fixing - only by the person who logged it.
+const SUBMITTABLE_STATUSES = ['draft', 'rejected'];
 
 interface User {
     id: number;
@@ -339,7 +343,7 @@ export default function TimesheetsIndex({ timesheets, members, projects = [], ov
             action: 'submit',
             className: 'text-blue-500 hover:text-blue-700',
             // Only the timesheet's own user submits it; others approve/reject it
-            condition: (row: any) => hasPermission(userPermissions, 'timesheet_submit') && row.status === 'draft' && row.user_id === auth?.user?.id
+            condition: (row: any) => hasPermission(userPermissions, 'timesheet_submit') && SUBMITTABLE_STATUSES.includes(row.status) && row.user_id === auth?.user?.id
         },
         {
             label: t('Delete'),
@@ -657,6 +661,12 @@ export default function TimesheetsIndex({ timesheets, members, projects = [], ov
                                         <span>{t('Entries')}</span>
                                         <span>{timesheet.entries?.length || 0}</span>
                                     </div>
+
+                                    {timesheet.status === 'rejected' && timesheet.latest_approval?.comments && (
+                                        <div className="rounded-md bg-red-50 p-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                                            <span className="font-medium">{t('Rejection reason')}:</span> {timesheet.latest_approval.comments}
+                                        </div>
+                                    )}
                                 </div>
                                 
                                 <div className="flex gap-1 mt-4">
@@ -692,13 +702,13 @@ export default function TimesheetsIndex({ timesheets, members, projects = [], ov
                                         </Tooltip>
                                     )}
                                     
-                                    {hasPermission(userPermissions, 'timesheet_submit') && timesheet.status === 'draft' && timesheet.user_id === auth?.user?.id && (
+                                    {hasPermission(userPermissions, 'timesheet_submit') && SUBMITTABLE_STATUSES.includes(timesheet.status) && timesheet.user_id === auth?.user?.id && (
                                         <Button 
                                             size="sm"
                                             onClick={() => handleAction('submit', timesheet.id)}
                                             className="ml-2"
                                         >
-                                            {t('Submit')}
+                                            {timesheet.status === 'rejected' ? t('Resubmit') : t('Submit')}
                                         </Button>
                                     )}
                                 </div>

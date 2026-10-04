@@ -6,6 +6,7 @@ use App\Traits\LogsActivity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use App\Models\Concerns\BelongsToWorkspace;
 
 class Timesheet extends Model
@@ -48,6 +49,12 @@ class Timesheet extends Model
     public function approvals(): HasMany
     {
         return $this->hasMany(TimesheetApproval::class);
+    }
+
+    /** The most recent approval round - carries the rejection reason. */
+    public function latestApproval(): HasOne
+    {
+        return $this->hasOne(TimesheetApproval::class)->latestOfMany();
     }
 
     public function scopeForUser($query, $userId)

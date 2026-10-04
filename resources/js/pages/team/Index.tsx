@@ -83,7 +83,14 @@ export default function TeamIndex({ workspace, members, pendingInvitations, isOw
         }, {
             preserveScroll: true,
             onFinish: () => setSubmitting(false),
-            onSuccess: () => setInviteEmail(''),
+            // A blocked invite (plan limit, already a member) is also a successful
+            // visit, just with an error flash - keep the email for a retry and
+            // only clear it once it shows up as a pending invitation.
+            onSuccess: (page) => {
+                const invited = (page.props.pendingInvitations as PendingInvitation[] | undefined)
+                    ?.some(inv => inv.email.toLowerCase() === inviteEmail.trim().toLowerCase());
+                if (invited) setInviteEmail('');
+            },
             onError: (formErrors) => {
                 if (formErrors.email) setInviteEmailError(formErrors.email);
                 toast.error(Object.values(formErrors)[0] as string || t('Failed to send invitation.'));

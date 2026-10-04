@@ -576,7 +576,7 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
                         name="titleText"
                         value={settings.titleText}
                         onChange={handleInputChange}
-                        placeholder="WorkDo"
+                        placeholder={DEFAULT_BRAND_SETTINGS.titleText}
                       />
                       <p className="text-xs text-muted-foreground">
                         {t("Application title displayed in the browser tab")}
@@ -591,7 +591,7 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
                         name="footerText"
                         value={settings.footerText}
                         onChange={handleInputChange}
-                        placeholder="© 2026 WorkDo. All rights reserved."
+                        placeholder={DEFAULT_BRAND_SETTINGS.footerText}
                       />
                       <p className="text-xs text-muted-foreground">
                         {t("Text displayed in the footer")}

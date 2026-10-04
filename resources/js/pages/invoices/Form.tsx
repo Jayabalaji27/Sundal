@@ -179,19 +179,19 @@ export default function InvoiceForm({ invoice, projects, clients, currencies, ta
 
         if (isEdit) {
             router.put(route('invoices.update', invoice.id), submitData, {
-                onSuccess: () => setIsSubmitting(false),
-                onError: (errors) => {
-                    setIsSubmitting(false);
-                    setErrors(errors);
-                }
+                onError: (errors) => setErrors(errors),
+                // onFinish also runs after a non-422 failure (e.g. a 500), which
+                // fires neither onSuccess nor onError; without it the submit
+                // button stays disabled until the page is reloaded.
+                onFinish: () => setIsSubmitting(false),
             });
         } else {
             router.post(route('invoices.store'), submitData, {
-                onSuccess: () => setIsSubmitting(false),
-                onError: (errors) => {
-                    setIsSubmitting(false);
-                    setErrors(errors);
-                }
+                onError: (errors) => setErrors(errors),
+                // onFinish also runs after a non-422 failure (e.g. a 500), which
+                // fires neither onSuccess nor onError; without it the submit
+                // button stays disabled until the page is reloaded.
+                onFinish: () => setIsSubmitting(false),
             });
         }
     };

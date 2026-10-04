@@ -12,6 +12,16 @@ use Carbon\Carbon;
 
 class TimesheetReportController extends Controller
 {
+    /**
+     * Timesheet statuses each report filter includes. "counted" is the default
+     * and matches the project page: rejected and draft time is not logged time.
+     */
+    private const STATUS_FILTERS = [
+        'counted' => ['submitted', 'approved'],
+        'approved' => ['approved'],
+        'all' => null,
+    ];
+
     public function index(Request $request)
     {
         $user = auth()->user();
@@ -39,7 +49,7 @@ class TimesheetReportController extends Controller
         // Generate default latest report (summary for last 30 days)
         $defaultQuery = TimesheetEntry::with(['timesheet', 'project', 'task', 'user'])
             ->whereHas('timesheet', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
+                $q->where('workspace_id', $workspace->id)->whereIn('status', self::STATUS_FILTERS['counted']);
             })
             ->whereBetween('date', [$startDate, $endDate])
             ->orderBy('date', 'desc');
@@ -59,7 +69,8 @@ class TimesheetReportController extends Controller
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'user_id' => 'all',
-                'project_id' => 'all'
+                'project_id' => 'all',
+                'status' => 'counted',
             ],
             'defaultReportData' => $defaultReportData
         ]);
@@ -75,15 +86,18 @@ class TimesheetReportController extends Controller
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
             'user_id' => 'nullable|string',
-            'project_id' => 'nullable|string'
+            'project_id' => 'nullable|string',
+            'status' => 'nullable|in:' . implode(',', array_keys(self::STATUS_FILTERS)),
         ]);
+        $statuses = self::STATUS_FILTERS[$validated['status'] ?? 'counted'];
 
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
         
         $query = TimesheetEntry::with(['timesheet', 'project', 'task', 'user'])
-            ->whereHas('timesheet', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
+            ->whereHas('timesheet', function($q) use ($workspace, $statuses) {
+                $q->where('workspace_id', $workspace->id)
+                    ->when($statuses, fn ($q) => $q->whereIn('status', $statuses));
             })
             ->whereBetween('date', [$validated['start_date'], $validated['end_date']]);
 

@@ -894,7 +894,11 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
                             return (
                                <div key={stage.name} className="group flex items-center justify-between p-3 rounded-lg bg-card border border-border hover:border-primary/50 hover:shadow-sm transition-all duration-200">
                                  <div className="flex items-center gap-3">
-                                   <div className={`w-2 h-2 rounded-full ${dotBg} shadow-sm`} />
+                                   {/* The stage's own colour (as on the Kanban board); palette only as a fallback. */}
+                                   <div
+                                     className={`w-2 h-2 rounded-full ${stage.color ? '' : dotBg} shadow-sm`}
+                                     style={stage.color ? { backgroundColor: stage.color } : undefined}
+                                   />
                                    <span className="text-sm font-semibold text-foreground/80 capitalize group-hover:text-foreground transition-colors">{stage.name}</span>
                                  </div>
                                  <span className="text-sm font-bold text-foreground bg-muted px-2.5 py-0.5 rounded-full">{stage.count}</span>

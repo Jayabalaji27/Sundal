@@ -60,27 +60,27 @@ export default function TimerWidget({ projects, permissions }: Props) {
                 clearInterval(syncInterval);
                 return;
             }
+            // Only a re-sync: the clock ticks locally (see NavigationTimer).
+            if (document.visibilityState === 'hidden') return;
             fetchTimerStatus();
-        }, 3000); // Sync every 3 seconds
+        }, 30000);
+        // Tick locally between syncs. Functional update: this effect runs once,
+        // so reading timerState here would see only the initial (inactive) state.
         const timerInterval = setInterval(() => {
-            if (timerState.active && !timerState.is_paused) {
-                setMicroseconds(prev => {
-                    const newMicros = prev + 100;
-                    if (newMicros >= 1000) {
-                        setTimerState(prevState => ({
-                            ...prevState,
-                            elapsed_seconds: prevState.elapsed_seconds + 1
-                        }));
-                        return 0;
-                    }
-                    return newMicros;
-                });
-            }
-        }, 100);
+            setTimerState(prev => (prev.active && !prev.is_paused
+                ? { ...prev, elapsed_seconds: prev.elapsed_seconds + 1 }
+                : prev));
+        }, 1000);
+        // Re-sync as soon as the tab is shown again (polling pauses while hidden).
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible' && !loggedOutRef.current) fetchTimerStatus();
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
 
         return () => {
             clearInterval(syncInterval);
             clearInterval(timerInterval);
+            document.removeEventListener('visibilitychange', handleVisibility);
         };
     }, []);
 

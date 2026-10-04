@@ -208,7 +208,7 @@ export default function ApprovalDetails({ approval, userWorkspaceRole }: Props) 
                                 {approval.timesheet.entries.map((entry) => (
                                     <TableRow key={entry.id}>
                                         <TableCell className="font-medium">
-                                            {new Date(entry.date).toLocaleDateString()}
+                                            {window.appSettings.formatDateTime(entry.date, false)}
                                         </TableCell>
                                         <TableCell>{entry.project.title}</TableCell>
                                         <TableCell>{entry.task?.title || '-'}</TableCell>

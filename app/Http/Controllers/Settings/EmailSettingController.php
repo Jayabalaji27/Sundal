@@ -36,7 +36,7 @@ class EmailSettingController extends Controller
             'password' => getSetting('email_password', '', $user->id, $workspaceId),
             'encryption' => getSetting('email_encryption', 'tls', $user->id, $workspaceId),
             'fromAddress' => getSetting('email_from_address', 'noreply@example.com', $user->id, $workspaceId),
-            'fromName' => getSetting('email_from_name', 'WorkDo System', $user->id, $workspaceId)
+            'fromName' => getSetting('email_from_name', config('app.name'), $user->id, $workspaceId)
         ];
 
         // Mask password if it exists
@@ -124,7 +124,7 @@ class EmailSettingController extends Controller
             'username' => getSetting('email_username', 'user@example.com', $user->id, $workspaceId),
             'encryption' => getSetting('email_encryption', 'tls', $user->id, $workspaceId),
             'fromAddress' => getSetting('email_from_address', 'noreply@example.com', $user->id, $workspaceId),
-            'fromName' => getSetting('email_from_name', 'WorkDo System', $user->id, $workspaceId)
+            'fromName' => getSetting('email_from_name', config('app.name'), $user->id, $workspaceId)
         ];
         
         // Get the actual password (not masked)

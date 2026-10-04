@@ -119,7 +119,7 @@ export default function Show({ timesheet }: Props) {
                                     <div>
                                         <div className="text-sm text-gray-500">Period</div>
                                         <div className="font-medium">
-                                            {new Date(timesheet.start_date).toLocaleDateString()} - {new Date(timesheet.end_date).toLocaleDateString()}
+                                            {window.appSettings.formatDateTime(timesheet.start_date, false)} - {window.appSettings.formatDateTime(timesheet.end_date, false)}
                                         </div>
                                     </div>
                                 </div>
@@ -206,7 +206,7 @@ export default function Show({ timesheet }: Props) {
                                 <TableBody>
                                     {timesheet.entries.map((entry) => (
                                         <TableRow key={entry.id}>
-                                            <TableCell>{new Date(entry.date).toLocaleDateString()}</TableCell>
+                                            <TableCell>{window.appSettings.formatDateTime(entry.date, false)}</TableCell>
                                             <TableCell>{entry.project.title}</TableCell>
                                             <TableCell>{entry.task?.title || '-'}</TableCell>
                                             <TableCell className="text-sm">

@@ -36,46 +36,64 @@ class PlanSeeder extends Seeder
 
             $plans = [$freePlan];
 
-            // Add other plans only in demo mode
-            if (config('app.is_demo')) {
-                $plans[] = [
-                    'name' => 'Starter',
-                    'price' => 19.99,
-                    'yearly_price' => 191.90,
-                    'duration' => 'monthly',
-                    'description' => 'Perfect for small businesses looking to grow their online presence.',
-                    'max_users_per_workspace' => 10,
-                    'max_clients_per_workspace' => 10,
-                    'max_managers_per_workspace' => 2,
-                    'max_projects_per_workspace' => 10,
-                    'workspace_limit' => 3,
-                    'enable_chatgpt' => 'off',
-                    'storage_limit' => 5,
-                    'is_trial' => 'off',
-                    'trial_day' => 7,
-                    'is_plan_enable' => 'on',
-                    'is_default' => false
-                ];
+            // Paid plans are seeded in every SaaS install, not only demo mode:
+            // without them /plans offers nothing to upgrade to and every gated
+            // module dead-ends. Prices are starting points; the superadmin edits
+            // them under Plans. Existing plans (matched by name) are never changed.
+            $plans[] = [
+                'name' => 'Starter',
+                'price' => 19.99,
+                'yearly_price' => 191.90,
+                'duration' => 'monthly',
+                'description' => 'Perfect for small businesses looking to grow their online presence.',
+                'max_users_per_workspace' => 10,
+                'max_clients_per_workspace' => 10,
+                'max_managers_per_workspace' => 2,
+                'max_projects_per_workspace' => 10,
+                'workspace_limit' => 3,
+                'enable_chatgpt' => 'off',
+                'storage_limit' => 5,
+                'is_trial' => 'off',
+                'trial_day' => 7,
+                'is_plan_enable' => 'on',
+                'is_default' => false
+            ];
 
-                $plans[] = [
-                    'name' => 'Pro',
-                    'price' => 49.99,
-                    'yearly_price' => 479.90,
-                    'duration' => 'monthly',
-                    'description' => 'Ideal for growing businesses with multiple stores and advanced needs.',
-                    'max_users_per_workspace' => 50,
-                    'max_clients_per_workspace' => 30,
-                    'max_managers_per_workspace' => 5,
-                    'max_projects_per_workspace' => 25,
-                    'workspace_limit' => 10,
-                    'enable_chatgpt' => 'on',
-                    'storage_limit' => 50,
-                    'is_trial' => 'off',
-                    'trial_day' => 14,
-                    'is_plan_enable' => 'on',
-                    'is_default' => false
-                ];
-            }
+            $plans[] = [
+                'name' => 'Pro',
+                'price' => 49.99,
+                'yearly_price' => 479.90,
+                'duration' => 'monthly',
+                'description' => 'Ideal for growing businesses with multiple stores and advanced needs.',
+                'max_users_per_workspace' => 50,
+                'max_clients_per_workspace' => 30,
+                'max_managers_per_workspace' => 5,
+                'max_projects_per_workspace' => 25,
+                'workspace_limit' => 10,
+                'enable_chatgpt' => 'on',
+                'storage_limit' => 50,
+                'is_trial' => 'off',
+                'trial_day' => 14,
+                'is_plan_enable' => 'on',
+                'is_default' => false
+            ];
+
+            // Unlocks the add-on modules (AI, Knowledge Base, Chat & Meetings -
+            // see CheckModuleAccess) on top of any base plan. Per-workspace
+            // limits don't apply to an add-on, so their column defaults stay.
+            $plans[] = [
+                'name' => 'Pro Add-on',
+                'plan_type' => 'addon',
+                'price' => 9.99,
+                'yearly_price' => 95.90,
+                'duration' => 'monthly',
+                'description' => 'Adds AI, Knowledge Base, Chat and Meetings to any plan.',
+                'enable_chatgpt' => 'on',
+                'is_trial' => 'off',
+                'trial_day' => 0,
+                'is_plan_enable' => 'on',
+                'is_default' => false
+            ];
 
             foreach ($plans as $planData) {
                 // Check if plan with this name already exists
