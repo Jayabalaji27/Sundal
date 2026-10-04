@@ -28,13 +28,15 @@ class AiProjectController extends Controller
             'requirements' => 'required|string|min:20|max:3000',
         ]);
 
-        $apiKey = Setting::where('key', 'chatgptKey')->value('value');
-        $model  = Setting::where('key', 'chatgptModel')->value('value') ?? 'gpt-3.5-turbo';
+        // getSetting() scopes to this workspace's settings; a bare Setting query
+        // returned whichever tenant's key happened to be stored first.
+        $apiKey = getSetting('chatgptKey');
+        $model  = getSetting('chatgptModel') ?: 'gpt-3.5-turbo';
 
         if (!$apiKey || !str_starts_with(trim($apiKey), 'sk-')) {
             return response()->json([
                 'success' => false,
-                'message' => __('OpenAI API key not configured. Go to Settings → Integrations → ChatGPT to add your key.'),
+                'message' => __('OpenAI API key not configured. Go to Settings → General → Chat GPT Settings to add your key.'),
             ], 422);
         }
 

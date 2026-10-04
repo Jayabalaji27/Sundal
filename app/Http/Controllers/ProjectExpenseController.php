@@ -148,7 +148,8 @@ class ProjectExpenseController extends Controller
 
     public function create()
     {
-        return redirect()->route('expenses.index');
+        // Creating happens in a dialog on the index page; ?create=1 opens it.
+        return redirect()->route('expenses.index', ['create' => 1]);
     }
 
     public function show(ProjectExpense $expense)

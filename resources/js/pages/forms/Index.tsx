@@ -61,6 +61,7 @@ export default function FormsIndex() {
             await navigator.clipboard.writeText(link);
             setCopied(form.id);
             setTimeout(() => setCopied(null), 2000);
+            toast.success(t('Link copied to clipboard'));
         } catch {
             toast.error(t('Could not copy to clipboard — your browser may have blocked clipboard access.'));
         }

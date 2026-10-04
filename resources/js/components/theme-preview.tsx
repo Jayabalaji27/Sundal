@@ -4,6 +4,7 @@ import { SidebarMenuSkeleton } from '@/components/ui/sidebar';
 import { useThemePreview } from '@/hooks/use-theme-preview';
 import { useLogos } from '@/contexts/LogoContext';
 import { useAppearance } from '@/hooks/use-appearance';
+import { usePage } from '@inertiajs/react';
 
 export function ThemePreview() {
   const { themeColor, position, variant, collapsible, style } = useThemePreview();
@@ -69,9 +70,8 @@ export function ThemePreview() {
   };
   
   // Get title text
-  const getTitleText = () => {
-    return 'WorkDo';
-  };
+  const { globalSettings, name: appName } = usePage().props as any;
+  const getTitleText = () => globalSettings?.titleText || appName;
   
   return (
     <div className="border rounded-lg overflow-hidden">

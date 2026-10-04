@@ -453,6 +453,7 @@ class DashboardController extends Controller
             return $stages->map(function($stage) {
                 return [
                     'name' => $stage->name,
+                    'color' => $stage->color,
                     'count' => $stage->tasks_count
                 ];
             })->toArray();

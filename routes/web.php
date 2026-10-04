@@ -617,8 +617,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('chatbot/ask', [ChatbotController::class, 'ask'])->name('chatbot.ask');
 
         // ── AI UVP Modules ────────────────────────────────────────────────
-        // Gated behind the Pro Add-on plan (agent_use-permissioned routes only;
-        // ai/projects/* below has no permission gate today and is left as-is).
+        // Gated behind the Pro Add-on plan. ai/projects/* (Projects → AI Generate)
+        // has no Spatie permission of its own (the controller checks
+        // project_create) but is plan-gated the same way.
         Route::get('standup', [\App\Http\Controllers\StandupController::class, 'index'])->middleware(['permission:agent_use', 'module.access'])->name('standup.index');
         Route::get('api/standup', [\App\Http\Controllers\StandupController::class, 'api'])->middleware(['permission:agent_use', 'module.access'])->name('standup.api');
 
@@ -628,8 +629,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('resource-conflicts', [\App\Http\Controllers\ResourceConflictController::class, 'index'])->middleware(['permission:agent_advanced_insights', 'module.access'])->name('resource-conflicts.index');
         Route::get('api/resource-conflicts', [\App\Http\Controllers\ResourceConflictController::class, 'api'])->middleware(['permission:agent_advanced_insights', 'module.access'])->name('resource-conflicts.api');
 
-        Route::post('ai/projects/parse', [\App\Http\Controllers\AiProjectController::class, 'parse'])->name('ai.projects.parse');
-        Route::post('ai/projects/create', [\App\Http\Controllers\AiProjectController::class, 'create'])->name('ai.projects.create');
+        Route::post('ai/projects/parse', [\App\Http\Controllers\AiProjectController::class, 'parse'])->middleware('module.access')->name('ai.projects.parse');
+        Route::post('ai/projects/create', [\App\Http\Controllers\AiProjectController::class, 'create'])->middleware('module.access')->name('ai.projects.create');
 
         // BYOA — API Keys (Owner only)
         Route::get('api-keys', [ApiKeyController::class, 'index'])->middleware('permission:api_key_view_any')->name('api-keys.index');

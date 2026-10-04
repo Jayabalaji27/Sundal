@@ -33,6 +33,7 @@ interface Props {
         end_date: string;
         user_id: string;
         project_id: string;
+        status: string;
     };
     defaultReportData: any;
     permissions?: any;
@@ -111,7 +112,7 @@ export default function TimesheetReports({ members, projects, defaultFilters, de
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                         <div className="space-y-2">
                             <Label>{t('Project')}</Label>
                             <Select 
@@ -148,6 +149,23 @@ export default function TimesheetReports({ members, projects, defaultFilters, de
                                             {member.name}
                                         </SelectItem>
                                     ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>{t('Timesheet Status')}</Label>
+                            <Select
+                                value={filters.status}
+                                onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="counted">{t('Submitted & approved')}</SelectItem>
+                                    <SelectItem value="approved">{t('Approved only')}</SelectItem>
+                                    <SelectItem value="all">{t('All (incl. draft & rejected)')}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

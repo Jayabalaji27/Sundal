@@ -394,7 +394,7 @@ export default function InvoiceShow() {
                                             <div className="inline-flex items-center gap-1.5 text-sm">
                                                 <Calendar className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                                                 <span className="font-medium">{t('Due Date')} :</span>
-                                                <span className="text-muted-foreground text-red-600">{window.appSettings.formatDateTime(new Date(invoice.due_date), false)}</span>
+                                                <span className={invoice.is_overdue ? 'font-medium text-red-600' : 'text-muted-foreground'}>{window.appSettings.formatDateTime(new Date(invoice.due_date), false)}</span>
                                             </div>
                                         </div>
                                     </div>

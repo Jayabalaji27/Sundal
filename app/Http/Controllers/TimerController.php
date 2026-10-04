@@ -155,8 +155,16 @@ class TimerController extends Controller
     {
         $user = auth()->user();
 
+        // This is a background poll. Flash data lives for exactly one request,
+        // so a poll landing between a form POST and the redirected page load
+        // would consume the flash (e.g. a plan-limit error) and the user would
+        // see nothing. Keep it for the next real page visit.
+        if (! $request->inertia() && $request->hasSession()) {
+            $request->session()->reflash();
+        }
+
         if (!$user->timer_active) {
-            return $request->inertia() 
+            return $request->inertia()
                 ? back()->with('timer', ['active' => false])
                 : response()->json(['active' => false]);
         }

@@ -1005,28 +1005,19 @@ export default function ProjectShow() {
                                             <div className="flex justify-between items-center">
                                                 <span className="text-sm text-gray-600">Total Hours Logged:</span>
                                                 <span className="font-semibold">
-                                                    {projectTimesheets ? 
-                                                        projectTimesheets.reduce((total: number, ts: any) => total + parseFloat(ts.total_hours || 0), 0).toFixed(1) 
-                                                        : '0.0'
-                                                    }h
+                                                    {Number(project.total_project_hours || 0).toFixed(1)}h
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center">
                                                 <span className="text-sm text-gray-600">Billable Hours:</span>
                                                 <span className="font-semibold text-green-600">
-                                                    {projectTimesheets ? 
-                                                        projectTimesheets.reduce((total: number, ts: any) => total + parseFloat(ts.billable_hours || 0), 0).toFixed(1) 
-                                                        : '0.0'
-                                                    }h
+                                                    {Number(project.total_billable_hours || 0).toFixed(1)}h
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center">
                                                 <span className="text-sm text-gray-600">Team Members Active:</span>
                                                 <span className="font-semibold">
-                                                    {projectTimesheets ? 
-                                                        new Set(projectTimesheets.map((ts: any) => ts.user?.id)).size 
-                                                        : 0
-                                                    }
+                                                    {project.total_team_members || 0}
                                                 </span>
                                             </div>
                                         </div>
@@ -1108,24 +1099,18 @@ export default function ProjectShow() {
                                         <div className="space-y-4">
                                             <div className="flex justify-between items-center">
                                                 <span className="text-sm text-gray-600">Team Size:</span>
-                                                <span className="font-semibold">{project.members?.length || 0}</span>
+                                                <span className="font-semibold">{project.team_size ?? project.members?.length ?? 0}</span>
                                             </div>
                                             <div className="flex justify-between items-center">
                                                 <span className="text-sm text-gray-600">Active Members:</span>
                                                 <span className="font-semibold text-green-600">
-                                                    {projectTimesheets ? 
-                                                        new Set(projectTimesheets.map((ts: any) => ts.user?.id)).size 
-                                                        : 0
-                                                    }
+                                                    {project.total_team_members || 0}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center">
                                                 <span className="text-sm text-gray-600">Avg Hours/Member:</span>
                                                 <span className="font-semibold">
-                                                    {projectTimesheets && project.members?.length ? 
-                                                        (projectTimesheets.reduce((total: number, ts: any) => total + parseFloat(ts.total_hours || 0), 0) / project.members.length).toFixed(1) 
-                                                        : '0.0'
-                                                    }h
+                                                    {Number(project.avg_hours_per_member || 0).toFixed(1)}h
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center">

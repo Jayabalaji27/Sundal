@@ -168,7 +168,7 @@ class TimesheetController extends Controller
             return redirect()->route('dashboard')->withErrors(['message' => 'No workspace selected']);
         }
         
-        $query = Timesheet::with(['user', 'entries.project', 'entries.task', 'approver'])
+        $query = Timesheet::with(['user', 'entries.project', 'entries.task', 'approver', 'latestApproval'])
             ->where('workspace_id', $workspace->id);
 
         // Own timesheets only, unless the user can access all workspace data (owner).
@@ -546,8 +546,9 @@ class TimesheetController extends Controller
             abort(403, __('You can only submit your own timesheets.'));
         }
 
-        if ($timesheet->status !== 'draft') {
-            return back()->withErrors(['message' => 'Only draft timesheets can be submitted']);
+        // A rejected timesheet is fixed up and sent back for approval.
+        if (!in_array($timesheet->status, ['draft', 'rejected'], true)) {
+            return back()->withErrors(['message' => 'Only draft or rejected timesheets can be submitted']);
         }
         
         if (!$timesheet->entries()->exists()) {
@@ -728,7 +729,7 @@ class TimesheetController extends Controller
         
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
-        $weekStart = $request->week_start ? Carbon::parse($request->week_start) : now()->startOfWeek();
+        $weekStart = $request->week_start ? Carbon::parse($request->week_start)->startOfWeek() : now()->startOfWeek();
         $weekEnd = $weekStart->copy()->endOfWeek();
         
         if (!$workspace) {

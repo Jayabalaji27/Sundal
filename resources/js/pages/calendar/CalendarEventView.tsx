@@ -136,7 +136,7 @@ export default function CalendarEventView({ event }: CalendarEventViewProps) {
                                         {t('Start Date')}
                                     </label>
                                     <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-                                        {window.appSettings.formatDateTime(new Date(event.start_date),false)}
+                                        {window.appSettings.formatDateTime(event.start_date,false)}
                                     </p>
                                 </div>
                             )}
@@ -147,7 +147,7 @@ export default function CalendarEventView({ event }: CalendarEventViewProps) {
                                         {t('Due Date')}
                                     </label>
                                     <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">
-                                        {window.appSettings.formatDateTime(new Date(event.due_date),false)}
+                                        {window.appSettings.formatDateTime(event.due_date,false)}
                                     </p>
                                 </div>
                             )}

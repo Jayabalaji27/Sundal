@@ -173,7 +173,7 @@ class TimesheetApprovalController extends Controller
         try {
             $approval->update([
                 'status' => 'approved',
-                'comments' => $validated['comments'],
+                'comments' => $validated['comments'] ?? null,
                 'approved_at' => now()
             ]);
 
@@ -212,7 +212,7 @@ class TimesheetApprovalController extends Controller
         try {
             $approval->update([
                 'status' => 'rejected',
-                'comments' => $validated['comments'],
+                'comments' => $validated['comments'] ?? null,
                 'approved_at' => now()
             ]);
 
@@ -256,7 +256,7 @@ class TimesheetApprovalController extends Controller
             foreach ($approvals as $approval) {
                 $approval->update([
                     'status' => 'approved',
-                    'comments' => $validated['comments'],
+                    'comments' => $validated['comments'] ?? null,
                     'approved_at' => now()
                 ]);
 
@@ -301,7 +301,7 @@ class TimesheetApprovalController extends Controller
             foreach ($approvals as $approval) {
                 $approval->update([
                     'status' => 'rejected',
-                    'comments' => $validated['comments'],
+                    'comments' => $validated['comments'] ?? null,
                     'approved_at' => now()
                 ]);
 
@@ -317,12 +317,16 @@ class TimesheetApprovalController extends Controller
     private function updateTimesheetStatus(Timesheet $timesheet)
     {
         try {
-            $pendingApprovals = $timesheet->approvals()->where('status', 'pending')->count();
-            
-            if ($pendingApprovals === 0) {
-                $rejectedApprovals = $timesheet->approvals()->where('status', 'rejected')->count();
-                
-                if ($rejectedApprovals > 0) {
+            // Only each approver's newest decision counts. A resubmitted timesheet
+            // keeps its earlier rejection as history, which otherwise flipped it
+            // straight back to rejected when the new round was approved.
+            $currentRound = $timesheet->approvals()
+                ->whereIn('id', fn ($q) => $q->selectRaw('MAX(id)')->from('timesheet_approvals')
+                    ->where('timesheet_id', $timesheet->id)->groupBy('approver_id'))
+                ->pluck('status');
+
+            if (!$currentRound->contains('pending')) {
+                if ($currentRound->contains('rejected')) {
                     $timesheet->update(['status' => 'rejected']);
                 } else {
                     $timesheet->update([

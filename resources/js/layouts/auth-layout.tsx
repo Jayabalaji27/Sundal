@@ -34,7 +34,12 @@ export default function AuthLayout({
 
     const { globalSettings } = usePage().props as any;
 
-    const currentLogo = appearance === 'dark' ? logoDark : logoLight;
+    // Same pairing as the sidebar: logoDark is the dark-ink logo for light
+    // backgrounds (the login page showed white text on white). `appearance` can
+    // be 'system', so read the applied theme class instead.
+    const isDark = appearance === 'dark'
+        || (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+    const currentLogo = isDark ? logoLight : logoDark;
     const primaryColor = themeColor === 'custom' ? customColor : THEME_COLORS[themeColor as keyof typeof THEME_COLORS];
 
     // Apply RTL immediately on mount

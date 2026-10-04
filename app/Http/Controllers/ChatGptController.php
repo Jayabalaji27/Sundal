@@ -20,8 +20,9 @@ class ChatGptController extends Controller
         ]);
 
         try {
-            $apiKey = Setting::where('key', 'chatgptKey')->value('value');
-            $model = Setting::where('key', 'chatgptModel')->value('value') ?? 'gpt-3.5-turbo';
+            // Scoped like AiProjectController - not whichever tenant's key is first.
+            $apiKey = getSetting('chatgptKey');
+            $model = getSetting('chatgptModel') ?: 'gpt-3.5-turbo';
 
             if (!$apiKey || !str_starts_with(trim($apiKey), 'sk-')) {
                 return response()->json([

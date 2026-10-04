@@ -704,3 +704,241 @@ describe('Superadmin', function () {
             ->and($request->fresh()->total)->toBe((float) $plan->price);
     });
 });
+
+// ═══ Company owner production-readiness report (taskly-qa-fix-report.md) ═══
+
+describe('Company owner production pass', function () {
+    test('editing an invoice with a tax saves the new totals', function () {
+        [$owner, $ws] = qaOwner();
+        $project = qaProject($ws, $owner);
+        [$todo] = qaStages($ws);
+        $task = qaTask($project, $todo, $owner);
+        $tax = \App\Models\Tax::create(['workspace_id' => $ws->id, 'name' => 'GST', 'rate' => 12]);
+        $payload = ['project_id' => $project->id, 'title' => 'Inv', 'invoice_date' => now()->toDateString(),
+            'due_date' => now()->addWeek()->toDateString(), 'selected_taxes' => [$tax->id]];
+
+        $this->actingAs($owner)->post(route('invoices.store'), $payload + ['items' => [['type' => 'task', 'amount' => 1000, 'task_id' => $task->id]]])
+            ->assertSessionHasNoErrors();
+        $invoice = Invoice::latest('id')->first();
+
+        // tax_rate is a JSON column; MySQL re-formats it, so the stored text never
+        // matches a fresh json_encode() and Eloquent's dirty check casts it.
+        $this->actingAs($owner)->put(route('invoices.update', $invoice), $payload + ['items' => [
+            ['type' => 'task', 'description' => 'x', 'rate' => 1000, 'amount' => 2000, 'task_id' => $task->id],
+        ]])->assertRedirect(route('invoices.show', $invoice))->assertSessionHasNoErrors();
+
+        $invoice->refresh();
+        expect($invoice->subtotal)->toBe('2000.00')
+            ->and($invoice->tax_amount)->toBe('240.00')
+            ->and($invoice->total_amount)->toBe('2240.00')
+            ->and($invoice->selected_taxes)->toBe([$tax->id]);
+    });
+
+    test('a non-numeric invoice amount is a validation error, not a 500', function () {
+        [$owner, $ws] = qaOwner();
+        $project = qaProject($ws, $owner);
+        [$todo] = qaStages($ws);
+        $task = qaTask($project, $todo, $owner);
+        $invoice = qaInvoice($project, $owner, ['status' => 'draft']);
+
+        $this->actingAs($owner)->put(route('invoices.update', $invoice), [
+            'title' => 'Inv', 'invoice_date' => now()->toDateString(), 'due_date' => now()->addWeek()->toDateString(),
+            'items' => [['type' => 'task', 'description' => 'x', 'amount' => '1,000.00', 'task_id' => $task->id]],
+        ])->assertSessionHasErrors('items.0.amount');
+    });
+});
+
+describe('Production error handling', function () {
+    test('an unexpected exception shows the generic error page without details', function () {
+        config(['app.debug' => false]);
+        app()->detectEnvironment(fn () => 'production');
+        \Illuminate\Support\Facades\Route::middleware('web')->get('/__qa-boom', fn () => throw new RuntimeException('qa-secret-detail'));
+        [$owner] = qaOwner();
+
+        $response = $this->actingAs($owner)->get('/__qa-boom');
+
+        $response->assertStatus(500)
+            ->assertInertia(fn (Assert $page) => $page->component('errors/error')->where('status', 500));
+        expect($response->getContent())->not->toContain('qa-secret-detail')->not->toContain(base_path());
+    });
+});
+
+describe('Plan limits (company owner pass)', function () {
+    test('a timer status poll does not swallow the flash from a blocked action', function () {
+        [$owner, $ws] = qaOwner();
+        qaMember($ws, 'manager'); // Free plan: 1 manager
+
+        $this->actingAs($owner)->post(route('workspace.invitations.store', $ws), ['email' => 'mgr2@example.com', 'role' => 'manager'])
+            ->assertSessionHas('error');
+        // The poll lands between the POST and the redirected page load.
+        $this->getJson(route('timer.status'))->assertOk();
+
+        $this->get(route('team.index', $ws))
+            ->assertInertia(fn (Assert $page) => $page->where('flash.error', fn ($error) => str_contains($error, 'Manager limit')));
+    });
+
+    test('creating a workspace over the plan limit returns an error', function () {
+        [$owner] = qaOwner(); // Free plan: 1 workspace
+
+        $this->actingAs($owner)->post(route('workspaces.store'), ['name' => 'Second'])
+            ->assertSessionHasErrors('error');
+        expect(Workspace::where('owner_id', $owner->id)->count())->toBe(1);
+    });
+
+    test('clients count toward the overall user limit', function () {
+        [$owner, $ws] = qaOwner(); // Free plan: 2 users per workspace
+        qaMember($ws, 'manager');
+        qaMember($ws, 'member');
+
+        $this->actingAs($owner)->post(route('workspace.invitations.store', $ws), ['email' => 'client@example.com', 'role' => 'client'])
+            ->assertSessionHas('error');
+        expect(session('error'))->toContain('User limit')
+            ->and(WorkspaceInvitation::where('email', 'client@example.com')->exists())->toBeFalse();
+    });
+
+    test('changing a role respects the role cap', function () {
+        [$owner, $ws] = qaOwner(); // Free plan: 1 manager
+        qaMember($ws, 'manager');
+        $member = qaMember($ws, 'member');
+
+        $this->actingAs($owner)->patch(route('team.update-role', [$ws, $member]), ['role' => 'manager'])
+            ->assertSessionHas('error');
+        expect(WorkspaceMember::where('workspace_id', $ws->id)->where('user_id', $member->id)->value('role'))->toBe('member');
+    });
+});
+
+describe('Timesheets, calendar and taxes (company owner pass)', function () {
+    test('a rejected timesheet shows the reason and can be resubmitted and approved', function () {
+        [$owner, $ws] = qaOwner();
+        $member = qaMember($ws, 'member');
+        $project = qaProject($ws, $owner);
+        $timesheet = Timesheet::create(['user_id' => $member->id, 'workspace_id' => $ws->id, 'start_date' => '2026-10-05',
+            'end_date' => '2026-10-11', 'status' => 'draft', 'total_hours' => 8, 'billable_hours' => 8]);
+        TimesheetEntry::create(['timesheet_id' => $timesheet->id, 'project_id' => $project->id, 'user_id' => $member->id,
+            'date' => '2026-10-06', 'hours' => 8, 'is_billable' => true, 'hourly_rate' => 0]);
+
+        $this->actingAs($member)->post(route('timesheets.submit', $timesheet))->assertSessionHasNoErrors();
+        $approval = \App\Models\TimesheetApproval::where('timesheet_id', $timesheet->id)->latest('id')->first();
+        $this->actingAs($owner)->post(route('timesheet-approvals.reject', $approval), ['comments' => 'Split the hours by task'])
+            ->assertSessionHas('success');
+        expect($timesheet->fresh()->status)->toBe('rejected');
+
+        $this->actingAs($member)->get(route('timesheets.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('timesheets.data.0.latest_approval.comments', 'Split the hours by task'));
+
+        $this->actingAs($member)->post(route('timesheets.submit', $timesheet))->assertSessionHasNoErrors();
+        expect($timesheet->fresh()->status)->toBe('submitted');
+
+        $approval = \App\Models\TimesheetApproval::where('timesheet_id', $timesheet->id)->latest('id')->first();
+        expect($approval->status)->toBe('pending');
+        $this->actingAs($owner)->post(route('timesheet-approvals.approve', $approval))->assertSessionHas('success');
+        expect($timesheet->fresh()->status)->toBe('approved');
+    });
+
+    test('calendar sends tasks as all-day date-only events with an exclusive end', function () {
+        [$owner, $ws] = qaOwner();
+        $project = qaProject($ws, $owner);
+        [$todo] = qaStages($ws);
+        qaTask($project, $todo, $owner, ['start_date' => '2026-10-06', 'end_date' => '2026-10-09']);
+
+        $this->actingAs($owner)->get(route('task-calendar.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('events.0.start', '2026-10-06')
+                ->where('events.0.end', '2026-10-10')
+                ->where('events.0.allDay', true));
+    });
+
+    test('the weekly view always starts on the Monday of the requested week', function () {
+        [$owner] = qaOwner();
+
+        $this->actingAs($owner)->get(route('timesheets.weekly-view', ['week_start' => '2026-10-06']))
+            ->assertInertia(fn (Assert $page) => $page->where('weekStart', '2026-10-05')->where('weekEnd', '2026-10-11'));
+    });
+
+    test('twenty tax updates in a row all succeed', function () {
+        [$owner, $ws] = qaOwner();
+        $tax = \App\Models\Tax::create(['workspace_id' => $ws->id, 'name' => 'GST', 'rate' => 10]);
+
+        foreach (range(1, 20) as $i) {
+            $this->actingAs($owner)->put(route('taxes.update', $tax), ['name' => 'GST', 'rate' => 10 + $i])
+                ->assertRedirect()->assertSessionHas('success');
+        }
+        expect($tax->fresh()->rate)->toBe(30.0);
+    });
+});
+
+describe('Medium and polish fixes (company owner pass)', function () {
+    test('AI Generate is gated by the add-on like the other AI modules', function () {
+        [$owner] = qaOwner(); // Free plan, no add-on
+        foreach (['ai.projects.parse', 'ai.projects.create'] as $name) {
+            expect(\Illuminate\Support\Facades\Route::getRoutes()->getByName($name)->gatherMiddleware())->toContain('module.access');
+        }
+
+        $this->actingAs($owner)->get(route('projects.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('auth.modulesLocked', true));
+    });
+
+    test('project hours and the timesheet report leave out rejected and draft time', function () {
+        [$owner, $ws] = qaOwner();
+        $project = qaProject($ws, $owner);
+        foreach (['approved' => 8, 'rejected' => 9, 'draft' => 3] as $status => $hours) {
+            $ts = Timesheet::create(['user_id' => $owner->id, 'workspace_id' => $ws->id, 'start_date' => now()->startOfWeek(),
+                'end_date' => now()->endOfWeek(), 'status' => $status, 'total_hours' => $hours, 'billable_hours' => $hours]);
+            // No task: time logged straight on the project counts too.
+            TimesheetEntry::create(['timesheet_id' => $ts->id, 'project_id' => $project->id, 'user_id' => $owner->id,
+                'date' => now()->toDateString(), 'hours' => $hours, 'is_billable' => true, 'hourly_rate' => 0]);
+        }
+
+        $this->actingAs($owner)->get(route('projects.show', $project))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('project.total_project_hours', fn ($h) => (float) $h === 8.0)
+                ->where('project.total_team_members', 1)
+                ->where('project.team_size', 1)
+                ->where('project.avg_hours_per_member', fn ($h) => (float) $h === 8.0));
+
+        $range = ['start_date' => now()->subDay()->toDateString(), 'end_date' => now()->addDay()->toDateString()];
+        expect((float) $this->postJson(route('timesheet-reports.generate'), $range)->json('summary.total_hours'))->toBe(8.0)
+            ->and((float) $this->postJson(route('timesheet-reports.generate'), $range + ['status' => 'all'])->json('summary.total_hours'))->toBe(20.0);
+    });
+
+    test('notes cannot be shared with deactivated members', function () {
+        [$owner, $ws] = qaOwner();
+        $active = qaMember($ws, 'member');
+        $inactive = qaMember($ws, 'manager');
+        WorkspaceMember::where('user_id', $inactive->id)->update(['status' => 'inactive']);
+
+        $this->actingAs($owner)->get(route('notes.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('users', fn ($users) => collect($users)->pluck('id')->all() === [$active->id]));
+    });
+
+    test('rejecting an expense needs a reason', function () {
+        [$owner, $ws] = qaOwner();
+        $project = qaProject($ws, $owner);
+        $expense = ProjectExpense::create(['project_id' => $project->id, 'submitted_by' => $owner->id, 'amount' => 10,
+            'expense_date' => now()->toDateString(), 'title' => 'E', 'status' => 'pending']);
+
+        $this->actingAs($owner)->post(route('expense-approvals.reject', $expense), ['notes' => ''])->assertSessionHasErrors('notes');
+        expect($expense->fresh()->status)->toBe('pending');
+
+        $this->actingAs($owner)->post(route('expense-approvals.reject', $expense), ['notes' => 'Missing receipt'])->assertSessionHas('success');
+        expect($expense->fresh()->status)->toBe('rejected');
+    });
+
+    test('small navigation and feedback fixes', function () {
+        [$owner, $ws] = qaOwner();
+        [$todo] = qaStages($ws);
+        $todo->update(['color' => '#ef4444']);
+
+        $this->actingAs($owner)->get(route('expenses.create'))->assertRedirect(route('expenses.index', ['create' => 1]));
+
+        $this->actingAs($owner)->get(route('tasks.index', ['view' => 'list']))
+            ->assertInertia(fn (Assert $page) => $page->where('tasks.per_page', 20));
+
+        $this->actingAs($owner)->post(route('projects.store'), ['title' => 'Toast me', 'status' => 'active', 'priority' => 'medium',
+            'start_date' => now()->toDateString(), 'deadline' => now()->addMonth()->toDateString()])
+            ->assertSessionHas('success');
+
+        $this->actingAs($owner)->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page->where('dashboardData.taskStages.0.color', '#ef4444'));
+    });
+});

@@ -146,6 +146,7 @@ class HandleInertiaRequests extends Middleware
                 ) : null,
                 'roles' => fn() => $this->getUserRoles($request),
                 'permissions' => fn() => $this->getUserPermissions($request),
+                'modulesLocked' => fn() => \App\Http\Middleware\CheckModuleAccess::locksModulesFor($request->user()),
             ],
             'workspaceSettings' => fn() => $this->getWorkspaceSettings($request),
             'unreadNotificationsCount' => fn() => $this->getUnreadNotificationsCount($request),

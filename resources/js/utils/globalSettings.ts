@@ -121,7 +121,16 @@ export function initializeGlobalSettings(settings: Record<string, any>) {
             if (!date) return null;
 
             try {
-                const dateObj = typeof date === 'string' ? new Date(date) : date;
+                let dateObj = typeof date === 'string' ? new Date(date) : date;
+                // Date-only values ("2026-10-06", or a `date` cast serialised as UTC
+                // midnight - often passed in as new Date(value)) are calendar days,
+                // not instants: rebuild them from their UTC parts so the local
+                // getters below don't show the previous day west of UTC.
+                const isUtcMidnight = dateObj.getUTCHours() === 0 && dateObj.getUTCMinutes() === 0
+                    && dateObj.getUTCSeconds() === 0 && dateObj.getUTCMilliseconds() === 0;
+                if (!includeTime && isUtcMidnight) {
+                    dateObj = new Date(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate());
+                }
                 let phpFormat = settings.dateFormat ?? 'D, M j, Y';
                 
                 // Add time format if includeTime is true

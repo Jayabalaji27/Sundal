@@ -172,6 +172,16 @@ export default function ExpenseIndex() {
         setIsModalOpen(true);
     };
 
+    // /expenses/create (e.g. Dashboard → Submit Expense) lands here with ?create=1.
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('create') === '1') {
+            handleAddNew();
+            url.searchParams.delete('create');
+            window.history.replaceState(window.history.state, '', url.toString());
+        }
+    }, []);
+
     const getStatusColor = (status: string) => {
         const colors: Record<string, string> = {
             pending: 'bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20',

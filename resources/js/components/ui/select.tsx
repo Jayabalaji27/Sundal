@@ -70,7 +70,7 @@ const SelectContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content> & {
     searchable?: boolean;
   }
->(({ className, children, position = "popper", searchable = false, ...props }, ref) => {
+>(({ className, children, position = "popper", searchable = false, onCloseAutoFocus, ...props }, ref) => {
   const [searchTerm, setSearchTerm] = React.useState('');
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -96,16 +96,27 @@ const SelectContent = React.forwardRef<
 
   return (
     <SelectPrimitive.Portal>
+      {/* No exit animation on purpose: while a closing Select animates out, its
+          layer stays on top with outside pointer events disabled, so the next
+          click (e.g. a dialog's Update button) was swallowed. */}
       <SelectPrimitive.Content
         ref={ref}
         className={cn(
-          "relative z-[100] max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+          "relative z-[100] max-h-96 min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
           position === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className
         )}
         position={position}
         {...props}
+        onCloseAutoFocus={(e) => {
+          onCloseAutoFocus?.(e);
+          // Radix returns focus to the trigger a tick after closing. If the user
+          // has already clicked into another field, keep focus there instead of
+          // pulling it back (typing right after picking an option went nowhere).
+          const active = document.activeElement;
+          if (active?.matches('input, textarea, select, button, [contenteditable="true"]')) e.preventDefault();
+        }}
       >
         <SelectScrollUpButton />
         {searchable && (

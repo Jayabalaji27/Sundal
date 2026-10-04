@@ -71,8 +71,13 @@ class CalendarController extends Controller
                 return [
                     'id' => 'task-' . $task->id,
                     'title' => $task->title,
-                    'start' => $task->start_date ?: $task->end_date,
-                    'end' => $task->end_date,
+                    // Task dates are calendar days: send them as all-day, date-only
+                    // values so FullCalendar doesn't place them as UTC-midnight
+                    // timed events (shifted by the browser timezone in week/day
+                    // views). An all-day end is exclusive, hence the extra day.
+                    'start' => ($task->start_date ?: $task->end_date)->toDateString(),
+                    'end' => $task->end_date->copy()->addDay()->toDateString(),
+                    'allDay' => true,
                     'type' => 'task',
                     'backgroundColor' => '#f59e0b',
                     'borderColor' => '#d97706',

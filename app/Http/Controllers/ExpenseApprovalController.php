@@ -61,11 +61,14 @@ class ExpenseApprovalController extends Controller
     {
         $this->authorizePermission('expense_approval_reject');
         
+        // The submitter needs to know what to fix, as with timesheet rejection.
+        // Validated outside the try so a missing reason is a field error, not
+        // the generic "Failed to reject" below.
+        $validated = $request->validate([
+            'notes' => 'required|string|max:1000'
+        ]);
+
         try {
-            
-            $validated = $request->validate([
-                'notes' => 'nullable|string'
-            ]);
 
             DB::transaction(function () use ($expense, $validated) {
                 // Create or update approval record
@@ -76,7 +79,7 @@ class ExpenseApprovalController extends Controller
                     ],
                     [
                         'status' => 'rejected',
-                        'notes' => $validated['notes'] ?? 'Expense rejected',
+                        'notes' => $validated['notes'],
                         'approved_at' => now(),
                         'approval_level' => 1
                     ]
