@@ -20,3 +20,6 @@ TEST_PLAN.md
 TEST_SUMMARY.md
 test.md
 .env.server.bak
+
+# Pest test-run output
+/vendor/pestphp/pest/.temp/test-results
