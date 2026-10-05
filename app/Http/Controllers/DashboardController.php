@@ -244,29 +244,13 @@ class DashboardController extends Controller
                 return 0;
             }
 
-            // Task visibility follows the same project visibility rule used everywhere
-            // else (Project::scopeVisibleTo) instead of an ad hoc members/clients-only
-            // check — the old check missed tasks on workspace-visible or user-created
-            // projects, the same undercount bug fixed for getActiveProjects() above.
-            $query = \App\Models\Task::whereHas('project', function ($q) use ($workspace, $user) {
-                $q->where('workspace_id', $workspace->id)->visibleTo($user);
-            })
+            // Same visibility as the task calendar this card links clients to: the
+            // Tasks page rule (members only their own tasks), and clients only on
+            // projects that share tasks with them.
+            $query = \App\Models\Task::visibleOnCalendarTo($user)
                 ->open()
                 ->whereNotNull('end_date')
                 ->whereBetween('end_date', [now()->startOfDay(), now()->addDays(7)->endOfDay()]);
-
-            // Members only see their own tasks (mirrors TaskController@index).
-            // Clients only see tasks assigned to them or on projects they're a client of.
-            if ($role === 'member') {
-                $query->where(function ($q) use ($user) {
-                    $q->where('assigned_to', $user->id)->orWhere('created_by', $user->id);
-                });
-            } elseif ($role === 'client') {
-                $query->where(function ($q) use ($user) {
-                    $q->where('assigned_to', $user->id)
-                        ->orWhereHas('project.clients', fn ($pm) => $pm->where('user_id', $user->id));
-                });
-            }
 
             return $query->count();
         } catch (\Exception $e) {

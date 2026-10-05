@@ -32,40 +32,9 @@ class CalendarController extends Controller
 
         // Get tasks
         try {
-            $tasksQuery = Task::with(['project', 'assignedTo', 'taskStage'])
-                ->whereHas('project', function ($q) use ($workspace) {
-                    $q->where('workspace_id', $workspace->id);
-                })
+            $tasksQuery = Task::with(['project:id,title', 'taskStage'])
+                ->visibleOnCalendarTo($user)
                 ->whereNotNull('end_date');
-
-            // Access control based on workspace role
-            if ($userWorkspaceRole !== 'owner') {
-                $tasksQuery->whereHas('project', function ($projectQuery) use ($user) {
-                    $projectQuery->where(function ($q) use ($user) {
-                        $q->whereHas('members', function ($memberQuery) use ($user) {
-                            $memberQuery->where('user_id', $user->id);
-                        })
-                        ->orWhereHas('clients', function ($clientQuery) use ($user) {
-                            $clientQuery->where('user_id', $user->id);
-                        })
-                        ->orWhere('created_by', $user->id);
-                    });
-                });
-
-                // Filter tasks by assignment for members only (not clients)
-                if ($userWorkspaceRole === 'member') {
-                    $tasksQuery->where(function($taskQuery) use ($user) {
-                        $taskQuery->where('assigned_to', $user->id)
-                            ->orWhere('created_by', $user->id);
-                    });
-                }
-
-                // Clients can't open /tasks, so they only see task titles for projects
-                // whose shared settings explicitly expose tasks to them.
-                if ($userWorkspaceRole === 'client') {
-                    $tasksQuery->whereIn('project_id', $this->clientTaskVisibleProjectIds($user, $workspace->id));
-                }
-            }
 
             $tasks = $tasksQuery->get()->map(function ($task) {
                 return [
@@ -194,33 +163,19 @@ class CalendarController extends Controller
         }
 
         if ($workspace->getMemberRole($user) === 'client'
-            && !in_array($task->project_id, $this->clientTaskVisibleProjectIds($user, $workspace->id))) {
+            && !in_array($task->project_id, Project::idsSharedWithClient($user, $workspace->id, 'task'))) {
             abort(403, 'You do not have permission to perform this action.');
         }
 
         $task->load([
-            'project',
+            'project:id,title,workspace_id',
             'taskStage',
-            'assignedTo',
-            'creator'
+            'assignedTo:id,name,avatar',
+            'creator:id,name,avatar'
         ]);
 
         return response()->json([
             'task' => $task
         ]);
-    }
-
-    /**
-     * Projects where the client is assigned and the project's shared settings
-     * have "Task" switched on.
-     */
-    private function clientTaskVisibleProjectIds(User $user, int $workspaceId): array
-    {
-        return Project::where('workspace_id', $workspaceId)
-            ->whereHas('clients', fn ($q) => $q->where('user_id', $user->id))
-            ->get(['id', 'shared_settings'])
-            ->filter(fn ($project) => !empty($project->shared_settings['task']))
-            ->pluck('id')
-            ->all();
     }
 }

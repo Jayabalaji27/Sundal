@@ -115,7 +115,7 @@ class Contract extends BaseModel
             return collect();
         }
 
-        return User::whereIn('id', $this->assigned_users)->get();
+        return User::whereIn('id', $this->assigned_users)->get(['id', 'name', 'email', 'avatar']);
     }
 
     public function scopeForWorkspace($query, $workspaceId)

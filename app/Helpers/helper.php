@@ -104,6 +104,29 @@ if (! function_exists('settings')) {
     }
 }
 
+if (! function_exists('sharedSettingsFor')) {
+    /**
+     * Settings safe to share with every page as `globalSettings`. Mail server,
+     * storage and API credentials are only needed on the settings pages (which
+     * load their own `settings` prop), so they're stripped for anyone who isn't a
+     * superadmin or the workspace owner. `chatgptKeySet` tells the UI whether the
+     * AI button can work without exposing the key itself.
+     */
+    function sharedSettingsFor(array $settings, ?User $user): array
+    {
+        $settings['chatgptKeySet'] = !empty($settings['chatgptKey']);
+
+        if ($user && ($user->type === 'superadmin' || $user->currentWorkspace?->isOwner($user))) {
+            return $settings;
+        }
+
+        return array_filter($settings, fn ($key) => !preg_match(
+            '/^email_(host|port|username|password|driver|encryption|provider)$|^(aws|wasabi)|secret|password|token|private|salt|key$/i',
+            (string) $key
+        ), ARRAY_FILTER_USE_KEY);
+    }
+}
+
 if (! function_exists('formatDateTime')) {
     function formatDateTime($date, $includeTime = true)
     {

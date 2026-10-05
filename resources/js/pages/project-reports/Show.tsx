@@ -353,7 +353,7 @@ export default function Show({ project, stats, userStats, users, stages, workspa
                                 </div>
                                 <div>
                                     <p className="text-sm text-gray-600 mb-1">{t('Total Members')}:</p>
-                                    <p className="text-sm font-medium">{(project.members?.length || 0) + (project.clients?.length || 0)}</p>
+                                    <p className="text-sm font-medium">{project.members?.length || 0}</p>
                                 </div>
                             </div>
                             <div className="col-span-3 flex flex-col justify-center space-y-4">

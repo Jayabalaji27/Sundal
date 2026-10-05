@@ -88,9 +88,6 @@ Route::get('project/{encryptedId}', [\App\Http\Controllers\ProjectController::cl
 Route::post('project/{encryptedId}', [\App\Http\Controllers\ProjectController::class, 'publicView'])
     ->name('projects.public-view.password');
 
-// Invoice preview route (public, no auth required)
-Route::get('invoice-preview', [\App\Http\Controllers\InvoicePreviewController::class, 'preview'])->name('invoice.preview');
-
 // Client portal — public, token-gated (Phase 1.5: rate-limited per IP, no auth)
 Route::get('portal/{token}', [ClientPortalController::class, 'show'])
     ->middleware('throttle:30,1')->name('portal.show');
@@ -350,9 +347,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return Inertia::render('media-library-demo');
         })->middleware('permission:media_view_any')->name('media-library');
 
+        // AI text generation uses the owner's OpenAI key, so it follows the AI
+        // agent permission - clients don't have it.
         Route::get('chatgpt', function () {
             return Inertia::render('examples/chatgpt-demo');
-        })->name('chatgpt');
+        })->middleware('permission:agent_use')->name('chatgpt');
 
         // ── Phase 2: unified nav entries ─────────────────────────────────────
         // These used to render a "shell" Inertia page that immediately
@@ -568,7 +567,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('currencies/{currency}', [CurrencyController::class, 'destroy'])->middleware('permission:currency_delete')->name('currencies.destroy');
 
         // ChatGPT routes
-        Route::post('api/chatgpt/generate', [\App\Http\Controllers\ChatGptController::class, 'generate'])->middleware('module.access')->name('chatgpt.generate');
+        Route::post('api/chatgpt/generate', [\App\Http\Controllers\ChatGptController::class, 'generate'])->middleware(['module.access', 'permission:agent_use'])->name('chatgpt.generate');
 
         // Language management
         Route::get('manage-language/{lang?}', [LanguageController::class, 'managePage'])->middleware('permission:language_manage')->withoutMiddleware('block.superadmin.workspace')->name('manage-language');
@@ -653,11 +652,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Portfolio routes
         Route::get('portfolios', [PortfolioController::class, 'index'])->middleware('permission:project_view_any')->name('portfolios.index');
-        Route::post('portfolios', [PortfolioController::class, 'store'])->name('portfolios.store');
-        Route::get('portfolios/{portfolio}', [PortfolioController::class, 'show'])->name('portfolios.show');
-        Route::put('portfolios/{portfolio}', [PortfolioController::class, 'update'])->name('portfolios.update');
-        Route::patch('portfolios/{portfolio}', [PortfolioController::class, 'update']);
-        Route::delete('portfolios/{portfolio}', [PortfolioController::class, 'destroy'])->name('portfolios.destroy');
+        Route::post('portfolios', [PortfolioController::class, 'store'])->middleware('permission:project_create')->name('portfolios.store');
+        Route::get('portfolios/{portfolio}', [PortfolioController::class, 'show'])->middleware('permission:project_view_any')->name('portfolios.show');
+        Route::put('portfolios/{portfolio}', [PortfolioController::class, 'update'])->middleware('permission:project_update')->name('portfolios.update');
+        Route::patch('portfolios/{portfolio}', [PortfolioController::class, 'update'])->middleware('permission:project_update');
+        Route::delete('portfolios/{portfolio}', [PortfolioController::class, 'destroy'])->middleware('permission:project_delete')->name('portfolios.destroy');
 
         // Form builder routes (authenticated)
         Route::get('forms', [FormBuilderController::class, 'index'])->middleware('permission:form_view_any')->name('forms.index');

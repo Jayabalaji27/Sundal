@@ -31,7 +31,9 @@ class ProjectReportController extends Controller
 
         $userWorkspaceRole = $workspace->getMemberRole($user);
 
-        $query = Project::with(['workspace', 'clients', 'creator', 'members.user'])
+        // Only the user fields the page renders - full user rows carry plan, 2FA,
+        // referral and timer data.
+        $query = Project::with(['workspace', 'clients:users.id,users.name,users.avatar', 'creator:id,name,avatar', 'members.user:id,name,avatar'])
             ->forWorkspace($user->current_workspace_id)
             ->visibleTo($user);
 
@@ -85,9 +87,18 @@ class ProjectReportController extends Controller
             return $project;
         });
 
+        // Feeds the "filter by user" dropdown. Non-owners only get the people on
+        // projects they can see, since those are the only ones that filter anything.
         $users = User::whereHas('workspaces', function ($q) use ($workspace) {
             $q->where('workspace_id', $workspace->id)->where('status', 'active');
-        })->get();
+        })
+            ->when(!$workspace->isOwner($user), function ($q) use ($user) {
+                $visibleProjectIds = Project::forWorkspace($user->current_workspace_id)->visibleTo($user)->pluck('id');
+                $q->where(fn ($inner) => $inner
+                    ->whereIn('id', DB::table('project_members')->whereIn('project_id', $visibleProjectIds)->select('user_id'))
+                    ->orWhereIn('id', DB::table('project_clients')->whereIn('project_id', $visibleProjectIds)->select('user_id')));
+            })
+            ->get(['id', 'name']);
 
         return Inertia::render('project-reports/Index', [
             'projects' => $projects,
@@ -105,8 +116,8 @@ class ProjectReportController extends Controller
         $user = Auth::user();
         $workspace = $user->currentWorkspace;
 
-        // Get project with relationships
-        $project->load(['members', 'clients', 'milestones', 'tasks.taskStage', 'tasks.members']);
+        // Get project with relationships - only the user fields the page needs
+        $project->load(['members', 'clients:users.id,users.name,users.avatar', 'milestones', 'tasks.taskStage', 'tasks.members:users.id,users.name,users.avatar']);
 
         // Calculate project statistics
         $stats = $this->calculateProjectStats($project);
@@ -117,13 +128,21 @@ class ProjectReportController extends Controller
         // Get chart data
         $chartData = $this->getProjectChartData($project, $workspace);
 
-        // Get workspace users and stages for filtering
-        $users = $workspace->members()->with('user')->get();
+        // Users for the "filter by assignee" dropdown. Non-owners only get the
+        // people on this project, and nobody gets more than id and name.
+        $projectUserIds = $project->members->pluck('user_id')
+            ->merge($project->clients->pluck('id'))
+            ->merge($project->tasks->pluck('assigned_to'))
+            ->filter()->unique();
+        $users = $workspace->members()
+            ->when(!$workspace->isOwner($user), fn ($q) => $q->whereIn('user_id', $projectUserIds))
+            ->with('user:id,name')
+            ->get(['id', 'workspace_id', 'user_id', 'role']);
         $stages = TaskStage::where('workspace_id', $workspace->id)->orderBy('order')->get();
 
         // Get initial tasks data
         $initialTasksQuery = Task::where('project_id', $project->id)
-            ->with(['taskStage', 'members.user', 'milestone', 'assignedUser'])
+            ->with(['taskStage', 'members:users.id,users.name,users.avatar', 'milestone', 'assignedUser:id,name,avatar'])
             ->limit(10);
 
         $initialTasks = $initialTasksQuery->get()->map(function ($task) {
@@ -135,7 +154,7 @@ class ProjectReportController extends Controller
                 $assignedUsers->push($task->assignedUser);
             }
             if ($task->members && $task->members->count() > 0) {
-                $assignedUsers = $assignedUsers->merge($task->members->pluck('user')->filter());
+                $assignedUsers = $assignedUsers->merge($task->members);
             }
             $assignedUsers = $assignedUsers->unique('id');
 
@@ -182,7 +201,7 @@ class ProjectReportController extends Controller
             'chartData' => $chartData,
             'users' => $users,
             'stages' => $stages,
-            'workspace' => $workspace,
+            'workspace' => $workspace->only(['id', 'name']),
             'tasks' => [
                 'data' => $initialTasks,
                 'total' => Task::where('project_id', $project->id)->count()
@@ -197,7 +216,7 @@ class ProjectReportController extends Controller
         $this->authorizeVisible($project);
 
         $tasksQuery = Task::where('project_id', $project->id)
-            ->with(['taskStage', 'members.user', 'milestone', 'assignedUser']);
+            ->with(['taskStage', 'members:users.id,users.name,users.avatar', 'milestone', 'assignedUser:id,name,avatar']);
 
         // Apply search filter
         if ($request->filled('search')) {
@@ -245,7 +264,7 @@ class ProjectReportController extends Controller
                 $assignedUsers->push($task->assignedUser);
             }
             if ($task->members && $task->members->count() > 0) {
-                $assignedUsers = $assignedUsers->merge($task->members->pluck('user')->filter());
+                $assignedUsers = $assignedUsers->merge($task->members);
             }
             $assignedUsers = $assignedUsers->unique('id');
 

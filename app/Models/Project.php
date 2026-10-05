@@ -162,6 +162,21 @@ class Project extends Model
         });
     }
 
+    /**
+     * IDs of the workspace projects the client is assigned to whose shared
+     * settings switch on the given section (e.g. 'task'). Clients only see a
+     * project section when the owner has shared it with them.
+     */
+    public static function idsSharedWithClient(User $client, int $workspaceId, string $section): array
+    {
+        return static::where('workspace_id', $workspaceId)
+            ->whereHas('clients', fn ($q) => $q->where('user_id', $client->id))
+            ->get(['id', 'shared_settings'])
+            ->filter(fn ($project) => !empty($project->shared_settings[$section]))
+            ->pluck('id')
+            ->all();
+    }
+
     public function scopeSearch(Builder $query, $search): Builder
     {
         return $query->where(function ($q) use ($search) {

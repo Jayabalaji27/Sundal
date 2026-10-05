@@ -523,7 +523,7 @@ export default function ContractsIndex() {
                                 </div>
                                 
                                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                                    <span>{contract.notes_count} {t('notes')}</span>
+                                    {contract.notes_count !== undefined && <span>{contract.notes_count} {t('notes')}</span>}
                                     <span>{contract.comments_count} {t('comments')}</span>
                                     <span>{contract.attachments_count} {t('files')}</span>
                                 </div>

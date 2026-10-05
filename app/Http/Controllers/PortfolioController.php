@@ -54,8 +54,10 @@ class PortfolioController extends Controller
             abort(404);
         }
 
-        $projects = Project::with(['clients', 'members.user', 'creator'])
+        // Only projects this user can open, with just the user fields the page shows.
+        $projects = Project::with(['clients:users.id,users.name,users.avatar', 'members.user:id,name,avatar', 'creator:id,name,avatar'])
             ->where('portfolio_id', $portfolio->id)
+            ->visibleTo($user)
             ->latest()
             ->get();
 

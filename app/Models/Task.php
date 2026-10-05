@@ -95,6 +95,21 @@ class Task extends Model
         return $query;
     }
 
+    /**
+     * Tasks the user can see on the calendar: the Tasks page rule, and clients
+     * (who can't open /tasks) only on their projects that share tasks with them.
+     */
+    public function scopeVisibleOnCalendarTo($query, User $user)
+    {
+        $query->visibleTo($user);
+
+        if ($user->currentWorkspace?->getMemberRole($user) === 'client') {
+            $query->whereIn('project_id', Project::idsSharedWithClient($user, (int) $user->current_workspace_id, 'task'));
+        }
+
+        return $query;
+    }
+
     public function scopeForProject($query, $projectId)
     {
         return $query->where('project_id', $projectId);
