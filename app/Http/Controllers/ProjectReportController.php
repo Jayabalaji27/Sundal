@@ -100,6 +100,7 @@ class ProjectReportController extends Controller
     public function show(Project $project)
     {
         $this->authorizePermission('project_report_view_any');
+        $this->authorizeVisible($project);
 
         $user = Auth::user();
         $workspace = $user->currentWorkspace;
@@ -193,6 +194,7 @@ class ProjectReportController extends Controller
     public function getTasksData(Request $request, Project $project)
     {
         $this->authorizePermission('project_report_view_any');
+        $this->authorizeVisible($project);
 
         $tasksQuery = Task::where('project_id', $project->id)
             ->with(['taskStage', 'members.user', 'milestone', 'assignedUser']);
@@ -306,6 +308,7 @@ class ProjectReportController extends Controller
     public function export(Project $project)
     {
         $this->authorizePermission('project_report_export');
+        $this->authorizeVisible($project);
 
         $project->load(['members', 'clients', 'milestones', 'tasks.taskStage', 'tasks.members']);
         $stats = $this->calculateProjectStats($project);
@@ -780,6 +783,17 @@ class ProjectReportController extends Controller
             ->setPaper('a4', 'landscape');
 
         return $pdf->download('project_report_' . ($project->title ?: $project->name) . '_' . date('Y-m-d') . '.pdf');
+    }
+
+    /** Same rule as the reports list, so a direct URL can't open another project's report. */
+    private function authorizeVisible(Project $project): void
+    {
+        $user = Auth::user();
+
+        abort_unless(
+            Project::forWorkspace($user->current_workspace_id)->visibleTo($user)->whereKey($project->id)->exists(),
+            403
+        );
     }
 
     private function calculateProjectStats($project)

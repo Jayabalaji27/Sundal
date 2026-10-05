@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
 import { PageTemplate } from '@/components/page-template';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Calendar, DollarSign, User, Building, CheckSquare, Edit } from 'lucide-react';
 import { formatCurrency } from '@/utils/currency';
 import { useTranslation } from 'react-i18next';
+import ExpenseFormModal from '@/components/expenses/ExpenseFormModal';
 
 interface Expense {
     id: number;
@@ -19,6 +20,7 @@ interface Expense {
     title: string;
     description?: string;
     status: string;
+    can_edit?: boolean;
     project: {
         id: number;
         title: string;
@@ -41,11 +43,13 @@ interface Expense {
 
 interface Props {
     expense: Expense;
+    projects?: React.ComponentProps<typeof ExpenseFormModal>['projects'];
     permissions?: any;
 }
 
-export default function Show({ expense, permissions }: Props) {
+export default function Show({ expense, projects = [], permissions }: Props) {
     const { t } = useTranslation();
+    const [isEditOpen, setIsEditOpen] = useState(false);
     const { permissions: pagePermissions } = usePage().props as any;
     const expensePermissions = permissions || pagePermissions;
     const getStatusColor = (status: string) => {
@@ -72,12 +76,13 @@ export default function Show({ expense, permissions }: Props) {
         }
     ];
     
-    if (expensePermissions?.update) {
+    // Same edit dialog as the Expenses list; only pending / needs-info expenses can change
+    if (expensePermissions?.update && expense.can_edit) {
         pageActions.unshift({
             label: t('Edit Expense'),
             icon: <Edit className="h-4 w-4 mr-2" />,
             variant: 'default' as const,
-            onClick: () => router.visit(route('expenses.edit', expense.id))
+            onClick: () => setIsEditOpen(true)
         });
     }
 
@@ -200,6 +205,14 @@ export default function Show({ expense, permissions }: Props) {
                     </Card>
                 )}
             </div>
+
+            <ExpenseFormModal
+                isOpen={isEditOpen}
+                onClose={() => setIsEditOpen(false)}
+                expense={expense}
+                projects={projects}
+                mode="edit"
+            />
         </PageTemplate>
     );
 }

@@ -432,6 +432,8 @@ class ProjectController extends Controller
             'canManageBudget' => $this->checkPermission('project_manage_budget'),
             'canDeleteProject' => $this->checkPermission('project_delete'),
             'canManageMembers' => $this->checkPermission('project_assign_members'),
+            // Same rule as assignManagers(): only the workspace owner assigns project managers
+            'canAssignManagers' => $this->checkPermission('project_assign_members') && $workspace->isOwner($user),
             'canManageClients' => $this->checkPermission('project_assign_clients'),
             'canManageAttachments' => $this->checkPermission('project_manage_attachments'),
             'canManageNotes' => $this->checkPermission('project_manage_notes'),

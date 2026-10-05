@@ -93,7 +93,8 @@ export default function TimesheetApprovals({ approvals, filters, userWorkspaceRo
     const canApprove = hasPermission(userPermissions, 'timesheet_approve');
     // Only the workspace owner reviews their own timesheets (the server enforces this too)
     const canReview = (approval: TimesheetApproval): boolean =>
-        canReview(approval)
+        approval.status === 'pending'
+        && canApprove
         && (userWorkspaceRole === 'owner' || approval.timesheet?.user_id !== auth?.user?.id);
     const reviewableApprovals = approvals.data.filter(canReview);
 

@@ -243,7 +243,7 @@ export function BugModal({ bug, projects, statuses, members, onClose, permission
                                 </div>
 
                                 <div>
-                                    <Label htmlFor="milestone_id">{t('Milestone')} <span className="text-red-500">*</span></Label>
+                                    <Label htmlFor="milestone_id">{t('Milestone')}</Label>
                                     <Select value={data.milestone_id} onValueChange={(value) => setData('milestone_id', value)}>
                                         <SelectTrigger>
                                             <SelectValue placeholder={loadingProjectData ? t('Loading...') : t('Select milestone')} />

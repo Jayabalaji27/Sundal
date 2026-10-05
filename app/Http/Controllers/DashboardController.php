@@ -568,7 +568,12 @@ class DashboardController extends Controller
                     });
                 }
             });
-            
+
+            // Members only see their own expenses on the Expenses page, so count only those
+            if ($role === 'member') {
+                $baseQuery->where('submitted_by', $user->id);
+            }
+
             $total = (clone $baseQuery)->count();
             $pending = (clone $baseQuery)->where('status', 'pending')->count();
             $approved = (clone $baseQuery)->where('status', 'approved')->count();

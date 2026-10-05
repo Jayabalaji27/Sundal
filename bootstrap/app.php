@@ -108,6 +108,18 @@ return Application::configure(basePath: dirname(__DIR__))
                 ]);
             }
 
+            // Same reason for a 403 on an Inertia form submit: rendering the error
+            // page counts as a successful visit, so onSuccess showed e.g. "Manager
+            // added to project" although the action was refused. Send it back as
+            // an error instead, so onError runs and the user stays on the page.
+            if ($response->getStatusCode() === 403 && $request->header('X-Inertia') && ! $request->isMethod('GET')) {
+                $message = $exception instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface && $exception->getMessage() !== ''
+                    ? $exception->getMessage()
+                    : __('You do not have permission to perform this action.');
+
+                return back()->withErrors(['error' => $message]);
+            }
+
             // 403/404 are deliberate authorization/routing outcomes, not unexpected
             // crashes — a raw stack trace has no debugging value for them, so show
             // the friendly page in every environment, local/testing included.

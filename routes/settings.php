@@ -106,14 +106,15 @@ Route::middleware(['auth', 'verified', 'plan.access'])->group(function () {
     
     // Webhook Settings routes
     Route::get('settings/webhooks', [WebhookController::class, 'index'])->middleware(['permission:settings_webhook', 'block.superadmin.workspace'])->name('settings.webhooks.index');
-    Route::post('settings/webhooks', [WebhookController::class, 'store'])->name('settings.webhooks.store');
-    Route::put('settings/webhooks/{webhook}', [WebhookController::class, 'update'])->name('settings.webhooks.update');
-    Route::delete('settings/webhooks/{webhook}', [WebhookController::class, 'destroy'])->name('settings.webhooks.destroy');
+    // Writes need the same permission as the page (members could create webhooks to any URL)
+    Route::post('settings/webhooks', [WebhookController::class, 'store'])->middleware('permission:settings_webhook')->name('settings.webhooks.store');
+    Route::put('settings/webhooks/{webhook}', [WebhookController::class, 'update'])->middleware('permission:settings_webhook')->name('settings.webhooks.update');
+    Route::delete('settings/webhooks/{webhook}', [WebhookController::class, 'destroy'])->middleware('permission:settings_webhook')->name('settings.webhooks.destroy');
     
-    // Email notification settings routes
-    Route::get('settings/email-notifications', [SystemSettingsController::class, 'getEmailNotifications'])->name('settings.email-notifications.get');
-    Route::get('settings/email-notifications/available', [SystemSettingsController::class, 'getAvailableEmailNotifications'])->name('settings.email-notifications.available');
-    Route::post('settings/email-notifications', [SystemSettingsController::class, 'updateEmailNotifications'])->name('settings.email-notifications.update');
+    // Email notification settings routes — same permission the Settings page uses to show this section
+    Route::get('settings/email-notifications', [SystemSettingsController::class, 'getEmailNotifications'])->middleware('permission:settings_email_notification')->name('settings.email-notifications.get');
+    Route::get('settings/email-notifications/available', [SystemSettingsController::class, 'getAvailableEmailNotifications'])->middleware('permission:settings_email_notification')->name('settings.email-notifications.available');
+    Route::post('settings/email-notifications', [SystemSettingsController::class, 'updateEmailNotifications'])->middleware('permission:settings_email_notification')->name('settings.email-notifications.update');
     
     // Zoom Settings routes
     Route::post('settings/zoom', [ZoomSettingsController::class, 'update'])->middleware('permission:settings_zoom')->name('settings.zoom.update');

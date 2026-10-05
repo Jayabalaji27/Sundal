@@ -97,7 +97,7 @@ function ClientPortalPanel({ project }: { project: any }) {
 
 export default function ProjectShow() {
     const { t } = useTranslation();
-    const { auth, project, budget = null, members, managers, clients, projectTasks = [], taskStages = [], projectBugs = [], projectTimesheets = [], canDeleteProject, userWorkspaceRole, attachmentFilters = {}, noteFilters = {}, activityFilters = {} } = usePage().props as any;
+    const { auth, project, budget = null, members, managers, clients, projectTasks = [], taskStages = [], projectBugs = [], projectTimesheets = [], canDeleteProject, canAssignManagers = false, userWorkspaceRole, attachmentFilters = {}, noteFilters = {}, activityFilters = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
     
     // Permission-based access control
@@ -1145,7 +1145,8 @@ export default function ProjectShow() {
                                             Add Member
                                         </Button>
                                     )}
-                                    {hasPermission(permissions, 'project_assign_members') && (
+                                    {/* Only the workspace owner assigns project managers (server enforces it too) */}
+                                    {canAssignManagers && (
                                         <Button size="sm" onClick={() => handleAction('invite-manager')}>
                                             <Plus className="h-4 w-4 mr-2" />
                                             Add Manager

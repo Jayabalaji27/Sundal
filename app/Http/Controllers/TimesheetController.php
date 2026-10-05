@@ -333,12 +333,13 @@ class TimesheetController extends Controller
     public function show(Timesheet $timesheet)
     {
         $this->authorizePermission('timesheet_view');
-                
+        $this->authorizeVisible($timesheet);
+
         $timesheet->load(['entries.project', 'entries.task', 'entries.user', 'approvals.approver']);
-        
-        $projects = Project::where('workspace_id', auth()->user()->current_workspace_id)
-            ->with('tasks')
-            ->get();
+
+        // Same project list as the index page, not every project in the workspace
+        $user = auth()->user();
+        $projects = $this->getAccessibleProjects($user, $user->currentWorkspace);
                 
         return Inertia::render('timesheets/Show', [
             'timesheet' => $timesheet,
@@ -434,6 +435,7 @@ class TimesheetController extends Controller
     public function update(Request $request, Timesheet $timesheet)
     {
         $this->authorizePermission('timesheet_update');
+        $this->authorizeVisible($timesheet);
         $this->ensureEditable($timesheet);
         
         $validated = $request->validate([
@@ -533,10 +535,28 @@ class TimesheetController extends Controller
     public function destroy(Timesheet $timesheet)
     {
         $this->authorizePermission('timesheet_delete');
+        $this->authorizeVisible($timesheet);
         $this->ensureEditable($timesheet);
 
         $timesheet->delete();
         return back()->with('success', __('Timesheet deleted successfully!'));
+    }
+
+    /**
+     * Same rule as the index list: own timesheets only, unless the user can access
+     * all workspace data (owner). Managers review others' timesheets under Approvals.
+     */
+    private function authorizeVisible(Timesheet $timesheet): void
+    {
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+
+        abort_unless(
+            $workspace
+                && (int) $timesheet->workspace_id === (int) $workspace->id
+                && ($this->canAccessAllData($user, $workspace) || (int) $timesheet->user_id === (int) $user->id),
+            403
+        );
     }
 
     private function ensureEditable(Timesheet $timesheet): void

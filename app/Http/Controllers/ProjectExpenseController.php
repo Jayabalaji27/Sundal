@@ -21,25 +21,9 @@ class ProjectExpenseController extends Controller
 
         $userWorkspaceRole = $workspace->getMemberRole($user);
 
+        // Members see only their own expenses, managers their assigned projects' (see the scope)
         $query = ProjectExpense::with(['project', 'budgetCategory', 'submitter', 'task'])
-            ->whereHas('project', function ($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id);
-            });
-
-        // Members can only see their own expenses
-        if ($userWorkspaceRole === 'member') {
-            $query->where('submitted_by', $user->id);
-        } elseif ($userWorkspaceRole === 'manager') {
-            // Managers see expenses from their assigned projects
-            $query->whereHas('project', function ($q) use ($user) {
-                $q->where(function ($projectQuery) use ($user) {
-                    $projectQuery->whereHas('members', function ($memberQuery) use ($user) {
-                        $memberQuery->where('user_id', $user->id);
-                    })
-                        ->orWhere('created_by', $user->id);
-                });
-            });
-        }
+            ->visibleTo($user);
 
         if ($request->project_id) {
             $query->where('project_id', $request->project_id);
@@ -155,6 +139,7 @@ class ProjectExpenseController extends Controller
     public function show(ProjectExpense $expense)
     {
         $this->authorizePermission('expense_view');
+        $this->authorizeVisible($expense);
 
         $expense->load([
             'project',
@@ -192,6 +177,7 @@ class ProjectExpenseController extends Controller
 
     public function edit(ProjectExpense $expense)
     {
+        $this->authorizeVisible($expense);
         return redirect()->route('expenses.index');
     }
 
@@ -270,6 +256,7 @@ class ProjectExpenseController extends Controller
 
     public function duplicate(ProjectExpense $expense)
     {
+        $this->authorizeVisible($expense);
         $newExpense = $expense->replicate();
         $newExpense->title = $expense->title . ' (Copy)';
         $newExpense->expense_date = now()->toDateString();
@@ -282,12 +269,21 @@ class ProjectExpenseController extends Controller
 
     public function getProjectTasks(Project $project)
     {
+        $user = auth()->user();
+        abort_unless(Project::forWorkspace($user->current_workspace_id)->visibleTo($user)->whereKey($project->id)->exists(), 403);
+
         $tasks = $project->tasks()
             ->with(['taskStage:id,name,color'])
             ->select('id', 'title', 'task_stage_id')
             ->get();
 
         return response()->json($tasks);
+    }
+
+    /** Same rule as the expenses list, so a direct URL can't reach a record the list hides. */
+    private function authorizeVisible(ProjectExpense $expense): void
+    {
+        abort_unless(ProjectExpense::visibleTo(auth()->user())->whereKey($expense->id)->exists(), 403);
     }
 
     /**
