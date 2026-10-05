@@ -11,6 +11,8 @@ class ExpenseReceiptController extends Controller
 {
     public function upload(Request $request, ProjectExpense $expense)
     {
+        $this->authorizeVisible($expense);
+
         $request->validate([
             'files' => 'required|array',
             'files.*' => 'file|mimes:jpg,jpeg,png,pdf|max:5120', // 5MB max
@@ -48,6 +50,8 @@ class ExpenseReceiptController extends Controller
 
     public function destroy(ExpenseAttachment $attachment)
     {
+        $this->authorizeVisible($attachment->projectExpense);
+
         // Check if user can delete this attachment
         if ($attachment->uploaded_by !== auth()->id() && !auth()->user()->can('edit-any-expenses')) {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -60,6 +64,8 @@ class ExpenseReceiptController extends Controller
 
     public function download(ExpenseAttachment $attachment)
     {
+        $this->authorizeVisible($attachment->projectExpense);
+
         $mediaItem = $attachment->mediaItem;
         $filePath = storage_path('app/public/' . $mediaItem->file_name);
 
@@ -68,5 +74,11 @@ class ExpenseReceiptController extends Controller
         }
 
         return response()->download($filePath, $mediaItem->name);
+    }
+
+    /** Receipts follow the expense's own visibility (see ProjectExpense::visibleTo). */
+    private function authorizeVisible(?ProjectExpense $expense): void
+    {
+        abort_unless($expense && ProjectExpense::visibleTo(auth()->user())->whereKey($expense->id)->exists(), 403);
     }
 }

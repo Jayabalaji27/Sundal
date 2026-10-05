@@ -9,6 +9,7 @@ use App\Models\ProjectMilestone;
 use App\Models\User;
 use App\Traits\HasPermissionChecks;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -276,23 +277,30 @@ class BugController extends Controller
             return back()->with('error', __('No bug status found. Please contact administrator.'));
         }
 
-        try {
-            $bug = Bug::create([
-                ...$validated,
-                'bug_status_id' => $firstStatus->id,
-                'reported_by' => $user->id
-            ]);
+        // assigned_to is optional: a bug reported without it is unassigned.
+        $assignedTo = $validated['assigned_to'] ?? null;
 
-            // Fire event for email notification if bug is assigned
-            if ($validated['assigned_to']) {
-                $assignedUser = User::find($validated['assigned_to']);
-                if ($assignedUser) {
-                    $bug->load('project');
-                    if (!config('app.is_demo', true)) {
-                        event(new \App\Events\BugAssigned($bug, $assignedUser, auth()->user()));
+        try {
+            // One unit: if the notification step fails, the bug isn't left half-created.
+            DB::transaction(function () use ($validated, $firstStatus, $user, $assignedTo) {
+                $bug = Bug::create([
+                    ...$validated,
+                    'assigned_to' => $assignedTo,
+                    'bug_status_id' => $firstStatus->id,
+                    'reported_by' => $user->id
+                ]);
+
+                // Fire event for email notification if bug is assigned
+                if ($assignedTo) {
+                    $assignedUser = User::find($assignedTo);
+                    if ($assignedUser) {
+                        $bug->load('project');
+                        if (!config('app.is_demo', true)) {
+                            event(new \App\Events\BugAssigned($bug, $assignedUser, auth()->user()));
+                        }
                     }
                 }
-            }
+            });
 
             return back()->with('success', __('Bug reported successfully!'));
         } catch (\Exception $e) {
@@ -328,7 +336,7 @@ class BugController extends Controller
 
         // Check if assigned_to changed
         $oldAssignedTo = $bug->assigned_to;
-        $newAssignedTo = $validated['assigned_to'];
+        $newAssignedTo = $validated['assigned_to'] ?? null;
 
         $bug->update($validated);
 

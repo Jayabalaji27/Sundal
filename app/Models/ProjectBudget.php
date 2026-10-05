@@ -105,4 +105,25 @@ class ProjectBudget extends Model
             default => parent::getActivityDescription($action)
         };
     }
+
+    /**
+     * Budgets the user may see in their current workspace: managers, clients and
+     * members only those of projects visible to them (Project::scopeVisibleTo).
+     * Shared by the budgets list and the budget detail page.
+     */
+    public function scopeVisibleTo($query, User $user)
+    {
+        $workspace = $user->currentWorkspace;
+        if (!$workspace) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $query->where('project_budgets.workspace_id', $workspace->id);
+
+        if (in_array($workspace->getMemberRole($user), ['manager', 'client', 'member'], true)) {
+            $query->whereHas('project', fn ($q) => $q->visibleTo($user));
+        }
+
+        return $query;
+    }
 }

@@ -406,10 +406,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Docs — redirects to Knowledge Base or Notes (merged nav entry)
         Route::get('docs', function (\Illuminate\Http\Request $req) use ($redirectToFirstPermittedTab) {
-            return $redirectToFirstPermittedTab($req, [
+            $tabs = [
                 'kb'    => ['permission' => 'kb_view_any', 'route' => 'kb.index'],
                 'notes' => ['permission' => 'note_view_any', 'route' => 'notes.index'],
-            ]);
+            ];
+            // Knowledge Base needs the Pro Add-on; without it, land on Notes rather
+            // than bouncing off kb.index back to the dashboard.
+            if (\App\Http\Middleware\CheckModuleAccess::locksModulesFor(auth()->user()) && auth()->user()->can('note_view_any')) {
+                unset($tabs['kb']);
+            }
+            return $redirectToFirstPermittedTab($req, $tabs);
         })->middleware('permission:kb_view_any|note_view_any')->name('docs.index');
 
         // AI page — shows preset tools + custom agents

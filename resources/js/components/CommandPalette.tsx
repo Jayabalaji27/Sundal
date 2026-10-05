@@ -31,6 +31,8 @@ export function CommandPalette() {
     const { t } = useTranslation();
     const { auth } = usePage().props as any;
     const permissions = auth?.permissions || [];
+    // Chat, Knowledge Base and AI tools need the Pro Add-on (same rule as the sidebar)
+    const modulesLocked = !!auth?.modulesLocked;
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [selected, setSelected] = useState(0);
@@ -104,21 +106,21 @@ export function CommandPalette() {
         ...(hasPermission(permissions, 'timesheet_view_any') ? [
             { id: 'timesheets', label: t('Timesheets'), icon: <Clock className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('timesheets.index')) },
         ] : []),
-        ...(hasPermission(permissions, 'chat_view') ? [
+        ...(!modulesLocked && hasPermission(permissions, 'chat_view') ? [
             { id: 'chat', label: t('Chat'), icon: <MessageSquare className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('chat.index')) },
         ] : []),
         ...(hasPermission(permissions, 'invoice_view_any') ? [
             { id: 'invoices', label: t('Invoices'), icon: <FileText className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('invoices.index')) },
         ] : []),
-        ...(hasPermission(permissions, 'kb_view_any') ? [
+        ...(!modulesLocked && hasPermission(permissions, 'kb_view_any') ? [
             { id: 'kb', label: t('Knowledge Base'), icon: <BookOpen className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('kb.index')) },
         ] : []),
 
         // AI Tools
-        ...((hasPermission(permissions, 'agent_use') || hasPermission(permissions, 'agent_view_any')) ? [
+        ...(!modulesLocked && (hasPermission(permissions, 'agent_use') || hasPermission(permissions, 'agent_view_any')) ? [
             { id: 'standup', label: t('Standup Bot'), description: t('Daily team standup'), icon: <Activity className="h-4 w-4" />, group: t('AI Tools'), action: () => navigate(route('standup.index')) },
         ] : []),
-        ...(hasPermission(permissions, 'agent_advanced_insights') ? [
+        ...(!modulesLocked && hasPermission(permissions, 'agent_advanced_insights') ? [
             { id: 'risk-radar', label: t('Risk Radar'), description: t('Project health overview'), icon: <Radio className="h-4 w-4" />, group: t('AI Tools'), action: () => navigate(route('risk-radar.index')) },
             { id: 'conflicts', label: t('Resource Conflicts'), description: t('Workload analysis'), icon: <AlertTriangle className="h-4 w-4" />, group: t('AI Tools'), action: () => navigate(route('resource-conflicts.index')) },
         ] : []),

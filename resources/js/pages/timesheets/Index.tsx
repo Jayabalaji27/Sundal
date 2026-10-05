@@ -653,9 +653,9 @@ export default function TimesheetsIndex({ timesheets, members, projects = [], ov
                                         <span className="font-medium text-green-600">{timesheet.billable_hours}h</span>
                                     </div>
                                     
-                                    <div className="flex justify-between text-sm">
-                                        <span>{t('Period')}</span>
-                                        <span>{window.appSettings.formatDateTime(new Date(timesheet.start_date),false)} - {window.appSettings.formatDateTime(new Date(timesheet.end_date),false)}</span>
+                                    <div className="flex justify-between gap-3 text-sm">
+                                        <span className="shrink-0">{t('Period')}</span>
+                                        <span className="text-right">{window.appSettings.formatDateTime(new Date(timesheet.start_date),false)} - {window.appSettings.formatDateTime(new Date(timesheet.end_date),false)}</span>
                                     </div>
                                     
                                     <div className="flex justify-between text-sm">

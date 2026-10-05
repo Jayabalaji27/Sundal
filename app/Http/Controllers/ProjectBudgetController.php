@@ -29,16 +29,11 @@ class ProjectBudgetController extends Controller
         $query = ProjectBudget::with(['project.creator', 'categories', 'creator'])
             ->join('projects', 'project_budgets.project_id', '=', 'projects.id')
             ->select('project_budgets.*')
-            ->where('project_budgets.workspace_id', $workspace->id);
-        // Managers, clients, and members only see budgets from projects visible to
-        // them (Project::scopeVisibleTo - same rule used everywhere else project
-        // visibility is checked). The old ad hoc members/clients/creator-only check
-        // missed workspace-visible projects, hiding their budgets from Manager/Member.
-        if (in_array($userWorkspaceRole, ['manager', 'client', 'member'])) {
-            $query->whereHas('project', function ($q) use ($user) {
-                $q->visibleTo($user);
-            });
-        }
+            // Managers, clients, and members only see budgets from projects visible to
+            // them (Project::scopeVisibleTo - same rule used everywhere else project
+            // visibility is checked). The old ad hoc members/clients/creator-only check
+            // missed workspace-visible projects, hiding their budgets from Manager/Member.
+            ->visibleTo($user);
 
         if ($request->search) {
             $query->where('projects.title', 'like', '%' . $request->search . '%');
@@ -129,7 +124,9 @@ class ProjectBudgetController extends Controller
     public function show(ProjectBudget $budget)
     {
         $this->authorizePermission('budget_view');
-        
+        // Same rule as the budgets list, so a direct URL can't open another project's budget
+        abort_unless(ProjectBudget::visibleTo(auth()->user())->whereKey($budget->id)->exists(), 403);
+
         $budget->load([
             'project.creator', 
             'project.members.user',

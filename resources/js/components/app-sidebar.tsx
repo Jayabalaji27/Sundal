@@ -85,6 +85,9 @@ export function AppSidebar() {
     // ─── Common items — Phase 2: 13 top-level items ──────────────────────────
     const buildCommonNavItems = (): NavItem[] => {
         const items: NavItem[] = [];
+        // Chat, Meetings, Knowledge Base and AI need the Pro Add-on (CheckModuleAccess);
+        // hide them instead of linking to a route that bounces back to the dashboard.
+        const modulesLocked = !!auth?.modulesLocked;
 
         // 1. Dashboard
         if (hasPermission(permissions, 'dashboard_view')) {
@@ -148,10 +151,10 @@ export function AppSidebar() {
         }
 
         // 7. Communication (Chat + Meetings) — placed directly after the Work group.
-        if (hasPermission(permissions, 'chat_view')) {
+        if (!modulesLocked && hasPermission(permissions, 'chat_view')) {
             items.push({ title: t('Chat'), href: route('chat.index'), icon: MessageSquare, group: t('Communication') });
         }
-        if (hasPermission(permissions, 'zoom_meeting_view_any') || hasPermission(permissions, 'google_meeting_view_any')) {
+        if (!modulesLocked && (hasPermission(permissions, 'zoom_meeting_view_any') || hasPermission(permissions, 'google_meeting_view_any'))) {
             const meetingsChildren: { title: string; href: string }[] = [];
             if (hasPermission(permissions, 'zoom_meeting_view_any')) {
                 meetingsChildren.push({ title: t('Zoom Meetings'), href: route('zoom-meetings.index') });
@@ -186,7 +189,7 @@ export function AppSidebar() {
         // 9. Docs (Knowledge Base + Notes merged)
         if (hasPermission(permissions, 'kb_view_any') || hasPermission(permissions, 'note_view_any')) {
             const docsChildren: { title: string; href: string }[] = [];
-            if (hasPermission(permissions, 'kb_view_any')) {
+            if (!modulesLocked && hasPermission(permissions, 'kb_view_any')) {
                 docsChildren.push({ title: t('Knowledge Base'), href: route('kb.index') });
             }
             if (hasPermission(permissions, 'note_view_any')) {
@@ -201,7 +204,7 @@ export function AppSidebar() {
         }
 
         // 11. AI (Risk Radar + Resource Conflicts + custom agents)
-        if (hasPermission(permissions, 'agent_use') || hasPermission(permissions, 'agent_view_any')) {
+        if (!modulesLocked && (hasPermission(permissions, 'agent_use') || hasPermission(permissions, 'agent_view_any'))) {
             items.push({ title: t('AI'), href: route('ai.index'), icon: Bot, group: t('Intelligence') });
         }
 

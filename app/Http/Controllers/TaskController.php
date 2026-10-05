@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\GoogleCalendarService;
 use App\Traits\HasPermissionChecks;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -326,34 +327,40 @@ class TaskController extends Controller
             ->ordered()
             ->first();
 
-        $task = Task::create([
-            ...$validated,
-            'task_stage_id' => $firstStage->id,
-            'created_by' => auth()->id(),
-            'progress' => 0
-        ]);
+        // assigned_to is optional: a task created without it is unassigned.
+        $assignedTo = $validated['assigned_to'] ?? null;
 
-        // Sync with Google Calendar if enabled
-        if ($validated['is_googlecalendar_sync'] ?? false) {
-            $this->syncTaskWithGoogleCalendar($task);
-        }
+        // One unit: if a follow-up step fails, no half-created task is left behind.
+        DB::transaction(function () use ($validated, $firstStage, $assignedTo) {
+            $task = Task::create([
+                ...$validated,
+                'assigned_to' => $assignedTo,
+                'task_stage_id' => $firstStage->id,
+                'created_by' => auth()->id(),
+                'progress' => 0
+            ]);
 
-    
-        // Fire event for Slack notification
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\TaskCreated($task));
-        }
+            // Sync with Google Calendar if enabled
+            if ($validated['is_googlecalendar_sync'] ?? false) {
+                $this->syncTaskWithGoogleCalendar($task);
+            }
 
-        // Fire event for email notification if task is assigned
-        if ($validated['assigned_to']) {
-            $assignedUser = \App\Models\User::find($validated['assigned_to']);
-            if ($assignedUser) {
-                $task->load('project');
-                if (!config('app.is_demo', true)) {
-                    event(new \App\Events\TaskAssigned($task, $assignedUser, auth()->user()));
+            // Fire event for Slack notification
+            if (!config('app.is_demo', true)) {
+                event(new \App\Events\TaskCreated($task));
+            }
+
+            // Fire event for email notification if task is assigned
+            if ($assignedTo) {
+                $assignedUser = User::find($assignedTo);
+                if ($assignedUser) {
+                    $task->load('project');
+                    if (!config('app.is_demo', true)) {
+                        event(new \App\Events\TaskAssigned($task, $assignedUser, auth()->user()));
+                    }
                 }
             }
-        }
+        });
 
         return back()->with('success', __('Task created successfully!'));
     }

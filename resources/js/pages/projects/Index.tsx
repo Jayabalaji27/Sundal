@@ -659,6 +659,10 @@ export default function ProjectIndex() {
             {(projects?.data?.length === 0) && (
                 <EmptyState
                     {...EMPTY_STATES.projects}
+                    // View-only users can't create projects, so don't tell them to
+                    {...(!hasPermission(permissions, 'project_create') && {
+                        description: "You haven't been added to any projects yet.",
+                    })}
                     action={hasPermission(permissions, 'project_create') ? { label: 'Create Your First Project', onClick: handleAddNew, icon: <Plus className="h-4 w-4" /> } : undefined}
                     secondaryAction={canUseAiGenerate ? { label: 'AI Generate', onClick: () => setIsAiModalOpen(true) } : undefined}
                 />

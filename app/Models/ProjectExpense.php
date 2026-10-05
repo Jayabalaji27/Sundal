@@ -119,6 +119,35 @@ class ProjectExpense extends Model
         return $query->where('status', 'pending');
     }
 
+    /**
+     * Expenses the user may see in their current workspace: members only their own,
+     * managers those on projects they belong to or created, everyone else all of them.
+     * Shared by the expenses list, detail page, receipts and dashboard stats.
+     */
+    public function scopeVisibleTo($query, User $user)
+    {
+        $workspace = $user->currentWorkspace;
+        if (!$workspace) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $query->whereHas('project', fn ($q) => $q->where('workspace_id', $workspace->id));
+
+        $role = $workspace->getMemberRole($user);
+        if ($role === 'member') {
+            $query->where('submitted_by', $user->id);
+        } elseif ($role === 'manager') {
+            $query->whereHas('project', function ($q) use ($user) {
+                $q->where(function ($projectQuery) use ($user) {
+                    $projectQuery->whereHas('members', fn ($m) => $m->where('user_id', $user->id))
+                        ->orWhere('created_by', $user->id);
+                });
+            });
+        }
+
+        return $query;
+    }
+
     public function scopeForProject($query, $projectId)
     {
         return $query->where('project_id', $projectId);
