@@ -37,12 +37,17 @@ export function FloatingChatGpt() {
     }
   } else {
     // Non-SaaS mode: Check if ChatGPT is configured
-    const hasChatGptKey = globalSettings?.chatgptKey && globalSettings.chatgptKey.length > 0;
+    const hasChatGptKey = globalSettings?.chatgptKeySet ?? (globalSettings?.chatgptKey?.length > 0);
     canUseChatGPT = hasChatGptKey;
   }
   
   // The generate endpoint is gated behind the Pro Add-on too
   if (auth?.modulesLocked) {
+    canUseChatGPT = false;
+  }
+
+  // ...and behind agent_use, which clients don't have
+  if (!isSuperAdmin && !auth?.permissions?.includes('agent_use')) {
     canUseChatGPT = false;
   }
 

@@ -99,11 +99,12 @@ class InvoiceController extends Controller
         }
         $projects = $projectsQuery->get(['id', 'title']);
 
-        // Get clients for filter dropdown
+        // Get clients for filter dropdown (a client only ever sees their own invoices)
         $clients = $workspace->users()
             ->whereHas('roles', function ($q) {
                 $q->where('name', 'client');
             })
+            ->when($userWorkspaceRole === 'client', fn ($q) => $q->where('users.id', $user->id))
             ->get(['users.id', 'users.name']);
 
         return Inertia::render('invoices/Index', [
@@ -124,7 +125,9 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        $invoice->load(['project', 'client', 'creator', 'items.task', 'items.expense', 'items.timesheetEntry']);
+        // Only the user fields the invoice page shows - full user rows carry plan,
+        // 2FA, referral and timer data.
+        $invoice->load(['project', 'client:id,name,email,avatar', 'creator:id,name,email', 'items.task', 'items.expense', 'items.timesheetEntry']);
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
         $userWorkspaceRole = $workspace->getMemberRole($user);

@@ -20,7 +20,29 @@ use Illuminate\Support\Facades\Process;
 class ContractController extends Controller
 {
     use HasPermissionChecks;
-    
+
+    // Only the user fields the contract pages render - full user rows carry plan,
+    // 2FA, referral and timer data.
+    private const CLIENT_COLUMNS = 'id,name,email,avatar';
+    private const CREATOR_COLUMNS = 'id,name,avatar';
+
+    private function isClient(): bool
+    {
+        $user = auth()->user();
+
+        return $user->currentWorkspace?->getMemberRole($user) === 'client';
+    }
+
+    /**
+     * Clients only see contracts assigned to them. Anything else - including
+     * unassigned contracts - is treated as not found, like other records they
+     * can't see.
+     */
+    private function abortUnlessVisible(Contract $contract): void
+    {
+        abort_if($this->isClient() && (int) $contract->client_id !== (int) auth()->id(), 404);
+    }
+
     public function index(Request $request)
     {
         $this->authorizePermission('contract_view_any');
@@ -28,8 +50,9 @@ class ContractController extends Controller
         
         // Start with base query without forWorkspace scope to avoid ambiguity
         $query = Contract::where('contracts.workspace_id', $workspaceId)
-            ->with(['contractType', 'client', 'creator'])
-            ->withCount(['notes', 'comments', 'attachments']);
+            ->with(['contractType', 'client:' . self::CLIENT_COLUMNS, 'creator:' . self::CREATOR_COLUMNS])
+            ->withCount($this->isClient() ? ['comments', 'attachments'] : ['notes', 'comments', 'attachments'])
+            ->when($this->isClient(), fn ($q) => $q->where('contracts.client_id', auth()->id()));
 
         // Apply filters
         if ($request->filled('status')) {
@@ -95,11 +118,16 @@ class ContractController extends Controller
         });
         
         $contractTypes = ContractType::forWorkspace($workspaceId)->active()->ordered()->get();
+        // The client filter and project lists feed the create/edit dialog and the
+        // client filter; a client only needs themselves and their own projects.
         $clients = User::whereHas('workspaces', function ($q) use ($workspaceId) {
             $q->where('workspace_id', $workspaceId)
               ->where('role', 'client');
-        })->get(['id', 'name', 'email']);
+        })
+            ->when($this->isClient(), fn ($q) => $q->whereKey(auth()->id()))
+            ->get(['id', 'name', 'email']);
         $projects = \App\Models\Project::forWorkspace($workspaceId)
+            ->when($this->isClient(), fn ($q) => $q->whereHas('clients', fn ($c) => $c->where('user_id', auth()->id())))
             ->with(['clients:users.id'])
             ->get(['id', 'title'])
             ->map(function ($project) {
@@ -166,12 +194,15 @@ class ContractController extends Controller
     public function show(Contract $contract)
     {
         $this->authorizePermission('contract_view');
+        $this->abortUnlessVisible($contract);
+        // Notes and internal comments are for the team only - never sent to a client.
+        $isClient = $this->isClient();
         $contract->load([
             'contractType',
-            'client',
-            'creator',
-            'notes' => fn($q) => $q->with('creator')->orderBy('is_pinned', 'desc')->orderBy('created_at', 'desc'),
-            'comments' => fn($q) => $q->with('creator')->orderBy('created_at', 'desc'),
+            'client:' . self::CLIENT_COLUMNS,
+            'creator:' . self::CREATOR_COLUMNS,
+            'notes' => fn($q) => $q->with('creator:' . self::CREATOR_COLUMNS)->when($isClient, fn ($n) => $n->whereRaw('1 = 0'))->orderBy('is_pinned', 'desc')->orderBy('created_at', 'desc'),
+            'comments' => fn($q) => $q->with('creator:' . self::CREATOR_COLUMNS)->when($isClient, fn ($c) => $c->where('is_internal', false))->orderBy('created_at', 'desc'),
             'attachments'
         ]);
 
@@ -222,6 +253,7 @@ class ContractController extends Controller
             'permissions' => [
                 'update' => $this->checkPermission('contract_update'),
                 'delete' => $this->checkPermission('contract_delete'),
+                'viewNotes' => !$isClient,
             ]
         ]);
     }
@@ -333,6 +365,7 @@ class ContractController extends Controller
 
     public function commentStore(Request $request, Contract $contract)
     {
+        $this->abortUnlessVisible($contract);
         $request->validate(['comment' => 'required|string']);
         ContractComment::create([
             'contract_id' => $contract->id,
@@ -417,6 +450,9 @@ class ContractController extends Controller
 
     public function fileDownload(ContractAttachment $attachment)
     {
+        abort_unless($attachment->contract, 404);
+        $this->abortUnlessVisible($attachment->contract);
+
         return download_file($attachment->files, basename($attachment->files));
     }
 }

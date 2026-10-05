@@ -60,7 +60,9 @@ const statusOptions = [
 
 export default function ContractShow() {
     const { t } = useTranslation();
-    const { contract, auth, assignedUsers, emailTemplateEnabled } = usePage().props as any;
+    const { contract, auth, assignedUsers, emailTemplateEnabled, permissions: pagePermissions } = usePage().props as any;
+    // Notes are internal to the team; the server sends none to clients.
+    const canViewNotes = pagePermissions?.viewNotes !== false;
     const permissions = auth?.permissions || [];
     const [activeTab, setActiveTab] = useState('overview');
     const [newNote, setNewNote] = useState('');
@@ -372,10 +374,12 @@ export default function ContractShow() {
                                 <Eye className="h-4 w-4 mr-2" />
                                 Overview
                             </TabsTrigger>
+                            {canViewNotes && (
                             <TabsTrigger value="notes" className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:scale-105 hover:bg-primary/10 hover:text-primary  dark:text-gray-400 dark:hover:text-primary dark:data-[state=active]:text-white">
                                 <Pin className="h-4 w-4 mr-2" />
                                 Notes ({contract.notes?.length || 0})
                             </TabsTrigger>
+                            )}
                             <TabsTrigger value="comments" className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:scale-105 hover:bg-primary/10 hover:text-primary  dark:text-gray-400 dark:hover:text-primary dark:data-[state=active]:text-white">
                                 <MessageSquare className="h-4 w-4 mr-2" />
                                 Comments ({contract.comments?.length || 0})

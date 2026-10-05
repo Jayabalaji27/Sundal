@@ -120,7 +120,7 @@ class HandleInertiaRequests extends Middleware
             }
             
             // Merge currency settings with other settings
-            $globalSettings = array_merge($settings, $currencySettings);
+            $globalSettings = array_merge(sharedSettingsFor($settings, $user), $currencySettings);
             $globalSettings['base_url'] = config('app.url');
             $globalSettings['is_saas'] = isSaasMode();
             $globalSettings['availableLanguages'] = $availableLanguages;

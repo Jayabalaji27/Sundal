@@ -555,13 +555,12 @@ class TaskController extends Controller
     public function getCalendarTasks(Request $request)
     {
         $user = auth()->user();
-        $workspace = $user->currentWorkspace;
         $calendarView = $request->get('calendar_view', 'local'); // 'local' or 'google'
         
-        $tasks = Task::with(['project', 'taskStage', 'assignedTo'])
-            ->whereHas('project', function ($q) use ($user) {
-                $q->forWorkspace($user->current_workspace_id);
-            })
+        // Same visibility as the calendar page, and only the assignee fields the
+        // calendar shows - full user rows carry plan, 2FA and timer data.
+        $tasks = Task::with(['project:id,title', 'taskStage', 'assignedTo:id,name,avatar'])
+            ->visibleOnCalendarTo($user)
             ->when($calendarView === 'google', function ($query) {
                 $query->where('is_googlecalendar_sync', true);
             })
