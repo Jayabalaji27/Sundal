@@ -7,6 +7,7 @@ node_modules/
 storage/qa-reports/
 /public/storage
 /public/hot
+/storage/framework/vite.hot
 /public/build
 graphify-out/
 app/graphify-out/

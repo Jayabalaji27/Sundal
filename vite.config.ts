@@ -29,17 +29,20 @@ export default defineConfig({
             input: ['resources/css/app.css', 'resources/css/dark-mode.css', 'resources/css/rtl.css', 'resources/js/app.tsx'],
             ssr: 'resources/js/ssr.tsx',
             refresh: true,
+            // Kept out of public/ so a stale hot file can't ship in a deploy zip
+            // and point production at 127.0.0.1:5173. Must match AppServiceProvider.
+            hotFile: 'storage/framework/vite.hot',
         }),
         stripUseClientDirective(),
         tailwindcss(),
     ],
     server: {
         host: '0.0.0.0',
-        // Browsers on other LAN devices can't resolve 0.0.0.0, so the HMR
-        // websocket needs this machine's actual LAN IP to connect back to.
-        // Override with VITE_HMR_HOST (e.g. 127.0.0.1) when running on another machine.
+        // This host is also written to public/hot, so it must be reachable from
+        // the browser. To test from other LAN devices, set VITE_HMR_HOST to this
+        // machine's LAN IP (0.0.0.0 can't be resolved by browsers).
         hmr: {
-            host: process.env.VITE_HMR_HOST || '192.168.88.5',
+            host: process.env.VITE_HMR_HOST || '127.0.0.1',
         },
         headers: {
             'Access-Control-Allow-Origin': '*',

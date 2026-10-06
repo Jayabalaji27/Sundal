@@ -33,7 +33,10 @@ class AppServiceProvider extends ServiceProvider
         
         // Register the WorkspaceObserver
         Workspace::observe(WorkspaceObserver::class);
-        
+
+        // Must match hotFile in vite.config.ts. A leftover public/hot is ignored.
+        \Illuminate\Support\Facades\Vite::useHotFile(storage_path('framework/vite.hot'));
+
 
 
         // Configure dynamic storage disks
