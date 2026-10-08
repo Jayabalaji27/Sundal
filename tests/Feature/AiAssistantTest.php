@@ -216,6 +216,23 @@ describe('settings', function () {
         ['https://evil.example.com', false],
     ]);
 
+    test('an OpenRouter key and vendor/model id can be saved', function () {
+        [$workspace, $users] = aiWorkspace();
+
+        $this->actingAs($users['owner'])->putJson(route('ai-assistant.settings.update'), [
+            'provider' => 'openrouter', 'model' => 'openai/gpt-4o', 'api_key' => 'sk-or-v1-test-12345678', 'retention_days' => 90,
+        ])->assertSessionHasNoErrors();
+
+        expect(AiProviderSetting::withoutGlobalScope('workspace')->first()->provider)->toBe('openrouter');
+    });
+
+    test('an empty company key never falls back to a server key', function () {
+        $provider = new \App\Services\Ai\Providers\PrismProvider(\Prism\Prism\Enums\Provider::Anthropic, 'claude-sonnet-5-5', '');
+
+        expect(fn () => $provider->run(new \App\Services\Ai\AiRequest('system', [['role' => 'user', 'content' => 'hi']])))
+            ->toThrow(\App\Services\Ai\AiProviderException::class, 'No API key is saved for this AI provider.');
+    });
+
     test('local and unknown providers are rejected', function () {
         [$workspace, $users] = aiWorkspace();
 

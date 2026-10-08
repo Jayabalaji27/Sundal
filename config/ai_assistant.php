@@ -36,6 +36,15 @@ return [
             'default_model' => null,
             'models' => [],
         ],
+        // A cloud router to many vendors' models, on the company's own
+        // OpenRouter key. Model ids are "vendor/model", e.g. openai/gpt-4o.
+        'openrouter' => [
+            'label' => 'OpenRouter',
+            'default_model' => 'openai/gpt-4o',
+            'models' => [
+                'openai/gpt-4o' => ['label' => 'OpenAI GPT-4o'],
+            ],
+        ],
         'azure_openai' => [
             'label' => 'Azure OpenAI',
             'default_model' => null,

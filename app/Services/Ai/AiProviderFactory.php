@@ -30,6 +30,7 @@ class AiProviderFactory
             'anthropic' => new PrismProvider(Provider::Anthropic, $settings->model, $settings->api_key),
             'openai' => new PrismProvider(Provider::OpenAI, $settings->model, $settings->api_key, $settings->organization),
             'gemini' => new PrismProvider(Provider::Gemini, $settings->model, $settings->api_key),
+            'openrouter' => new PrismProvider(Provider::OpenRouter, $settings->model, $settings->api_key),
             'azure_openai' => new AzureOpenAiProvider(
                 (string) $settings->azure_endpoint,
                 (string) ($settings->azure_deployment ?: $settings->model),

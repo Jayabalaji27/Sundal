@@ -455,16 +455,16 @@ function SettingsForm({ settings, providers, usage, retentionOptions, configured
                         </div>
                         <div className="space-y-1">
                             <Label>{t('Model')}</Label>
-                            {provider && provider.models.length > 0 ? (
-                                <Select value={form.model} onValueChange={v => set('model', v)}>
-                                    <SelectTrigger><SelectValue placeholder={t('Choose a model')} /></SelectTrigger>
-                                    <SelectContent>
-                                        {provider.models.map(m => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            ) : (
-                                <Input value={form.model} onChange={e => set('model', e.target.value)} placeholder={t('Model name')} />
-                            )}
+                            {/* Tested models are suggested; any other model id can be typed. */}
+                            <Input
+                                list="ai-model-options"
+                                value={form.model}
+                                onChange={e => set('model', e.target.value)}
+                                placeholder={t('Model name')}
+                            />
+                            <datalist id="ai-model-options">
+                                {provider?.models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                            </datalist>
                             {field('model')}
                         </div>
                     </div>

@@ -31,9 +31,11 @@ class PrismProvider implements AiProvider
 
     public function run(AiRequest $request): AiResult
     {
+        $config = $this->providerConfig();
+
         try {
             $response = Prism::text()
-                ->using($this->provider, $this->model, $this->providerConfig())
+                ->using($this->provider, $this->model, $config)
                 ->withSystemPrompt($request->system)
                 ->withMessages($this->messages($request))
                 ->withTools(array_map(fn (ToolSpec $spec) => $this->tool($spec), $request->tools))
@@ -54,10 +56,24 @@ class PrismProvider implements AiProvider
 
     private function providerConfig(): array
     {
-        return array_filter([
-            'api_key' => $this->apiKey,
-            'organization' => $this->provider === Provider::OpenAI ? $this->organization : null,
-        ]);
+        // Prism merges this over config/prism.php, which reads server keys such as
+        // ANTHROPIC_API_KEY from .env. Never let an empty company key fall back to them.
+        if (trim($this->apiKey) === '') {
+            throw new AiProviderException(__('No API key is saved for this AI provider.'));
+        }
+
+        $config = ['api_key' => $this->apiKey];
+
+        if ($this->provider === Provider::OpenAI && $this->organization) {
+            $config['organization'] = $this->organization;
+        }
+
+        if ($this->provider === Provider::OpenRouter) {
+            // Shown in the company's OpenRouter activity log.
+            $config['site'] = ['x_title' => 'Sundal AI Assistant', 'http_referer' => config('app.url')];
+        }
+
+        return $config;
     }
 
     private function messages(AiRequest $request): array
@@ -100,8 +116,11 @@ class PrismProvider implements AiProvider
         }
 
         $status = $this->statusCode($e);
+        $detail = strtolower($e->getMessage());
 
         return match (true) {
+            str_contains($detail, 'insufficient credits'), str_contains($detail, 'insufficient_quota'), $status === 402
+                => __('Your AI provider account has no credits left. Ask your company owner to add credits with the provider.'),
             $status === 401, $status === 403 => __('Your AI provider rejected the API key. Ask your company owner to check the AI settings.'),
             $status === 404 => __('Your AI provider does not recognise the selected model. Ask your company owner to check the AI settings.'),
             $status === 429 => __('Your AI provider account is out of quota or rate limited.'),
