@@ -71,6 +71,9 @@ class AiToolCall extends Model
             'details' => $this->payload['details'] ?? [],
             'items' => $this->payload['items'] ?? [],
             'confirm_phrase' => $this->payload['confirm_phrase'] ?? null,
+            // Form cards: the fields the user completes before confirming.
+            'fields' => $this->payload['form']['fields'] ?? [],
+            'form_error' => $this->payload['form']['error'] ?? null,
             'link' => $this->result['link'] ?? null,
             'can_undo' => $this->canUndo(),
             'undo_until' => $this->canUndo() ? $this->confirmed_at->addMinutes(self::UNDO_MINUTES)->toIso8601String() : null,

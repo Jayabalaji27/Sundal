@@ -2,11 +2,14 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Services\Ai\Forms\FormField;
+use App\Services\Ai\Forms\HasForm;
+use App\Services\Ai\AiAccess;
 use App\Actions\ActionException;
 use App\Actions\Projects\AssignProjectMembers;
 use App\Models\User;
 
-class AddProjectMembersTool extends AiTool
+class AddProjectMembersTool extends AiTool implements HasForm
 {
     public function __construct(
         private readonly RecordResolver $resolver,
@@ -39,6 +42,23 @@ class AddProjectMembersTool extends AiTool
             'project' => ['type' => 'string', 'required' => true, 'description' => 'Project title or id.'],
             'people' => ['type' => 'string', 'required' => true, 'description' => 'Names or emails separated by ";".'],
             'role' => ['type' => 'enum', 'options' => ['member', 'manager'], 'description' => 'Project role, defaults to member.'],
+        ];
+    }
+
+    public function formTitle(): string
+    {
+        return __('Add project members');
+    }
+
+    public function formFields(User $user): array
+    {
+        // Only the company owner may add project managers.
+        $roles = AiAccess::role($user) === 'owner' ? ['member', 'manager'] : ['member'];
+
+        return [
+            new FormField('project', __('Project'), 'project', required: true),
+            new FormField('people', __('People'), 'members', required: true),
+            new FormField('role', __('Project role'), 'enum', required: true, options: FormField::labels($roles), default: 'member'),
         ];
     }
 

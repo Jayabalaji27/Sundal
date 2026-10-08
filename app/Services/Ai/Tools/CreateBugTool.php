@@ -2,10 +2,12 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Services\Ai\Forms\FormField;
+use App\Services\Ai\Forms\HasForm;
 use App\Actions\Bugs\CreateBug;
 use App\Models\User;
 
-class CreateBugTool extends AiTool
+class CreateBugTool extends AiTool implements HasForm
 {
     private const PRIORITIES = ['low', 'medium', 'high', 'critical'];
     private const SEVERITIES = ['minor', 'major', 'critical', 'blocker'];
@@ -50,6 +52,25 @@ class CreateBugTool extends AiTool
             'assignee' => ['type' => 'string', 'description' => '"me" or a person\'s name or email.'],
             'due_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD.'],
         ];
+    }
+
+    public function formTitle(): string
+    {
+        return __('Report a bug');
+    }
+
+    public function formFields(User $user): array
+    {
+        return array_values(array_filter([
+            new FormField('title', __('Title'), 'text', required: true),
+            new FormField('project', __('Project'), 'project', required: true),
+            new FormField('severity', __('Severity'), 'enum', required: true, options: FormField::labels(self::SEVERITIES), mustChoose: true),
+            new FormField('priority', __('Priority'), 'enum', required: true, options: FormField::labels(self::PRIORITIES), mustChoose: true),
+            $user->hasWorkspacePermission('bug_assign')
+                ? new FormField('assignee', __('Assignee'), 'member', required: true, allowNone: true)
+                : null,
+            new FormField('due_date', __('Due date'), 'date'),
+        ]));
     }
 
     public function prepare(array $args, User $user): PreparedAction

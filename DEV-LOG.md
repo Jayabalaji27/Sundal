@@ -536,6 +536,33 @@ the name of sundal" → card → Confirm → project created.
 
 ---
 
+### RP-13 · 2026-10-09 · AI Assistant — deterministic form cards and fallbacks
+
+**Problem:** "create a to do task for a login page" created the task in a project the model
+picked (the tool schema marked `project` required, so the model filled it), with silent
+priority/assignee defaults. Asking in text would cost extra AI calls.
+
+**Fix:** one AI call, then the server decides with fixed rules (`app/Services/Ai/Forms/`):
+- 10 write tools implement `HasForm`; the model gets every parameter as optional and is told
+  to pass only what the user said.
+- `FormBuilder` keeps a value only if it resolves to exactly one visible record **and** the
+  user's own words name it (grounding check, no AI). Otherwise the card shows a list,
+  matches first. Project is pre-filled when there is only one; priority/severity/status and
+  assignee (with "Unassigned") are required picks.
+- Confirm sends the picks, the server validates them against the same scoped lists, re-runs
+  `prepare()` and executes. Errors stay on the card's fields; no AI call to fix them.
+- Fallbacks: quick-action buttons open any form with no AI (`POST ai-assistant/forms`);
+  `IntentMatcher` offers the form by keyword when the provider fails or the model shows no
+  card. Not on forms: bulk approvals and add-to-sprint (their cards already list every record).
+- Sync replies raise PHP's time limit (`AI_ASSISTANT_SYNC_TIME_LIMIT`, 300 s) so a slow
+  provider ends as a saved error with the form fallback, not a 30 s fatal.
+
+Tests: `AiAssistantTest` 76/76. Verified in the browser (OpenRouter free model): the card
+filled Title "Login page" and the only project, left Priority and Assignee to pick,
+Confirm disabled until picked; "New task" quick action opened the form with no AI call.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)

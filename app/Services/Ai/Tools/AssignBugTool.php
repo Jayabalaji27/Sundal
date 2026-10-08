@@ -2,10 +2,12 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Services\Ai\Forms\FormField;
+use App\Services\Ai\Forms\HasForm;
 use App\Actions\Bugs\AssignBug;
 use App\Models\User;
 
-class AssignBugTool extends AiTool
+class AssignBugTool extends AiTool implements HasForm
 {
     public function __construct(
         private readonly RecordResolver $resolver,
@@ -39,6 +41,20 @@ class AssignBugTool extends AiTool
             'project' => ['type' => 'string', 'description' => 'Project title or id, to narrow the bug search.'],
             'assignee' => ['type' => 'string', 'required' => true, 'description' => '"me" or a person\'s name or email.'],
             'due_date' => ['type' => 'string', 'description' => 'New due date, YYYY-MM-DD.'],
+        ];
+    }
+
+    public function formTitle(): string
+    {
+        return __('Assign a bug');
+    }
+
+    public function formFields(User $user): array
+    {
+        return [
+            new FormField('bug', __('Bug'), 'bug', required: true, narrowBy: 'project'),
+            new FormField('assignee', __('Assignee'), 'member', required: true),
+            new FormField('due_date', __('Due date'), 'date'),
         ];
     }
 

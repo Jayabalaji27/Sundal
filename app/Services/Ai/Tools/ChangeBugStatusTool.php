@@ -2,11 +2,13 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Services\Ai\Forms\FormField;
+use App\Services\Ai\Forms\HasForm;
 use App\Actions\Bugs\ChangeBugStatus;
 use App\Models\BugStatus;
 use App\Models\User;
 
-class ChangeBugStatusTool extends AiTool
+class ChangeBugStatusTool extends AiTool implements HasForm
 {
     public function __construct(
         private readonly RecordResolver $resolver,
@@ -39,6 +41,19 @@ class ChangeBugStatusTool extends AiTool
             'bug' => ['type' => 'string', 'required' => true, 'description' => 'Bug title or id.'],
             'project' => ['type' => 'string', 'description' => 'Project title or id, to narrow the bug search.'],
             'status' => ['type' => 'string', 'required' => true, 'description' => 'Target status name.'],
+        ];
+    }
+
+    public function formTitle(): string
+    {
+        return __('Change bug status');
+    }
+
+    public function formFields(User $user): array
+    {
+        return [
+            new FormField('bug', __('Bug'), 'bug', required: true, narrowBy: 'project'),
+            new FormField('status', __('Status'), 'bug_status', required: true),
         ];
     }
 

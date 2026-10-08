@@ -2,12 +2,14 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Services\Ai\Forms\FormField;
+use App\Services\Ai\Forms\HasForm;
 use App\Actions\ActionException;
 use App\Actions\Projects\CreateProject;
 use App\Models\User;
 use App\Models\Workspace;
 
-class CreateProjectTool extends AiTool
+class CreateProjectTool extends AiTool implements HasForm
 {
     private const STATUSES = ['planning', 'active', 'on_hold', 'completed', 'cancelled'];
     private const PRIORITIES = ['low', 'medium', 'high', 'urgent'];
@@ -50,6 +52,24 @@ class CreateProjectTool extends AiTool
             'members' => ['type' => 'string', 'description' => 'Team members to add: names or emails separated by ";".'],
             'clients' => ['type' => 'string', 'description' => 'Clients to add: names or emails separated by ";".'],
         ];
+    }
+
+    public function formTitle(): string
+    {
+        return __('New project');
+    }
+
+    public function formFields(User $user): array
+    {
+        return array_values(array_filter([
+            new FormField('title', __('Name'), 'text', required: true),
+            new FormField('status', __('Status'), 'enum', required: true, options: FormField::labels(self::STATUSES), mustChoose: true),
+            new FormField('priority', __('Priority'), 'enum', required: true, options: FormField::labels(self::PRIORITIES), mustChoose: true),
+            new FormField('deadline', __('Deadline'), 'date'),
+            $user->hasWorkspacePermission('project_assign_members')
+                ? new FormField('members', __('Members'), 'members')
+                : null,
+        ]));
     }
 
     public function prepare(array $args, User $user): PreparedAction

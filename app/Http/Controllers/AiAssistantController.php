@@ -9,6 +9,8 @@ use App\Models\AiUsage;
 use App\Services\Ai\AiAccess;
 use App\Services\Ai\AiAssistant;
 use App\Services\Ai\AiProviderException;
+use App\Services\Ai\Forms\HasForm;
+use App\Services\Ai\ToolRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,7 +28,7 @@ class AiAssistantController extends Controller
     // AiAssistant is method-injected so each request gets a fresh one (the
     // route caches the controller instance between calls in tests).
 
-    public function index(Request $request): Response|RedirectResponse
+    public function index(Request $request, AiAssistant $assistant): Response|RedirectResponse
     {
         $user = $request->user();
         $isOwner = AiAccess::canManageSettings($user);
@@ -47,6 +49,7 @@ class AiAssistantController extends Controller
                 'usage' => null,
                 'providers' => null,
                 'retentionOptions' => [],
+                'quickActions' => [],
             ]);
         }
 
@@ -83,6 +86,8 @@ class AiAssistantController extends Controller
                 'models' => collect($p['models'])->map(fn ($m, $id) => ['id' => $id, 'label' => $m['label']])->values(),
             ]) : null,
             'retentionOptions' => config('ai_assistant.retention_options'),
+            // Form buttons that work with no AI call (also when the provider is down).
+            'quickActions' => $settings && AiAccess::canUse($user) ? $assistant->quickActions($user) : [],
         ]);
     }
 
@@ -147,6 +152,11 @@ class AiAssistantController extends Controller
             ], 202);
         }
 
+        // A reply can take several AI round trips. Let the provider timeout end a slow
+        // call (a normal, saved error with the form fallback) instead of PHP's 30 s
+        // limit killing the request with nothing saved.
+        @set_time_limit((int) config('ai_assistant.sync_time_limit', 300));
+
         try {
             $assistant->reply($conversation, $user, trim($validated['content']));
         } catch (AiProviderException $e) {
@@ -163,11 +173,42 @@ class AiAssistantController extends Controller
         ]);
     }
 
+    /** Quick-action button: open a form card with no AI call at all. */
+    public function startForm(Request $request, AiAssistant $assistant, ToolRegistry $registry): JsonResponse
+    {
+        $user = $request->user();
+        $this->ensureCanUse($request);
+
+        $validated = $request->validate([
+            'tool' => 'required|string|max:80',
+            'conversation_id' => 'nullable|integer',
+        ]);
+
+        $tool = $registry->find($validated['tool']);
+        abort_unless($tool instanceof HasForm && $tool->allowedFor($user), 403);
+
+        $conversation = isset($validated['conversation_id'])
+            ? AiConversation::ownedBy($user)->findOrFail($validated['conversation_id'])
+            : AiConversation::create(['user_id' => $user->id, 'workspace_id' => $user->current_workspace_id, 'title' => $tool->formTitle()]);
+
+        $firstNewId = (int) $conversation->messages()->max('id');
+        $assistant->startForm($tool, $user, $conversation);
+
+        return response()->json([
+            'conversation' => $conversation->fresh()->only(['id', 'title']),
+            'messages' => $this->messagesWithCards($conversation, $firstNewId),
+        ]);
+    }
+
     public function confirm(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
     {
         $this->ensureCanUse($request);
-        $validated = $request->validate(['phrase' => 'nullable|string|max:100']);
-        $call = $assistant->confirm($toolCall, $request->user(), $validated['phrase'] ?? null);
+        $validated = $request->validate([
+            'phrase' => 'nullable|string|max:100',
+            'fields' => 'nullable|array',
+            'fields.*' => 'nullable',
+        ]);
+        $call = $assistant->confirm($toolCall, $request->user(), $validated['phrase'] ?? null, $validated['fields'] ?? null);
 
         return $this->cardResponse($call);
     }

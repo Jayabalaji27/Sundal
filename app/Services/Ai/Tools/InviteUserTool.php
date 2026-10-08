@@ -2,13 +2,15 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Services\Ai\Forms\FormField;
+use App\Services\Ai\Forms\HasForm;
 use App\Actions\ActionException;
 use App\Actions\Workspace\InviteToWorkspace;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\PlanLimitService;
 
-class InviteUserTool extends AiTool
+class InviteUserTool extends AiTool implements HasForm
 {
     public function __construct(private readonly InviteToWorkspace $invite) {}
 
@@ -37,6 +39,22 @@ class InviteUserTool extends AiTool
         return [
             'email' => ['type' => 'string', 'required' => true, 'description' => 'Email address to invite.'],
             'role' => ['type' => 'enum', 'options' => ['manager', 'member', 'client'], 'required' => true, 'description' => 'Workspace role.'],
+        ];
+    }
+
+    public function formTitle(): string
+    {
+        return __('Invite someone');
+    }
+
+    public function formFields(User $user): array
+    {
+        $workspace = Workspace::find($user->current_workspace_id);
+        $roles = $workspace ? InviteToWorkspace::rolesActorMayInvite($user, $workspace) : [];
+
+        return [
+            new FormField('email', __('Email'), 'text', required: true),
+            new FormField('role', __('Role'), 'enum', required: true, options: FormField::labels($roles), mustChoose: true),
         ];
     }
 

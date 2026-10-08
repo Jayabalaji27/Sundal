@@ -2,11 +2,13 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Services\Ai\Forms\FormField;
+use App\Services\Ai\Forms\HasForm;
 use App\Actions\Tasks\ChangeTaskStage;
 use App\Models\TaskStage;
 use App\Models\User;
 
-class ChangeTaskStageTool extends AiTool
+class ChangeTaskStageTool extends AiTool implements HasForm
 {
     public function __construct(
         private readonly RecordResolver $resolver,
@@ -39,6 +41,19 @@ class ChangeTaskStageTool extends AiTool
             'task' => ['type' => 'string', 'required' => true, 'description' => 'Task title or id.'],
             'project' => ['type' => 'string', 'description' => 'Project title or id, to narrow the task search.'],
             'stage' => ['type' => 'string', 'required' => true, 'description' => 'Target stage name.'],
+        ];
+    }
+
+    public function formTitle(): string
+    {
+        return __('Move a task');
+    }
+
+    public function formFields(User $user): array
+    {
+        return [
+            new FormField('task', __('Task'), 'task', required: true, narrowBy: 'project'),
+            new FormField('stage', __('Stage'), 'task_stage', required: true),
         ];
     }
 

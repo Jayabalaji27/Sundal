@@ -79,6 +79,10 @@ return [
 
     'request_timeout' => env('AI_ASSISTANT_REQUEST_TIMEOUT', 60),
 
+    // PHP time limit for a reply answered during the web request (not queued).
+    // Must be above request_timeout so a slow provider ends as a normal error.
+    'sync_time_limit' => env('AI_ASSISTANT_SYNC_TIME_LIMIT', 300),
+
     // Run AI calls on the queue so a 2-20 s reply does not hold a web worker;
     // the page polls for the answer. Needs a running queue worker, so it is
     // off by default (shared hosting often has none).

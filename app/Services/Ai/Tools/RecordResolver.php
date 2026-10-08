@@ -143,6 +143,35 @@ class RecordResolver
      * Find one record by id ("#12" or "12") or by name: an exact
      * (case-insensitive) match wins over a partial one.
      */
+    /**
+     * Every record a reference could mean, using the same rules as one():
+     * an id ("#12" or "12") wins, then exact (case-insensitive) names, then
+     * partial names. At most MAX_LISTED + 1 are returned.
+     *
+     * @return Collection<int, Model>
+     */
+    public function candidates(Builder $query, string $ref, string $column): Collection
+    {
+        $ref = trim($ref);
+        if ($ref === '') {
+            return new Collection();
+        }
+
+        if (preg_match('/^#?(\d+)$/', $ref, $m)) {
+            $byId = (clone $query)->whereKey((int) $m[1])->first();
+            if ($byId) {
+                return new Collection([$byId]);
+            }
+        }
+
+        $exact = (clone $query)->whereRaw("LOWER({$column}) = ?", [mb_strtolower($ref)])->limit(self::MAX_LISTED + 1)->get();
+        if ($exact->isNotEmpty()) {
+            return $exact;
+        }
+
+        return (clone $query)->where($column, 'like', '%' . addcslashes($ref, '%_\\') . '%')->limit(self::MAX_LISTED + 1)->get();
+    }
+
     private function one(Builder $query, string $ref, string $column, string $kind): Model
     {
         $ref = trim($ref);
@@ -150,21 +179,7 @@ class RecordResolver
             throw new ToolInputException(__('Which :kind? Ask the user.', ['kind' => $kind]));
         }
 
-        if (preg_match('/^#?(\d+)$/', $ref, $m)) {
-            $byId = (clone $query)->whereKey((int) $m[1])->first();
-            if ($byId) {
-                return $byId;
-            }
-        }
-
-        $exact = (clone $query)->whereRaw("LOWER({$column}) = ?", [mb_strtolower($ref)])->limit(self::MAX_LISTED + 1)->get();
-        if ($exact->count() === 1) {
-            return $exact->first();
-        }
-
-        $matches = $exact->isNotEmpty()
-            ? $exact
-            : (clone $query)->where($column, 'like', '%' . addcslashes($ref, '%_\\') . '%')->limit(self::MAX_LISTED + 1)->get();
+        $matches = $this->candidates($query, $ref, $column);
 
         if ($matches->count() === 1) {
             return $matches->first();

@@ -2,10 +2,12 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Services\Ai\Forms\FormField;
+use App\Services\Ai\Forms\HasForm;
 use App\Actions\Tasks\AssignTask;
 use App\Models\User;
 
-class AssignTaskTool extends AiTool
+class AssignTaskTool extends AiTool implements HasForm
 {
     public function __construct(
         private readonly RecordResolver $resolver,
@@ -39,6 +41,20 @@ class AssignTaskTool extends AiTool
             'project' => ['type' => 'string', 'description' => 'Project title or id, to narrow the task search.'],
             'assignee' => ['type' => 'string', 'required' => true, 'description' => '"me" or a person\'s name or email.'],
             'due_date' => ['type' => 'string', 'description' => 'New due date, YYYY-MM-DD.'],
+        ];
+    }
+
+    public function formTitle(): string
+    {
+        return __('Assign a task');
+    }
+
+    public function formFields(User $user): array
+    {
+        return [
+            new FormField('task', __('Task'), 'task', required: true, narrowBy: 'project'),
+            new FormField('assignee', __('Assignee'), 'member', required: true),
+            new FormField('due_date', __('Due date'), 'date'),
         ];
     }
 

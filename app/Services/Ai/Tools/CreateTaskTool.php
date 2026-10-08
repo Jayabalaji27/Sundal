@@ -2,10 +2,12 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Services\Ai\Forms\FormField;
+use App\Services\Ai\Forms\HasForm;
 use App\Actions\Tasks\CreateTask;
 use App\Models\User;
 
-class CreateTaskTool extends AiTool
+class CreateTaskTool extends AiTool implements HasForm
 {
     private const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
@@ -45,6 +47,24 @@ class CreateTaskTool extends AiTool
             'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD.'],
             'due_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD, after the start date.'],
         ];
+    }
+
+    public function formTitle(): string
+    {
+        return __('New task');
+    }
+
+    public function formFields(User $user): array
+    {
+        return array_values(array_filter([
+            new FormField('title', __('Title'), 'text', required: true),
+            new FormField('project', __('Project'), 'project', required: true),
+            new FormField('priority', __('Priority'), 'enum', required: true, options: FormField::labels(self::PRIORITIES), mustChoose: true),
+            $user->hasWorkspacePermission('task_assign_users')
+                ? new FormField('assignee', __('Assignee'), 'member', required: true, allowNone: true)
+                : null,
+            new FormField('due_date', __('Due date'), 'date'),
+        ]));
     }
 
     public function prepare(array $args, User $user): PreparedAction

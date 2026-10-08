@@ -2,6 +2,8 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Services\Ai\Forms\FormField;
+use App\Services\Ai\Forms\HasForm;
 use App\Actions\Invoices\SendInvoice;
 use App\Models\Invoice;
 use App\Models\User;
@@ -9,7 +11,7 @@ use App\Models\User;
 /**
  * Money-related: the card needs the invoice number typed to confirm.
  */
-class SendInvoiceTool extends AiTool
+class SendInvoiceTool extends AiTool implements HasForm
 {
     public function __construct(private readonly SendInvoice $sendInvoice) {}
 
@@ -38,6 +40,16 @@ class SendInvoiceTool extends AiTool
         return [
             'invoice' => ['type' => 'string', 'required' => true, 'description' => 'Invoice number (e.g. INV-104) or id.'],
         ];
+    }
+
+    public function formTitle(): string
+    {
+        return __('Send an invoice');
+    }
+
+    public function formFields(User $user): array
+    {
+        return [new FormField('invoice', __('Invoice'), 'invoice', required: true)];
     }
 
     public function prepare(array $args, User $user): PreparedAction

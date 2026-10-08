@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Link, router } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
-import { Bot, Check, ExternalLink, Loader2, MessageSquarePlus, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react';
+import { Bot, Check, ExternalLink, Loader2, ChevronDown, MessageSquarePlus, Plus, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -33,6 +34,26 @@ interface ToolCard {
     can_undo: boolean;
     undo_until: string | null;
     error: string | null;
+    /** Form cards: fields the user completes before confirming (no AI call). */
+    fields: FormFieldState[];
+    form_error: string | null;
+}
+
+interface FormFieldState {
+    name: string;
+    label: string;
+    type: 'select' | 'multi' | 'date' | 'text';
+    required: boolean;
+    value: string | string[] | null;
+    options: { value: string; label: string }[];
+    /** Why the field was left for the user, e.g. "Several match Ravi". */
+    note: string | null;
+    error: string | null;
+}
+
+interface QuickAction {
+    tool: string;
+    label: string;
 }
 
 interface Message {
@@ -80,6 +101,7 @@ interface Props {
     usage: { tokens_this_month: number; daily: { date: string; tokens: number }[] } | null;
     providers: Record<string, ProviderOption> | null;
     retentionOptions: number[];
+    quickActions: QuickAction[];
 }
 
 const errorMessage = (error: any, fallback: string): string =>
@@ -107,12 +129,12 @@ export default function AiAssistantPage(props: Props) {
                     <TabsTrigger value="assistant" disabled={!props.configured}>{t('Assistant')}</TabsTrigger>
                     <TabsTrigger value="settings">{t('Settings')}</TabsTrigger>
                 </TabsList>
-                <TabsContent value="assistant" className="mt-4">{props.configured && <Chat conversations={props.conversations} />}</TabsContent>
+                <TabsContent value="assistant" className="mt-4">{props.configured && <Chat conversations={props.conversations} quickActions={props.quickActions} />}</TabsContent>
                 <TabsContent value="settings" className="mt-4"><SettingsForm {...props} /></TabsContent>
             </Tabs>
         );
     } else {
-        body = <Chat conversations={props.conversations} />;
+        body = <Chat conversations={props.conversations} quickActions={props.quickActions} />;
     }
 
     return (
@@ -236,6 +258,9 @@ function Notice({ title, text }: { title: string; text: string }) {
 
 // ─── Chat ───────────────────────────────────────────────────────────────────
 
+/** Shown as buttons above the chat; the other quick actions are under "More". */
+const PRIMARY_ACTIONS = ['create_task', 'create_bug', 'assign_task', 'change_task_status'];
+
 const EXAMPLES = [
     'What tasks are overdue in my projects?',
     'Assign the login bug to Ravi, due Friday.',
@@ -245,7 +270,7 @@ const EXAMPLES = [
     'Create a project called Mobile App.',
 ];
 
-function Chat({ conversations: initial }: { conversations: Conversation[] }) {
+function Chat({ conversations: initial, quickActions }: { conversations: Conversation[]; quickActions: QuickAction[] }) {
     const { t } = useTranslation();
     const [conversations, setConversations] = useState<Conversation[]>(initial);
     const [activeId, setActiveId] = useState<number | null>(initial[0]?.id ?? null);
@@ -320,6 +345,27 @@ function Chat({ conversations: initial }: { conversations: Conversation[] }) {
                     { id: -Date.now() - 1, role: 'assistant', content: reason, created_at: new Date().toISOString(), cards: [], error: true },
                 ]);
             }
+        } finally {
+            setSending(false);
+        }
+    };
+
+    // The most-used forms as buttons; the rest under "More".
+    const primaryActions = PRIMARY_ACTIONS.map(tool => quickActions.find(a => a.tool === tool)).filter((a): a is QuickAction => !!a);
+    const moreActions = quickActions.filter(a => !PRIMARY_ACTIONS.includes(a.tool));
+
+    /** Quick action: open a form card straight away, with no AI call. */
+    const openForm = async (tool: string) => {
+        if (sending) return;
+        setSending(true);
+        try {
+            const { data } = await axios.post(route('ai-assistant.forms.start'), { tool, conversation_id: activeId });
+            setMessages(prev => [...prev, ...data.messages]);
+            if (activeId === null) createdHereRef.current = data.conversation.id;
+            setActiveId(current => current ?? data.conversation.id);
+            setConversations(prev => [data.conversation, ...prev.filter(c => c.id !== data.conversation.id)]);
+        } catch (error) {
+            toast.error(errorMessage(error, t('Could not open the form.')));
         } finally {
             setSending(false);
         }
@@ -432,8 +478,42 @@ function Chat({ conversations: initial }: { conversations: Conversation[] }) {
                     )}
                     <div ref={bottomRef} />
                 </div>
+                {quickActions.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 border-t px-3 pt-3" aria-label={t('Quick actions')}>
+                        {primaryActions.map(action => (
+                            <Button
+                                key={action.tool}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                disabled={sending}
+                                onClick={() => openForm(action.tool)}
+                            >
+                                <Plus className="mr-1 h-3 w-3" />
+                                {action.label}
+                            </Button>
+                        ))}
+                        {moreActions.length > 0 && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={sending}>
+                                        {t('More')} <ChevronDown className="ml-1 h-3 w-3" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                    {moreActions.map(action => (
+                                        <DropdownMenuItem key={action.tool} onSelect={() => openForm(action.tool)}>
+                                            {action.label}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+                    </div>
+                )}
                 <form
-                    className="flex items-end gap-2 border-t p-3"
+                    className={`flex items-end gap-2 p-3 ${quickActions.length > 0 ? '' : 'border-t'}`}
                     onSubmit={(e: FormEvent) => { e.preventDefault(); send(input); }}
                 >
                     <Textarea
@@ -468,12 +548,21 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
         return () => clearTimeout(timer);
     }, [card.can_undo, card.undo_until]);
 
+    // Form cards: the user's picks, reset whenever the server sends the card back.
+    const fields = card.fields ?? [];
+    const isForm = card.status === 'pending' && fields.length > 0;
+    const [values, setValues] = useState<Record<string, string | string[]>>(() => formValues(fields));
+    useEffect(() => setValues(formValues(fields)), [card.fields]);
+    const missing = isForm && fields.some(f => f.required && isEmpty(values[f.name]));
+
     const phraseOk = !card.confirm_phrase || phrase.trim().toLowerCase() === card.confirm_phrase.toLowerCase();
 
     const act = async (action: 'confirm' | 'cancel' | 'undo') => {
         setBusy(action);
         try {
-            const body = action === 'confirm' && card.confirm_phrase ? { phrase } : {};
+            const body = action === 'confirm'
+                ? { ...(card.confirm_phrase ? { phrase } : {}), ...(isForm ? { fields: values } : {}) }
+                : {};
             const { data } = await axios.post(route(`ai-assistant.tool-calls.${action}`, card.id), body);
             onChange(data.card, data.message);
             if (data.card.status === 'failed') toast.error(data.card.error || t('The action failed.'));
@@ -502,14 +591,19 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                         {statusLabel[card.status]}
                     </Badge>
                 </div>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                    {Object.entries(card.details).map(([label, value]) => (
-                        <div key={label} className="contents">
-                            <dt className="text-muted-foreground">{label}</dt>
-                            <dd>{value}</dd>
-                        </div>
-                    ))}
-                </dl>
+                {isForm ? (
+                    <CardForm cardId={card.id} fields={fields} values={values} onChange={(name, value) => setValues(prev => ({ ...prev, [name]: value }))} />
+                ) : (
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                        {Object.entries(card.details).map(([label, value]) => (
+                            <div key={label} className="contents">
+                                <dt className="text-muted-foreground">{label}</dt>
+                                <dd>{value}</dd>
+                            </div>
+                        ))}
+                    </dl>
+                )}
+                {card.status === 'pending' && card.form_error && <p className="text-xs text-destructive">{card.form_error}</p>}
                 {card.items.length > 0 && (
                     <ul className="max-h-48 list-disc space-y-0.5 overflow-y-auto rounded-md bg-muted/50 py-2 pl-6 pr-2 text-xs">
                         {card.items.map((item, i) => <li key={i}>{item}</li>)}
@@ -526,7 +620,12 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                 )}
                 {card.status === 'pending' && (
                     <div className="flex gap-2">
-                        <Button size="sm" onClick={() => act('confirm')} disabled={busy !== null || !phraseOk}>
+                        <Button
+                            size="sm"
+                            onClick={() => act('confirm')}
+                            disabled={busy !== null || !phraseOk || missing}
+                            title={missing ? t('Fill in the required fields first.') : undefined}
+                        >
                             {busy === 'confirm' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
                             {t('Confirm')}
                         </Button>
@@ -553,6 +652,97 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                 )}
             </CardContent>
         </Card>
+    );
+}
+
+const isEmpty = (value: string | string[] | null | undefined) =>
+    value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+
+function formValues(fields: FormFieldState[]): Record<string, string | string[]> {
+    return Object.fromEntries(fields.map(f => [f.name, f.type === 'multi' ? (Array.isArray(f.value) ? f.value : []) : (f.value as string | null) ?? '']));
+}
+
+const fieldClass = 'h-8 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+
+/**
+ * The editable part of a form card. Values the user named are pre-filled;
+ * the rest are picked here, from lists the server built for this user.
+ */
+function CardForm({ cardId, fields, values, onChange }: {
+    cardId: number;
+    fields: FormFieldState[];
+    values: Record<string, string | string[]>;
+    onChange: (name: string, value: string | string[]) => void;
+}) {
+    const { t } = useTranslation();
+
+    return (
+        <div className="space-y-2.5">
+            {fields.map(field => {
+                const id = `card-${cardId}-${field.name}`;
+                const value = values[field.name];
+                const invalid = !!field.error;
+
+                return (
+                    <div key={field.name} className="space-y-1">
+                        <Label htmlFor={id} className="text-xs">
+                            {field.label}
+                            {field.required && <span className="text-destructive"> *</span>}
+                        </Label>
+
+                        {field.type === 'select' && (
+                            <select
+                                id={id}
+                                className={`${fieldClass} ${invalid ? 'border-destructive' : ''}`}
+                                value={(value as string) ?? ''}
+                                onChange={e => onChange(field.name, e.target.value)}
+                                aria-invalid={invalid}
+                            >
+                                <option value="">{t('Choose…')}</option>
+                                {field.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                            </select>
+                        )}
+
+                        {field.type === 'multi' && (
+                            <div id={id} className={`max-h-36 space-y-1 overflow-y-auto rounded-md border p-2 ${invalid ? 'border-destructive' : ''}`}>
+                                {field.options.length === 0 && <p className="text-xs text-muted-foreground">{t('Nobody to choose from.')}</p>}
+                                {field.options.map(option => {
+                                    const selected = Array.isArray(value) && value.includes(option.value);
+                                    return (
+                                        <label key={option.value} className="flex cursor-pointer items-center gap-2 text-xs">
+                                            <input
+                                                type="checkbox"
+                                                checked={selected}
+                                                onChange={() => {
+                                                    const current = Array.isArray(value) ? value : [];
+                                                    onChange(field.name, selected ? current.filter(v => v !== option.value) : [...current, option.value]);
+                                                }}
+                                            />
+                                            {option.label}
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {(field.type === 'date' || field.type === 'text') && (
+                            <Input
+                                id={id}
+                                type={field.type === 'date' ? 'date' : 'text'}
+                                className={`h-8 text-xs ${invalid ? 'border-destructive' : ''}`}
+                                value={(value as string) ?? ''}
+                                onChange={e => onChange(field.name, e.target.value)}
+                                aria-invalid={invalid}
+                            />
+                        )}
+
+                        {field.error
+                            ? <p className="text-xs text-destructive">{field.error}</p>
+                            : field.note && <p className="text-xs text-amber-600 dark:text-amber-500">{field.note}</p>}
+                    </div>
+                );
+            })}
+        </div>
     );
 }
 
