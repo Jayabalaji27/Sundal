@@ -78,4 +78,9 @@ return [
     'retention_options' => [30, 90, 180, 365],
 
     'request_timeout' => env('AI_ASSISTANT_REQUEST_TIMEOUT', 60),
+
+    // Run AI calls on the queue so a 2-20 s reply does not hold a web worker;
+    // the page polls for the answer. Needs a running queue worker, so it is
+    // off by default (shared hosting often has none).
+    'queue' => env('AI_ASSISTANT_QUEUE', false),
 ];

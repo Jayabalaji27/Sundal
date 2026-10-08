@@ -152,11 +152,13 @@ describe('access', function () {
             ->assertInertia(fn (Assert $page) => $page->where('auth.aiAssistant', null));
     });
 
-    test('without the AI add-on the owner is sent to the plans page and the manager to the dashboard', function () {
+    test('without the AI add-on the owner sees the upgrade page and the manager is sent to the dashboard', function () {
         [$workspace, $users] = aiWorkspace(withAddon: false);
         aiSettings($workspace);
 
-        $this->actingAs($users['owner'])->get(route('ai-assistant.index'))->assertRedirect(route('plans.index'));
+        $this->actingAs($users['owner'])->get(route('ai-assistant.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('access', 'plan')->where('settings', null)->where('conversations', []));
         $this->actingAs($users['manager'])->get(route('ai-assistant.index'))->assertRedirect(route('dashboard'));
         $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertStatus(402);
     });
@@ -886,6 +888,89 @@ describe('history log and creators', function () {
         aiTask($project, $users['owner'], 'Made by a job');
 
         expect(ProjectActivity::where('project_id', $project->id)->where('user_id', 1)->exists())->toBeFalse();
+    });
+});
+
+describe('usage, errors, queue, writing helper and evaluation', function () {
+    test('the owner sees 30 days of daily usage', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        AiUsage::withoutGlobalScope('workspace')->create(['workspace_id' => $workspace->id, 'user_id' => $users['owner']->id,
+            'provider' => 'anthropic', 'model' => 'claude-sonnet-5-5', 'input_tokens' => 300, 'output_tokens' => 20]);
+
+        $this->actingAs($users['owner'])->get(route('ai-assistant.index'))
+            ->assertInertia(fn (Assert $page) => $page->has('usage.daily', 30)->where('usage.daily.29.tokens', 320)->where('usage.tokens_this_month', 320));
+    });
+
+    test('crossing 80% of the cap triggers the owner warning once a month', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['monthly_token_cap' => 1000]);
+        AiUsage::withoutGlobalScope('workspace')->create(['workspace_id' => $workspace->id, 'user_id' => $users['owner']->id,
+            'provider' => 'anthropic', 'model' => 'claude-sonnet-5-5', 'input_tokens' => 800, 'output_tokens' => 0]);
+        fakeAi([['text' => 'ok']]);
+
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+
+        expect(\Illuminate\Support\Facades\Cache::has("ai-cap-warning:{$workspace->id}:" . now()->format('Y-m')))->toBeTrue();
+    });
+
+    test('a provider error is kept in the chat but never sent back to the model', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        app()->instance(AiProviderFactory::class, AiProviderFactory::fake(new class implements \App\Services\Ai\AiProvider {
+            public function run(\App\Services\Ai\AiRequest $request): \App\Services\Ai\AiResult
+            {
+                throw new \App\Services\Ai\AiProviderException('Your AI provider account has no credits left.');
+            }
+        }));
+
+        $response = $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertStatus(502);
+        expect($response->json('messages.1.error'))->toBeTrue()->and($response->json('messages.1.content'))->toContain('no credits');
+
+        $fake = fakeAi([['text' => 'hello again']]);
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $response->json('conversation.id'), 'content' => 'hi again'])->assertOk();
+        expect(collect($fake->requests[0]->messages)->pluck('content')->all())->toBe(['hi', 'hi again']);
+    });
+
+    test('queue mode answers in a job running as the sender', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiTask(aiProject($workspace, $users['owner']), $users['owner'], 'API docs');
+        config(['ai_assistant.queue' => true]);
+        \Illuminate\Support\Facades\Queue::fake();
+
+        $response = $this->actingAs($users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'move API docs to Done'])
+            ->assertStatus(202)->assertJsonPath('pending', true);
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\ProcessAiMessage::class);
+
+        auth()->logout();
+        fakeAi([['tool' => 'change_task_status', 'args' => ['task' => 'API docs', 'stage' => 'Done']], ['text' => 'Card shown.']]);
+        (new \App\Jobs\ProcessAiMessage($users['manager']->id, $response->json('conversation.id'), $response->json('messages.0.id')))->handle(app(\App\Services\Ai\AiAssistant::class));
+
+        $call = AiToolCall::withoutGlobalScope('workspace')->where('tool', 'change_task_status')->first();
+        expect($call->status)->toBe('pending')->and($call->user_id)->toBe($users['manager']->id)
+            ->and(\App\Models\AiMessage::where('role', 'assistant')->latest('id')->value('content'))->toBe('Card shown.')
+            ->and(auth()->check())->toBeFalse();
+    });
+
+    test('the writing helper uses the workspace AI provider and counts toward the cap', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        fakeAi([['text' => 'A short project description.']]);
+
+        $this->actingAs($users['owner'])->postJson(route('chatgpt.generate'), ['prompt' => 'Describe a website project'])
+            ->assertOk()->assertJsonPath('content', 'A short project description.');
+        expect(AiUsage::withoutGlobalScope('workspace')->where('workspace_id', $workspace->id)->exists())->toBeTrue();
+    });
+
+    test('ai:eval scores the first tool the model picks', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        fakeAi([['tool' => 'list_tasks', 'args' => ['overdue' => true]]]);
+
+        $this->artisan('ai:eval', ['--user' => $users['manager']->email, '--limit' => 1, '--threshold' => 100])
+            ->expectsOutputToContain('Correct tool picks: 1/1 (100%)')
+            ->assertSuccessful();
     });
 });
 

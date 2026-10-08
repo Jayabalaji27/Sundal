@@ -10,6 +10,7 @@ use App\Services\Ai\AiAccess;
 use App\Services\Ai\AiAssistant;
 use App\Services\Ai\AiProviderException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
@@ -25,11 +26,31 @@ class AiAssistantController extends Controller
     // AiAssistant is method-injected so each request gets a fresh one (the
     // route caches the controller instance between calls in tests).
 
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
         $user = $request->user();
-        $settings = AiAccess::settings($user);
         $isOwner = AiAccess::canManageSettings($user);
+
+        // Without the AI add-on: owners (who can buy plans) see the upgrade page;
+        // managers go back to the dashboard, as with the other add-on modules.
+        if (AiAccess::status($user) === AiAccess::NEEDS_PLAN) {
+            if (!$isOwner) {
+                return redirect()->route('dashboard')->with('error', __('The AI Assistant requires the Pro Add-on plan. Please ask your workspace owner to upgrade.'));
+            }
+
+            return Inertia::render('ai-assistant/index', [
+                'access' => AiAccess::NEEDS_PLAN,
+                'isOwner' => true,
+                'configured' => false,
+                'conversations' => [],
+                'settings' => null,
+                'usage' => null,
+                'providers' => null,
+                'retentionOptions' => [],
+            ]);
+        }
+
+        $settings = AiAccess::settings($user);
 
         return Inertia::render('ai-assistant/index', [
             'access' => AiAccess::status($user),
@@ -54,6 +75,7 @@ class AiAssistantController extends Controller
             ] : null,
             'usage' => $isOwner && $settings ? [
                 'tokens_this_month' => AiUsage::tokensThisMonth($settings->workspace_id),
+                'daily' => AiUsage::dailyTokens($settings->workspace_id, 30),
             ] : null,
             'providers' => $isOwner ? collect(config('ai_assistant.providers'))->map(fn ($p) => [
                 'label' => $p['label'],
@@ -112,6 +134,18 @@ class AiAssistantController extends Controller
             : AiConversation::create(['user_id' => $user->id, 'workspace_id' => $user->current_workspace_id]);
 
         $firstNewId = (int) $conversation->messages()->max('id');
+
+        // Queue mode: answer in the background; the page polls the conversation.
+        if (config('ai_assistant.queue')) {
+            $message = $assistant->addUserMessage($conversation, trim($validated['content']));
+            \App\Jobs\ProcessAiMessage::dispatch($user->id, $conversation->id, $message->id);
+
+            return response()->json([
+                'conversation' => $conversation->fresh()->only(['id', 'title']),
+                'messages' => $this->messagesWithCards($conversation, $firstNewId),
+                'pending' => true,
+            ], 202);
+        }
 
         try {
             $assistant->reply($conversation, $user, trim($validated['content']));
@@ -186,6 +220,7 @@ class AiAssistantController extends Controller
             'id' => $message->id,
             'role' => $message->role,
             'content' => $message->content,
+            'error' => (bool) $message->is_error,
             'created_at' => $message->created_at?->toIso8601String(),
             'cards' => $cards,
         ];

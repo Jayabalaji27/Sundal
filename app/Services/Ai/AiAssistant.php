@@ -12,7 +12,10 @@ use App\Models\User;
 use App\Models\Workspace;
 use App\Services\Ai\Tools\AiTool;
 use App\Services\Ai\Tools\ToolInputException;
+use App\Notifications\AiTokenCapWarning;
+use App\Services\MailConfigService;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -34,22 +37,54 @@ class AiAssistant
     ) {}
 
     /**
-     * Handle one user message and return the saved assistant reply.
+     * Handle one user message now and return the saved assistant reply.
      *
      * @throws AiProviderException
      */
     public function reply(AiConversation $conversation, User $user, string $text): AiMessage
+    {
+        $this->addUserMessage($conversation, $text);
+
+        return $this->respond($conversation, $user, $text);
+    }
+
+    public function addUserMessage(AiConversation $conversation, string $text): AiMessage
+    {
+        $message = $conversation->messages()->create(['role' => 'user', 'content' => $text]);
+
+        if (!$conversation->title) {
+            $conversation->forceFill(['title' => mb_strimwidth($text, 0, 60, '…')])->save();
+        }
+
+        return $message;
+    }
+
+    /**
+     * Answer the latest user message (already saved). A provider error is
+     * saved in the chat as an error message, so it survives a reload or a
+     * queued reply, and is then rethrown.
+     *
+     * @throws AiProviderException
+     */
+    public function respond(AiConversation $conversation, User $user, string $text): AiMessage
+    {
+        try {
+            return $this->answer($conversation, $user, $text);
+        } catch (AiProviderException $e) {
+            $conversation->messages()->create(['role' => 'assistant', 'content' => $e->getMessage(), 'is_error' => true]);
+            $conversation->forceFill(['last_message_at' => now()])->save();
+
+            throw $e;
+        }
+    }
+
+    private function answer(AiConversation $conversation, User $user, string $text): AiMessage
     {
         $settings = AiAccess::settings($user)
             ?? throw new AiProviderException(__('No AI provider is connected yet. Ask your company owner to set one up.'));
 
         if ($settings->monthly_token_cap && AiUsage::tokensThisMonth($settings->workspace_id) >= $settings->monthly_token_cap) {
             throw new AiProviderException(__('This workspace has reached its monthly AI token cap. Ask your company owner to raise it.'));
-        }
-
-        $conversation->messages()->create(['role' => 'user', 'content' => $text]);
-        if (!$conversation->title) {
-            $conversation->title = mb_strimwidth($text, 0, 60, '…');
         }
 
         $turn = new AiTurn($conversation, $user, $text, $settings);
@@ -83,6 +118,8 @@ class AiAssistant
             'input_tokens' => $result->inputTokens,
             'output_tokens' => $result->outputTokens,
         ]);
+
+        $this->warnNearCap($settings);
 
         $reply = trim($result->text);
         if ($reply === '') {
@@ -266,6 +303,41 @@ class AiAssistant
         }
     }
 
+    /**
+     * Email the workspace owner once a month when usage reaches 80% of the cap.
+     * Never blocks the reply: a mail problem is only logged.
+     */
+    private function warnNearCap(AiProviderSetting $settings): void
+    {
+        if (!$settings->monthly_token_cap) {
+            return;
+        }
+
+        $used = AiUsage::tokensThisMonth($settings->workspace_id);
+        if ($used < $settings->monthly_token_cap * 0.8) {
+            return;
+        }
+
+        // Cache::add is atomic: only the first request past 80% sends the mail.
+        $key = "ai-cap-warning:{$settings->workspace_id}:" . now()->format('Y-m');
+        if (!Cache::add($key, true, now()->endOfMonth())) {
+            return;
+        }
+
+        try {
+            $workspace = Workspace::find($settings->workspace_id);
+            $owner = $workspace?->owner;
+            if (!$owner || !MailConfigService::isEmailConfigured($owner->id, $workspace->id)) {
+                return;
+            }
+
+            MailConfigService::setDynamicConfig($owner->id, $workspace->id);
+            $owner->notify(new AiTokenCapWarning($workspace->name, $used, $settings->monthly_token_cap));
+        } catch (Throwable $e) {
+            Log::warning('AI token cap warning email failed', ['workspace_id' => $settings->workspace_id, 'error' => $e->getMessage()]);
+        }
+    }
+
     private function guardPending(AiToolCall $call, User $user): void
     {
         if ((int) $call->user_id !== (int) $user->id) {
@@ -308,6 +380,7 @@ class AiAssistant
         $limit = config('ai_assistant.history_messages', 20);
 
         return $conversation->messages()
+            ->where('is_error', false)
             ->reorder('id', 'desc')
             ->limit($limit)
             ->get(['role', 'content'])

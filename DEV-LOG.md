@@ -495,11 +495,54 @@ files listed under RP-10 (pre-existing). Note: `php artisan test` needs
 
 ---
 
+### RP-12 · 2026-10-09 · AI Assistant — Phases 2 and 3 complete (branch `feature/ai-assistant-byoa`)
+
+Follows RP-11. All tools are limited by the user's own workspace permissions; owners get all 27.
+
+- **Providers** — OpenRouter added (Prism driver). An empty company key never falls back to a
+  server key from `.env`. "No credits left" shown as such.
+- **Phase 2 tools** — create bug, change bug status, list sprints, add tasks to a sprint,
+  list/decide timesheet approvals, list/decide expenses, budget status, project report.
+- **Phase 3 tools** — create project, add project members, list invoices, send invoice, list
+  contracts, invite user, revenue summary, Knowledge Base search, record history.
+- **Not offered on purpose** — creating sprints (route removed from the product), creating
+  contracts (form needs an uploaded file), and the plan's off-limits list (roles, billing,
+  keys, webhooks, removing users, deleting a workspace, hard deletes).
+- **Safety** — undo for 10 minutes (assign task/bug, task stage, bug status; refused if the
+  record changed again); typed confirmation for sending invoices and bulk actions over 10
+  records; bulk cards list every record.
+- **New shared Actions** (screens use them too) — CreateBug, ChangeBugStatus,
+  DecideTimesheetApproval, DecideExpense, AddTasksToSprint, CreateProject,
+  AssignProjectMembers, SendInvoice; InviteToWorkspace over WorkspaceService. Sprint add-task
+  now refuses tasks of another project or a completed sprint.
+- **History log** — `spatie/laravel-activitylog` 4.x (v5 needs PHP 8.4) with `workspace_id`;
+  `HistoryRecorder` logs 22 models with who, old/new values and source (screen /
+  ai_assistant / system). `RecordsCreator` fills created_by/reported_by/uploaded_by on 19
+  models. `LogsActivity` no longer credits changes with no signed-in user to user 1.
+  New columns: sprint_tasks.created_by, contracts_attachments.uploaded_by, contacts.created_by.
+- **Page** — upgrade page for owners without the Pro Add-on; 30-day usage chart and cap bar;
+  replies render bold, links and bullets; provider errors stay in the chat (`ai_messages.is_error`).
+- **Cap alert** — email to the owner once a month at 80% of the token cap (if mail is configured).
+- **Writing helper** — the floating ChatGPT button uses the workspace's BYOA provider when one
+  is connected (old `chatgptKey` still used otherwise) and counts toward the cap.
+- **Queue mode** — `AI_ASSISTANT_QUEUE=true` answers in `ProcessAiMessage` (runs as the sender)
+  and the page polls. Off by default: needs a running queue worker.
+- **Evaluation** — `tests/AiEval/prompts.json` (52 manager + 50 owner prompts) and
+  `php artisan ai:eval --user=<email>`: scores the tool picked first, gate 90%. Uses the
+  workspace's real provider (costs tokens); changes nothing.
+
+Tests: `AiAssistantTest` 62/62. Verified in the browser with OpenRouter: "create a project in
+the name of sundal" → card → Confirm → project created.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)
 - [ ] Run `php artisan migrate` on production after deploy
 - [ ] AI Assistant: `npm run build` (new page) + `php artisan migrate` + scheduler running for `ai:prune-conversations`
+- [ ] AI Assistant: run `php artisan ai:eval` per role on each provider before release (plan gate: 90%)
+- [ ] AI Assistant: set `AI_ASSISTANT_QUEUE=true` once a queue worker runs in production
 - [ ] Test all 6 custom modules end-to-end
 - [ ] Configure OpenAI API key for Agents/Chatbot
 - [ ] Configure Google OAuth for Google Meet/Calendar

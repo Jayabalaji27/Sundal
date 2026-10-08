@@ -440,8 +440,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // AI Assistant (BYOA) — company owners and managers only (ai.assistant),
         // and only with the AI add-on (module.access). Same ordering rule as the
         // AI page above: the role check runs first so other roles get a clean 403.
+        // The page itself skips module.access: without the add-on, owners get an
+        // upgrade page there (managers are sent to the dashboard by the controller).
+        Route::get('ai-assistant', [\App\Http\Controllers\AiAssistantController::class, 'index'])->middleware('ai.assistant')->name('ai-assistant.index');
         Route::middleware(['ai.assistant', 'module.access'])->prefix('ai-assistant')->name('ai-assistant.')->group(function () {
-            Route::get('/', [\App\Http\Controllers\AiAssistantController::class, 'index'])->name('index');
             Route::post('messages', [\App\Http\Controllers\AiAssistantController::class, 'send'])->name('send');
             Route::get('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'show'])->name('conversations.show');
             Route::patch('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'update'])->name('conversations.update');

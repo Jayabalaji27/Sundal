@@ -77,7 +77,7 @@ interface Props {
     configured: boolean;
     conversations: Conversation[];
     settings: Settings | null;
-    usage: { tokens_this_month: number } | null;
+    usage: { tokens_this_month: number; daily: { date: string; tokens: number }[] } | null;
     providers: Record<string, ProviderOption> | null;
     retentionOptions: number[];
 }
@@ -94,7 +94,9 @@ export default function AiAssistantPage(props: Props) {
     const [tab, setTab] = useState(props.configured ? 'assistant' : 'settings');
 
     let body;
-    if (props.access === 'managers_off') {
+    if (props.access === 'plan') {
+        body = <UpgradeNotice />;
+    } else if (props.access === 'managers_off') {
         body = <Notice title={t('The AI Assistant is turned off for managers')} text={t('Your company owner has turned the AI Assistant off for managers.')} />;
     } else if (!props.configured && !props.isOwner) {
         body = <Notice title={t('No AI provider connected')} text={t('Ask your company owner to connect an AI provider on this page.')} />;
@@ -117,6 +119,106 @@ export default function AiAssistantPage(props: Props) {
         <PageTemplate title={t('AI Assistant')} breadcrumbs={breadcrumbs}>
             {body}
         </PageTemplate>
+    );
+}
+
+/**
+ * The model's replies use a little Markdown: **bold**, [links](/tasks/12) and
+ * "- " bullets. Rendered as React elements, never as HTML, so a reply cannot
+ * inject markup; only relative or http(s) links become anchors.
+ */
+function FormattedText({ text }: { text: string }) {
+    const inline = (line: string, key: string) =>
+        line.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)\s]+\))/g).map((part, i) => {
+            const bold = part.match(/^\*\*([^*]+)\*\*$/);
+            if (bold) return <strong key={`${key}-${i}`}>{bold[1]}</strong>;
+            const link = part.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
+            if (link && /^(\/(?!\/)|https?:\/\/)/.test(link[2])) {
+                return <a key={`${key}-${i}`} href={link[2]} className="text-primary underline">{link[1]}</a>;
+            }
+            return <span key={`${key}-${i}`}>{part}</span>;
+        });
+
+    return (
+        <>
+            {text.split('\n').map((line, i) => {
+                const bullet = line.match(/^\s*[-*]\s+(.*)$/);
+                return bullet
+                    ? <div key={i} className="flex gap-2"><span>•</span><span>{inline(bullet[1], `l${i}`)}</span></div>
+                    : <div key={i}>{line.trim() === '' ? ' ' : inline(line, `l${i}`)}</div>;
+            })}
+        </>
+    );
+}
+
+/** Owners without the AI add-on: what the assistant does, and where to get it. */
+function UpgradeNotice() {
+    const { t } = useTranslation();
+    const samples = [
+        'Assign the login bug to Ravi, due Friday.',
+        'Approve all pending timesheets for Website Redesign.',
+        'Who is over budget this month?',
+        'How much did we bill in September?',
+    ];
+
+    return (
+        <Card className="mx-auto max-w-2xl">
+            <CardHeader className="items-center text-center">
+                <Sparkles className="mb-2 h-10 w-10 text-violet-500" />
+                <CardTitle>{t('Run your projects by chat')}</CardTitle>
+                <CardDescription>
+                    {t('The AI Assistant answers questions about your projects and does the work for you and your managers: assigning tasks and bugs, approving timesheets and expenses, creating projects and more. Every change is shown for you to confirm first. It runs on your own AI provider account.')}
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <ul className="space-y-2 text-sm">
+                    {samples.map(sample => (
+                        <li key={sample} className="rounded-md bg-muted px-3 py-2">“{t(sample)}”</li>
+                    ))}
+                </ul>
+                <p className="text-center text-sm text-muted-foreground">{t('The AI Assistant is part of the Pro Add-on.')}</p>
+                <div className="flex justify-center">
+                    <Button onClick={() => router.visit(route('plans.index'))}>{t('See plans')}</Button>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+/** Daily tokens, last 30 days: one series, one hue, hover for the exact value. */
+function UsageChart({ daily }: { daily: { date: string; tokens: number }[] }) {
+    const { t } = useTranslation();
+    const [hover, setHover] = useState<number | null>(null);
+    const max = Math.max(1, ...daily.map(d => d.tokens));
+    const label = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+    return (
+        <div>
+            <div className="relative flex h-24 items-end gap-[2px]" onMouseLeave={() => setHover(null)}>
+                {daily.map((d, i) => (
+                    <div key={d.date} className="flex h-full flex-1 items-end" onMouseEnter={() => setHover(i)}>
+                        <div
+                            className={`w-full rounded-t-[4px] ${d.tokens ? 'bg-primary' : 'bg-muted'} ${hover === i ? 'opacity-80' : ''}`}
+                            style={{ height: d.tokens ? `${Math.max(4, (d.tokens / max) * 100)}%` : '2px' }}
+                        />
+                    </div>
+                ))}
+                {hover !== null && (
+                    <div className="pointer-events-none absolute -top-9 rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-sm"
+                        style={{ left: `clamp(0px, calc(${(hover / daily.length) * 100}% - 40px), calc(100% - 110px))` }}>
+                        {label(daily[hover].date)}: {daily[hover].tokens.toLocaleString()} {t('tokens')}
+                    </div>
+                )}
+            </div>
+            <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
+                <span>{label(daily[0].date)}</span>
+                <span>{label(daily[daily.length - 1].date)}</span>
+            </div>
+            <table className="sr-only">
+                <caption>{t('Tokens used per day')}</caption>
+                <tbody>{daily.map(d => <tr key={d.date}><td>{d.date}</td><td>{d.tokens}</td></tr>)}</tbody>
+            </table>
+        </div>
     );
 }
 
@@ -203,17 +305,38 @@ function Chat({ conversations: initial }: { conversations: Conversation[] }) {
         try {
             const { data } = await axios.post(route('ai-assistant.send'), { conversation_id: activeId, content });
             apply(data);
+            if (data.pending) {
+                await waitForReply(data.conversation.id, data.messages.at(-1)?.id ?? 0);
+            }
         } catch (error: any) {
-            apply(error?.response?.data);
-            // Keep the reason in the chat (e.g. "no credits left"), not only in a toast.
-            const reason = errorMessage(error, t('The assistant could not answer. Please try again.'));
-            setMessages(prev => [
-                ...prev,
-                { id: -Date.now() - 1, role: 'assistant', content: reason, created_at: new Date().toISOString(), cards: [], error: true },
-            ]);
+            const data = error?.response?.data;
+            apply(data);
+            // The server saves provider errors ("no credits left") in the chat;
+            // only show a local one when it could not (network error, 429…).
+            if (!data?.messages?.some((m: Message) => m.error)) {
+                const reason = errorMessage(error, t('The assistant could not answer. Please try again.'));
+                setMessages(prev => [
+                    ...prev,
+                    { id: -Date.now() - 1, role: 'assistant', content: reason, created_at: new Date().toISOString(), cards: [], error: true },
+                ]);
+            }
         } finally {
             setSending(false);
         }
+    };
+
+    /** Queue mode: poll the conversation until the assistant's reply arrives (up to 3 minutes). */
+    const waitForReply = async (conversationId: number, afterId: number) => {
+        for (let attempt = 0; attempt < 120; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            const { data } = await axios.get(route('ai-assistant.conversations.show', conversationId));
+            const fresh: Message[] = data.messages.filter((m: Message) => m.id > afterId);
+            if (fresh.some(m => m.role === 'assistant')) {
+                setMessages(prev => [...prev.filter(m => m.id <= afterId), ...fresh]);
+                return;
+            }
+        }
+        throw new Error(t('The assistant is taking too long. Please try again.'));
     };
 
     const onCardChange = (card: ToolCard, note: Message | null) => {
@@ -296,7 +419,7 @@ function Chat({ conversations: initial }: { conversations: Conversation[] }) {
                                         ? 'border border-destructive/40 bg-destructive/10 text-destructive'
                                         : message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
                                 }`}>
-                                    {message.content}
+                                    {message.role === 'assistant' && !message.error ? <FormattedText text={message.content} /> : message.content}
                                 </div>
                                 {message.cards.map(card => <ConfirmCard key={card.id} card={card} onChange={onCardChange} />)}
                             </div>
@@ -620,11 +743,30 @@ function SettingsForm({ settings, providers, usage, retentionOptions, configured
                 {usage && (
                     <Card>
                         <CardHeader><CardTitle className="text-base">{t('Usage this month')}</CardTitle></CardHeader>
-                        <CardContent>
-                            <p className="text-2xl font-semibold">{usage.tokens_this_month.toLocaleString()}</p>
-                            <p className="text-xs text-muted-foreground">
-                                {settings?.monthly_token_cap ? t('of {{cap}} tokens', { cap: settings.monthly_token_cap.toLocaleString() }) : t('tokens, no cap set')}
-                            </p>
+                        <CardContent className="space-y-4">
+                            <div>
+                                <p className="text-2xl font-semibold">{usage.tokens_this_month.toLocaleString()}</p>
+                                <p className="text-xs text-muted-foreground">
+                                    {settings?.monthly_token_cap ? t('of {{cap}} tokens', { cap: settings.monthly_token_cap.toLocaleString() }) : t('tokens, no cap set')}
+                                </p>
+                                {settings?.monthly_token_cap ? (() => {
+                                    const pct = Math.min(100, (usage.tokens_this_month / settings.monthly_token_cap) * 100);
+                                    return (
+                                        <div className="mt-2 space-y-1">
+                                            <div className="h-2 rounded-full bg-muted" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+                                                <div className={`h-2 rounded-full ${pct >= 80 ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
+                                            </div>
+                                            {pct >= 80 && <p className="text-xs text-amber-600">{t('{{pct}}% of the monthly cap used', { pct: Math.round(pct) })}</p>}
+                                        </div>
+                                    );
+                                })() : null}
+                            </div>
+                            {usage.daily.length > 0 && (
+                                <div>
+                                    <p className="mb-2 text-xs text-muted-foreground">{t('Tokens per day, last 30 days')}</p>
+                                    <UsageChart daily={usage.daily} />
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 )}
