@@ -175,14 +175,8 @@ class TimesheetApprovalController extends Controller
         ]);
 
         try {
-            $approval->update([
-                'status' => 'approved',
-                'comments' => $validated['comments'] ?? null,
-                'approved_at' => now()
-            ]);
-
-            // Update timesheet status if all approvals are complete
-            $this->updateTimesheetStatus($approval->timesheet);
+            // Shared with the AI assistant: records the decision and settles the timesheet.
+            app(\App\Actions\Timesheets\DecideTimesheetApproval::class)->handle($user, $approval, 'approved', $validated['comments'] ?? null);
 
             return back()->with('success', __('Timesheet approved successfully!'));
         } catch (\Exception $e) {
@@ -218,13 +212,7 @@ class TimesheetApprovalController extends Controller
         ]);
 
         try {
-            $approval->update([
-                'status' => 'rejected',
-                'comments' => $validated['comments'] ?? null,
-                'approved_at' => now()
-            ]);
-
-            $approval->timesheet->update(['status' => 'rejected']);
+            app(\App\Actions\Timesheets\DecideTimesheetApproval::class)->handle($user, $approval, 'rejected', $validated['comments']);
 
             return back()->with('success', __('Timesheet rejected successfully!'));
         } catch (\Exception $e) {
@@ -262,14 +250,9 @@ class TimesheetApprovalController extends Controller
         }
 
         try {
+            $decide = app(\App\Actions\Timesheets\DecideTimesheetApproval::class);
             foreach ($approvals as $approval) {
-                $approval->update([
-                    'status' => 'approved',
-                    'comments' => $validated['comments'] ?? null,
-                    'approved_at' => now()
-                ]);
-
-                $this->updateTimesheetStatus($approval->timesheet);
+                $decide->handle($user, $approval, 'approved', $validated['comments'] ?? null);
             }
 
             return back()->with('success', __('Timesheets approved successfully!'));
@@ -308,14 +291,9 @@ class TimesheetApprovalController extends Controller
         }
 
         try {
+            $decide = app(\App\Actions\Timesheets\DecideTimesheetApproval::class);
             foreach ($approvals as $approval) {
-                $approval->update([
-                    'status' => 'rejected',
-                    'comments' => $validated['comments'] ?? null,
-                    'approved_at' => now()
-                ]);
-
-                $approval->timesheet->update(['status' => 'rejected']);
+                $decide->handle($user, $approval, 'rejected', $validated['comments']);
             }
 
             return back()->with('success', __('Timesheets rejected successfully!'));
@@ -331,32 +309,5 @@ class TimesheetApprovalController extends Controller
     private function isOwnTimesheet(TimesheetApproval $approval, $user, bool $isOwner): bool
     {
         return !$isOwner && (int) $approval->timesheet?->user_id === (int) $user->id;
-    }
-
-    private function updateTimesheetStatus(Timesheet $timesheet)
-    {
-        try {
-            // Only each approver's newest decision counts. A resubmitted timesheet
-            // keeps its earlier rejection as history, which otherwise flipped it
-            // straight back to rejected when the new round was approved.
-            $currentRound = $timesheet->approvals()
-                ->whereIn('id', fn ($q) => $q->selectRaw('MAX(id)')->from('timesheet_approvals')
-                    ->where('timesheet_id', $timesheet->id)->groupBy('approver_id'))
-                ->pluck('status');
-
-            if (!$currentRound->contains('pending')) {
-                if ($currentRound->contains('rejected')) {
-                    $timesheet->update(['status' => 'rejected']);
-                } else {
-                    $timesheet->update([
-                        'status' => 'approved',
-                        'approved_at' => now(),
-                        'approved_by' => auth()->id()
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            \Log::error('Failed to update timesheet status: ' . $e->getMessage());
-        }
     }
 }

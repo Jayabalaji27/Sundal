@@ -32,31 +32,8 @@ class ExpenseApprovalController extends Controller
             'notes' => 'nullable|string'
         ]);
 
-        DB::transaction(function () use ($expense, $validated) {
-            // Create or update approval record
-            ExpenseApproval::updateOrCreate(
-                [
-                    'project_expense_id' => $expense->id,
-                    'approver_id' => auth()->id()
-                ],
-                [
-                    'status' => 'approved',
-                    'notes' => $validated['notes'],
-                    'approved_at' => now(),
-                    'approval_level' => 1
-                ]
-            );
-
-            // Update expense status
-            $expense->update(['status' => 'approved']);
-
-            // Update budget after approval
-            $this->budgetService->updateBudgetAfterApproval($expense);
-            // Fire event for Slack notification
-            if (!config('app.is_demo', true)) {
-                event(new \App\Events\ExpenseApprovalRequested($expense));
-            }
-        });
+        // Shared with the AI assistant: approval record, status, budget update, Slack event.
+        app(\App\Actions\Expenses\DecideExpense::class)->handle(auth()->user(), $expense, 'approved', $validated['notes'] ?? null);
 
         return back()->with('success', __('Expense approved and budget updated successfully!'));
     }
@@ -77,25 +54,7 @@ class ExpenseApprovalController extends Controller
         ]);
 
         try {
-
-            DB::transaction(function () use ($expense, $validated) {
-                // Create or update approval record
-                ExpenseApproval::updateOrCreate(
-                    [
-                        'project_expense_id' => $expense->id,
-                        'approver_id' => auth()->id()
-                    ],
-                    [
-                        'status' => 'rejected',
-                        'notes' => $validated['notes'],
-                        'approved_at' => now(),
-                        'approval_level' => 1
-                    ]
-                );
-
-                // Update expense status
-                $expense->update(['status' => 'rejected']);
-            });
+            app(\App\Actions\Expenses\DecideExpense::class)->handle(auth()->user(), $expense, 'rejected', $validated['notes']);
 
             return back()->with('success', __('Expense rejected successfully!'));
         } catch (\Exception $e) {

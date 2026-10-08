@@ -22,7 +22,8 @@ use Inertia\Response;
  */
 class AiAssistantController extends Controller
 {
-    public function __construct(private readonly AiAssistant $assistant) {}
+    // AiAssistant is method-injected so each request gets a fresh one (the
+    // route caches the controller instance between calls in tests).
 
     public function index(Request $request): Response
     {
@@ -90,7 +91,7 @@ class AiAssistantController extends Controller
         return response()->json(['deleted' => true]);
     }
 
-    public function send(Request $request): JsonResponse
+    public function send(Request $request, AiAssistant $assistant): JsonResponse
     {
         $user = $request->user();
         $this->ensureCanUse($request);
@@ -113,7 +114,7 @@ class AiAssistantController extends Controller
         $firstNewId = (int) $conversation->messages()->max('id');
 
         try {
-            $this->assistant->reply($conversation, $user, trim($validated['content']));
+            $assistant->reply($conversation, $user, trim($validated['content']));
         } catch (AiProviderException $e) {
             return response()->json([
                 'error' => $e->getMessage(),
@@ -128,18 +129,27 @@ class AiAssistantController extends Controller
         ]);
     }
 
-    public function confirm(Request $request, AiToolCall $toolCall): JsonResponse
+    public function confirm(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
     {
         $this->ensureCanUse($request);
-        $call = $this->assistant->confirm($toolCall, $request->user());
+        $validated = $request->validate(['phrase' => 'nullable|string|max:100']);
+        $call = $assistant->confirm($toolCall, $request->user(), $validated['phrase'] ?? null);
 
         return $this->cardResponse($call);
     }
 
-    public function cancel(Request $request, AiToolCall $toolCall): JsonResponse
+    public function undo(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
     {
         $this->ensureCanUse($request);
-        $call = $this->assistant->cancel($toolCall, $request->user());
+        $call = $assistant->undo($toolCall, $request->user());
+
+        return $this->cardResponse($call);
+    }
+
+    public function cancel(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
+    {
+        $this->ensureCanUse($request);
+        $call = $assistant->cancel($toolCall, $request->user());
 
         return $this->cardResponse($call);
     }

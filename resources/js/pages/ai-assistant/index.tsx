@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Link, router } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
-import { Bot, Check, ExternalLink, Loader2, MessageSquarePlus, Send, Sparkles, Trash2, X } from 'lucide-react';
+import { Bot, Check, ExternalLink, Loader2, MessageSquarePlus, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import { toast } from '@/components/custom-toast';
 
 declare const route: any;
 
-type CardStatus = 'pending' | 'done' | 'failed' | 'cancelled' | 'expired';
+type CardStatus = 'pending' | 'done' | 'failed' | 'cancelled' | 'expired' | 'undone';
 
 interface ToolCard {
     id: number;
@@ -25,7 +25,13 @@ interface ToolCard {
     summary: string;
     status: CardStatus;
     details: Record<string, string>;
+    /** Every record a bulk action touches, listed in full. */
+    items: string[];
+    /** Risky actions: the user must type this to confirm. */
+    confirm_phrase: string | null;
     link: string | null;
+    can_undo: boolean;
+    undo_until: string | null;
     error: string | null;
 }
 
@@ -130,9 +136,11 @@ function Notice({ title, text }: { title: string; text: string }) {
 
 const EXAMPLES = [
     'What tasks are overdue in my projects?',
-    'Show the open bugs assigned to me.',
     'Assign the login bug to Ravi, due Friday.',
-    "Move 'API docs' to Done.",
+    'Which timesheets are waiting for my approval?',
+    'Who is over budget this month?',
+    'Write the weekly report for my biggest project.',
+    'Create a project called Mobile App.',
 ];
 
 function Chat({ conversations: initial }: { conversations: Conversation[] }) {
@@ -325,12 +333,25 @@ function Chat({ conversations: initial }: { conversations: Conversation[] }) {
 
 function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: ToolCard, note: Message | null) => void }) {
     const { t } = useTranslation();
-    const [busy, setBusy] = useState<'confirm' | 'cancel' | null>(null);
+    const [busy, setBusy] = useState<'confirm' | 'cancel' | 'undo' | null>(null);
+    const [phrase, setPhrase] = useState('');
+    // Hide the Undo button once its 10 minutes are over, without a reload.
+    const [undoOpen, setUndoOpen] = useState(card.can_undo);
+    useEffect(() => {
+        setUndoOpen(card.can_undo);
+        if (!card.can_undo || !card.undo_until) return;
+        const ms = new Date(card.undo_until).getTime() - Date.now();
+        const timer = setTimeout(() => setUndoOpen(false), Math.max(0, ms));
+        return () => clearTimeout(timer);
+    }, [card.can_undo, card.undo_until]);
 
-    const act = async (action: 'confirm' | 'cancel') => {
+    const phraseOk = !card.confirm_phrase || phrase.trim().toLowerCase() === card.confirm_phrase.toLowerCase();
+
+    const act = async (action: 'confirm' | 'cancel' | 'undo') => {
         setBusy(action);
         try {
-            const { data } = await axios.post(route(`ai-assistant.tool-calls.${action}`, card.id));
+            const body = action === 'confirm' && card.confirm_phrase ? { phrase } : {};
+            const { data } = await axios.post(route(`ai-assistant.tool-calls.${action}`, card.id), body);
             onChange(data.card, data.message);
             if (data.card.status === 'failed') toast.error(data.card.error || t('The action failed.'));
         } catch (error) {
@@ -346,6 +367,7 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
         failed: t('Failed'),
         cancelled: t('Cancelled'),
         expired: t('Expired'),
+        undone: t('Undone'),
     };
 
     return (
@@ -365,10 +387,23 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                         </div>
                     ))}
                 </dl>
+                {card.items.length > 0 && (
+                    <ul className="max-h-48 list-disc space-y-0.5 overflow-y-auto rounded-md bg-muted/50 py-2 pl-6 pr-2 text-xs">
+                        {card.items.map((item, i) => <li key={i}>{item}</li>)}
+                    </ul>
+                )}
                 {card.error && <p className="text-xs text-destructive">{card.error}</p>}
+                {card.status === 'pending' && card.confirm_phrase && (
+                    <div className="space-y-1">
+                        <Label htmlFor={`phrase-${card.id}`} className="text-xs">
+                            {t('This cannot be undone. Type {{phrase}} to confirm.', { phrase: card.confirm_phrase })}
+                        </Label>
+                        <Input id={`phrase-${card.id}`} value={phrase} onChange={e => setPhrase(e.target.value)} className="h-8 text-xs" autoComplete="off" />
+                    </div>
+                )}
                 {card.status === 'pending' && (
                     <div className="flex gap-2">
-                        <Button size="sm" onClick={() => act('confirm')} disabled={busy !== null}>
+                        <Button size="sm" onClick={() => act('confirm')} disabled={busy !== null || !phraseOk}>
                             {busy === 'confirm' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
                             {t('Confirm')}
                         </Button>
@@ -378,10 +413,20 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                         </Button>
                     </div>
                 )}
-                {card.status === 'done' && card.link && (
-                    <Link href={card.link} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                        {t('Open record')} <ExternalLink className="h-3 w-3" />
-                    </Link>
+                {card.status === 'done' && (card.link || undoOpen) && (
+                    <div className="flex flex-wrap items-center gap-3">
+                        {card.link && (
+                            <Link href={card.link} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                                {t('Open record')} <ExternalLink className="h-3 w-3" />
+                            </Link>
+                        )}
+                        {undoOpen && (
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => act('undo')} disabled={busy !== null}>
+                                {busy === 'undo' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Undo2 className="mr-1 h-3 w-3" />}
+                                {t('Undo')}
+                            </Button>
+                        )}
+                    </div>
                 )}
             </CardContent>
         </Card>

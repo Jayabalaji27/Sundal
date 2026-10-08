@@ -2,6 +2,7 @@
 
 namespace App\Services\Ai;
 
+use App\Actions\ActionException;
 use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\AiProviderSetting;
@@ -104,11 +105,17 @@ class AiAssistant
      * checked again: the user, the access rules, the tool permission and
      * every record on the card.
      */
-    public function confirm(AiToolCall $call, User $user): AiToolCall
+    public function confirm(AiToolCall $call, User $user, ?string $phrase = null): AiToolCall
     {
-        return DB::transaction(function () use ($call, $user) {
+        return DB::transaction(function () use ($call, $user, $phrase) {
             $call = AiToolCall::whereKey($call->id)->lockForUpdate()->firstOrFail();
             $this->guardPending($call, $user);
+
+            // Risky actions need the phrase typed, not just a click.
+            $expected = $call->payload['confirm_phrase'] ?? null;
+            if ($expected !== null && mb_strtolower(trim((string) $phrase)) !== mb_strtolower($expected)) {
+                throw ValidationException::withMessages(['phrase' => __('Type ":phrase" to confirm.', ['phrase' => $expected])]);
+            }
 
             $tool = $this->registry->find($call->tool);
             if (!$tool || !$tool->isWrite() || !$tool->allowedFor($user)) {
@@ -122,7 +129,7 @@ class AiAssistant
                     $call->id,
                     fn () => $tool->execute($call->payload['data'] ?? [], $user),
                 ));
-            } catch (ToolInputException|AuthorizationException $e) {
+            } catch (ToolInputException|ActionException|AuthorizationException $e) {
                 return $this->fail($call, $e->getMessage());
             } catch (ValidationException $e) {
                 return $this->fail($call, collect($e->errors())->flatten()->first() ?? $e->getMessage());
@@ -131,12 +138,49 @@ class AiAssistant
             $call->update([
                 'status' => AiToolCall::DONE,
                 'confirmed_at' => now(),
-                'result' => ['message' => $outcome->message, 'link' => $outcome->link],
+                'result' => array_filter(['message' => $outcome->message, 'link' => $outcome->link, 'undo' => $outcome->undo]),
                 'subject_type' => $outcome->subject?->getMorphClass(),
                 'subject_id' => $outcome->subject?->getKey(),
             ]);
 
             $this->note($call, __('Done: :message', ['message' => $outcome->message]));
+
+            return $call;
+        });
+    }
+
+    /**
+     * Reverse a confirmed action within AiToolCall::UNDO_MINUTES, through the
+     * same tool and Action classes, with the same checks as a confirm.
+     */
+    public function undo(AiToolCall $call, User $user): AiToolCall
+    {
+        return DB::transaction(function () use ($call, $user) {
+            $call = AiToolCall::whereKey($call->id)->lockForUpdate()->firstOrFail();
+
+            if ((int) $call->user_id !== (int) $user->id) {
+                throw new AuthorizationException(__('This card belongs to another user.'));
+            }
+            if (!$call->canUndo()) {
+                throw ValidationException::withMessages(['card' => __('This action can no longer be undone.')]);
+            }
+            if (!AiAccess::canUse($user)) {
+                throw new AuthorizationException(__('You no longer have access to the AI Assistant.'));
+            }
+
+            $tool = $this->registry->find($call->tool);
+            if (!$tool || !$tool->allowedFor($user)) {
+                throw new AuthorizationException(__('You are no longer allowed to do this.'));
+            }
+
+            try {
+                $message = DB::transaction(fn () => AiActionContext::run($call->id, fn () => $tool->undo($call->result['undo'], $user)));
+            } catch (ToolInputException|ActionException $e) {
+                throw ValidationException::withMessages(['card' => $e->getMessage()]);
+            }
+
+            $call->update(['status' => AiToolCall::UNDONE]);
+            $this->note($call, __('Undone: :message', ['message' => $message]));
 
             return $call;
         });
@@ -194,14 +238,23 @@ class AiAssistant
                 ...$base,
                 'status' => AiToolCall::PENDING,
                 'summary' => $prepared->summary,
-                'payload' => ['data' => $prepared->payload, 'details' => $prepared->details],
+                'payload' => [
+                    'data' => $prepared->payload,
+                    'details' => $prepared->details,
+                    'items' => $prepared->items,
+                    'confirm_phrase' => $prepared->confirmPhrase,
+                ],
             ]);
             $turn->toolCallIds[] = $call->id;
             $turn->cardIds[] = $call->id;
 
-            return "A confirmation card was shown to the user: \"{$prepared->summary}\". Nothing has changed yet. "
-                . 'Tell the user to review the card and press Confirm. Do not say it is done.';
-        } catch (ToolInputException $e) {
+            $typed = $prepared->confirmPhrase
+                ? " This is a risky action: the user must type \"{$prepared->confirmPhrase}\" on the card to confirm."
+                : '';
+
+            return "A confirmation card was shown to the user: \"{$prepared->summary}\". Nothing has changed yet.{$typed} "
+                . 'Tell the user to review the card and confirm it. Do not say it is done.';
+        } catch (ToolInputException|ActionException $e) {
             $turn->toolCallIds[] = AiToolCall::create([...$base, 'status' => AiToolCall::FAILED, 'error' => $e->getMessage()])->id;
 
             return $e->getMessage();

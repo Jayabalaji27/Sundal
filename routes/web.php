@@ -448,6 +448,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'destroy'])->name('conversations.destroy');
             Route::post('tool-calls/{toolCall}/confirm', [\App\Http\Controllers\AiAssistantController::class, 'confirm'])->name('tool-calls.confirm');
             Route::post('tool-calls/{toolCall}/cancel', [\App\Http\Controllers\AiAssistantController::class, 'cancel'])->name('tool-calls.cancel');
+            Route::post('tool-calls/{toolCall}/undo', [\App\Http\Controllers\AiAssistantController::class, 'undo'])->name('tool-calls.undo');
             Route::put('settings', [\App\Http\Controllers\AiAssistantSettingsController::class, 'update'])->name('settings.update');
             Route::post('settings/test', [\App\Http\Controllers\AiAssistantSettingsController::class, 'test'])->name('settings.test');
             Route::delete('settings', [\App\Http\Controllers\AiAssistantSettingsController::class, 'destroy'])->name('settings.destroy');

@@ -31,4 +31,12 @@ class AssignTask
 
         return $task;
     }
+
+    /** Undo: put back the previous assignee (or none) and due date. */
+    public function revert(User $actor, Task $task, ?int $assignedTo, ?string $endDate): Task
+    {
+        $task->update(['assigned_to' => $assignedTo, 'end_date' => $endDate]);
+
+        return $task;
+    }
 }

@@ -68,4 +68,13 @@ abstract class AiTool
     {
         throw new LogicException(static::class . ' is not a write tool.');
     }
+
+    /**
+     * Put back what a confirmed action changed, using ToolOutcome::$undo.
+     * Refuses (ToolInputException) when the record changed again since.
+     */
+    public function undo(array $undo, User $user): string
+    {
+        throw new LogicException(static::class . ' cannot be undone.');
+    }
 }

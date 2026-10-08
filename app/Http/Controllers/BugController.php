@@ -268,41 +268,13 @@ class BugController extends Controller
             $validated['assigned_to'] = null;
         }
 
-        // Get first status for the workspace
-        $firstStatus = BugStatus::forWorkspace($user->current_workspace_id)
-            ->ordered()
-            ->first();
-
-        if (!$firstStatus) {
-            return back()->with('error', __('No bug status found. Please contact administrator.'));
-        }
-
-        // assigned_to is optional: a bug reported without it is unassigned.
-        $assignedTo = $validated['assigned_to'] ?? null;
-
         try {
-            // One unit: if the notification step fails, the bug isn't left half-created.
-            DB::transaction(function () use ($validated, $firstStatus, $user, $assignedTo) {
-                $bug = Bug::create([
-                    ...$validated,
-                    'assigned_to' => $assignedTo,
-                    'bug_status_id' => $firstStatus->id,
-                    'reported_by' => $user->id
-                ]);
-
-                // Fire event for email notification if bug is assigned
-                if ($assignedTo) {
-                    $assignedUser = User::find($assignedTo);
-                    if ($assignedUser) {
-                        $bug->load('project');
-                        if (!config('app.is_demo', true)) {
-                            event(new \App\Events\BugAssigned($bug, $assignedUser, auth()->user()));
-                        }
-                    }
-                }
-            });
+            // Shared with the AI assistant: first status, reported_by, assignment email.
+            app(\App\Actions\Bugs\CreateBug::class)->handle($user, $validated);
 
             return back()->with('success', __('Bug reported successfully!'));
+        } catch (\App\Actions\ActionException $e) {
+            return back()->with('error', $e->getMessage());
         } catch (\Exception $e) {
             \Log::error('Bug creation failed: ' . $e->getMessage());
             return back()->with('error', __('Unable to create bug. Please try again.'));
@@ -371,18 +343,8 @@ class BugController extends Controller
             'bug_status_id' => 'required|exists:bug_statuses,id'
         ]);
 
-        $oldStatus = $bug->bugStatus->name;
-        $bug->update($validated);
-        $newStatus = $bug->fresh()->bugStatus->name;
-
-        // Log status change
-        $bug->logStatusChange($oldStatus, $newStatus);
-
-        // If moving to resolved status, set resolved_by
-        if (in_array($newStatus, ['Resolved', 'Closed']) && !$bug->resolved_by) {
-            $bug->update(['resolved_by' => auth()->id()]);
-            $bug->logResolution(auth()->user());
-        }
+        // Shared with the AI assistant: logs the change and records the resolver.
+        app(\App\Actions\Bugs\ChangeBugStatus::class)->handle(auth()->user(), $bug, BugStatus::findOrFail($validated['bug_status_id']));
 
         return back()->with('success', __('Bug status updated successfully!'));
     }

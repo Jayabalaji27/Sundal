@@ -465,16 +465,8 @@ class InvoiceController extends Controller
 
     public function send(Invoice $invoice)
     {
-        $oldStatus = $invoice->status;
-        $invoice->update([
-            'status' => 'sent',
-            'sent_at' => now()
-        ]);
-
-        // Fire event for Slack notification
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\InvoiceStatusUpdated($invoice, $oldStatus, 'sent'));
-        }
+        // Shared with the AI assistant: marks it sent and fires the status event.
+        app(\App\Actions\Invoices\SendInvoice::class)->handle(auth()->user(), $invoice);
 
         return back()->with('success', __('Invoice sent successfully!'));
     }

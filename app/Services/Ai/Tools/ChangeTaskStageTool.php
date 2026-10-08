@@ -69,12 +69,27 @@ class ChangeTaskStageTool extends AiTool
         $task = $this->resolver->byId($this->resolver->tasks($user), (int) $payload['task_id'], __('task'));
         $stage = $this->resolver->byId(TaskStage::forWorkspace($user->current_workspace_id), (int) $payload['stage_id'], __('task stage'));
 
+        $fromStageId = $task->task_stage_id;
         $this->changeStage->handle($user, $task, $stage);
 
         return new ToolOutcome(
             __('Moved task ":title" to :stage.', ['title' => $task->title, 'stage' => $stage->name]),
             $task,
             route('tasks.show', $task->id, false),
+            ['task_id' => $task->id, 'from_stage_id' => $fromStageId, 'to_stage_id' => $stage->id],
         );
+    }
+
+    public function undo(array $undo, User $user): string
+    {
+        $task = $this->resolver->byId($this->resolver->tasks($user), (int) $undo['task_id'], __('task'));
+        if ((int) $task->task_stage_id !== (int) $undo['to_stage_id']) {
+            throw new ToolInputException(__('Task ":title" was moved again since, so it was not undone.', ['title' => $task->title]));
+        }
+
+        $stage = $this->resolver->byId(TaskStage::forWorkspace($user->current_workspace_id), (int) $undo['from_stage_id'], __('task stage'));
+        $this->changeStage->handle($user, $task, $stage);
+
+        return __('Task ":title" moved back to :stage.', ['title' => $task->title, 'stage' => $stage->name]);
     }
 }

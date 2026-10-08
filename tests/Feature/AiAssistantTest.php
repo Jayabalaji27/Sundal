@@ -276,18 +276,34 @@ describe('chat', function () {
             ->and(AiUsage::withoutGlobalScope('workspace')->count())->toBe(1);
     });
 
-    test('owners and managers get the Phase 1 tools', function (string $role) {
+    test('the owner gets every tool', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
         $fake = fakeAi([['text' => 'ok']]);
 
-        $this->actingAs($users[$role])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
 
-        expect(toolNames($fake))->toBe([
-            'assign_bug', 'assign_task', 'change_task_status', 'create_task',
-            'list_bugs', 'list_projects', 'list_tasks', 'list_team_members',
-        ]);
-    })->with(['owner', 'manager']);
+        expect(toolNames($fake))->toBe(collect(app(\App\Services\Ai\ToolRegistry::class)->all())->keys()->sort()->values()->all())
+            ->and(toolNames($fake))->toHaveCount(26);
+    });
+
+    test('a manager gets the manager workflow tools their role allows', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $fake = fakeAi([['text' => 'ok']]);
+
+        $this->actingAs($users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+
+        expect(toolNames($fake))->toContain(
+            'list_tasks', 'create_task', 'assign_task', 'change_task_status', 'assign_bug', 'create_bug', 'change_bug_status',
+            'list_sprints', 'add_tasks_to_sprint', 'list_timesheet_approvals', 'decide_timesheets',
+            'list_expense_approvals', 'decide_expenses', 'get_budget_status', 'get_project_report',
+        );
+        // Every offered tool really is allowed by the manager's permissions.
+        foreach ($fake->requests[0]->tools as $spec) {
+            expect(app(\App\Services\Ai\ToolRegistry::class)->find($spec->name)->allowedFor($users['manager']))->toBeTrue();
+        }
+    });
 
     test('a read-only model gets no write tools', function () {
         [$workspace, $users] = aiWorkspace();
@@ -296,7 +312,9 @@ describe('chat', function () {
 
         $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
 
-        expect(toolNames($fake))->toBe(['list_bugs', 'list_projects', 'list_tasks', 'list_team_members']);
+        $registry = app(\App\Services\Ai\ToolRegistry::class);
+        expect(toolNames($fake))->toContain('list_projects', 'get_project_report', 'search_knowledge_base')
+            ->and(collect(toolNames($fake))->filter(fn ($name) => $registry->find($name)->isWrite()))->toBeEmpty();
     });
 
     test('nothing works before a provider is connected', function () {
@@ -530,5 +548,322 @@ describe('task screens still work through the shared actions', function () {
         $this->actingAs($users['owner'])->put(route('tasks.change-stage', $task), ['task_stage_id' => $done->id])->assertSessionHasNoErrors();
 
         expect($task->fresh()->task_stage_id)->toBe($done->id);
+    });
+});
+
+// ── Phase 2 and 3 tools ───────────────────────────────────────────────────────
+
+/** Ask the fake model to call one tool; return the resulting card and the tool's reply. */
+function aiCall($test, User $user, string $tool, array $args): array
+{
+    $fake = fakeAi([['tool' => $tool, 'args' => $args], ['text' => 'ok']]);
+    $response = $test->actingAs($user)->postJson(route('ai-assistant.send'), ['content' => 'go'])->assertOk();
+
+    return ['card' => $response->json('messages.1.cards.0'), 'result' => $fake->toolResults[0]['result'] ?? null];
+}
+
+/** The JSON a read tool handed to the model. */
+function aiData(array $call): array
+{
+    return json_decode(\Illuminate\Support\Str::after($call['result'], "\n"), true);
+}
+
+function aiConfirm($test, User $user, int $cardId, ?string $phrase = null)
+{
+    return $test->actingAs($user)->postJson(route('ai-assistant.tool-calls.confirm', $cardId), array_filter(['phrase' => $phrase]));
+}
+
+function aiTimesheet(Workspace $workspace, Project $project, User $person, User $approver): \App\Models\TimesheetApproval
+{
+    $timesheet = \App\Models\Timesheet::create(['user_id' => $person->id, 'workspace_id' => $workspace->id, 'start_date' => now()->startOfWeek(),
+        'end_date' => now()->endOfWeek(), 'status' => 'submitted', 'total_hours' => 8, 'billable_hours' => 8]);
+    \App\Models\TimesheetEntry::create(['timesheet_id' => $timesheet->id, 'project_id' => $project->id, 'user_id' => $person->id,
+        'date' => now()->startOfWeek()->toDateString(), 'start_time' => '09:00', 'end_time' => '17:00', 'hours' => 8, 'is_billable' => true, 'hourly_rate' => 0]);
+
+    return \App\Models\TimesheetApproval::create(['timesheet_id' => $timesheet->id, 'approver_id' => $approver->id, 'status' => 'pending']);
+}
+
+function aiExpense(Project $project, User $submitter, string $title = 'Taxi', float $amount = 1200): \App\Models\ProjectExpense
+{
+    return \App\Models\ProjectExpense::create(['project_id' => $project->id, 'submitted_by' => $submitter->id, 'amount' => $amount,
+        'currency' => 'INR', 'expense_date' => now()->toDateString(), 'title' => $title, 'status' => 'pending']);
+}
+
+function aiInvoice(Workspace $workspace, Project $project, User $creator, array $attrs = []): \App\Models\Invoice
+{
+    return \App\Models\Invoice::withoutGlobalScope('workspace')->create(array_merge(['project_id' => $project->id, 'workspace_id' => $workspace->id,
+        'created_by' => $creator->id, 'title' => 'Website work', 'invoice_date' => now()->toDateString(), 'due_date' => now()->addDays(14)->toDateString(),
+        'subtotal' => 1000, 'tax_rate' => '[]', 'total_amount' => 1000, 'paid_amount' => 0, 'status' => 'draft'], $attrs));
+}
+
+describe('bugs', function () {
+    test('create_bug stores the confirming user as reporter', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner']);
+
+        $card = aiCall($this, $users['manager'], 'create_bug', ['project' => 'Website Redesign', 'title' => 'Login button does nothing', 'severity' => 'critical'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+
+        $bug = Bug::where('title', 'Login button does nothing')->first();
+        expect($bug->reported_by)->toBe($users['manager']->id)->and($bug->severity)->toBe('critical')->and($bug->bugStatus->name)->toBe('New');
+    });
+
+    test('change_bug_status can be undone', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $bug = Bug::create(['project_id' => $project->id, 'bug_status_id' => BugStatus::where('workspace_id', $workspace->id)->where('name', 'New')->value('id'),
+            'title' => 'Crash on save', 'priority' => 'high', 'severity' => 'major', 'reported_by' => $users['owner']->id]);
+
+        $card = aiCall($this, $users['owner'], 'change_bug_status', ['bug' => 'Crash on save', 'status' => 'Resolved'])['card'];
+        aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.can_undo', true);
+        expect($bug->fresh()->bugStatus->name)->toBe('Resolved')->and($bug->fresh()->resolved_by)->toBe($users['owner']->id);
+
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect($bug->fresh()->bugStatus->name)->toBe('New');
+    });
+});
+
+describe('undo', function () {
+    test('undo restores the previous assignee, but not after another change or after 10 minutes', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $task = aiTask(aiProject($workspace, $users['owner']), $users['owner'], 'API docs', ['assigned_to' => $users['member']->id]);
+
+        $card = aiCall($this, $users['owner'], 'assign_task', ['task' => 'API docs', 'assignee' => 'me'])['card'];
+        aiConfirm($this, $users['owner'], $card['id']);
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertOk();
+        expect($task->fresh()->assigned_to)->toBe($users['member']->id);
+
+        $second = aiCall($this, $users['owner'], 'assign_task', ['task' => 'API docs', 'assignee' => 'me'])['card'];
+        aiConfirm($this, $users['owner'], $second['id']);
+        $task->update(['assigned_to' => $users['manager']->id]);
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.tool-calls.undo', $second['id']))->assertStatus(422);
+        expect($task->fresh()->assigned_to)->toBe($users['manager']->id);
+
+        $third = aiCall($this, $users['owner'], 'assign_task', ['task' => 'API docs', 'assignee' => 'me'])['card'];
+        aiConfirm($this, $users['owner'], $third['id']);
+        AiToolCall::withoutGlobalScope('workspace')->whereKey($third['id'])->update(['confirmed_at' => now()->subMinutes(11)]);
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.tool-calls.undo', $third['id']))->assertStatus(422);
+    });
+});
+
+describe('approvals', function () {
+    test('a manager approves a member timesheet on a project they manage, never their own', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        \App\Models\ProjectMember::create(['project_id' => $project->id, 'user_id' => $users['manager']->id, 'role' => 'manager', 'assigned_by' => $users['owner']->id]);
+        $memberSheet = aiTimesheet($workspace, $project, $users['member'], $users['manager']);
+        $ownSheet = aiTimesheet($workspace, $project, $users['manager'], $users['owner']);
+
+        $card = aiCall($this, $users['manager'], 'decide_timesheets', ['decision' => 'approve', 'project' => 'Website Redesign'])['card'];
+        expect($card['items'])->toHaveCount(1)->and($card['items'][0])->toContain($users['member']->name);
+
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($memberSheet->fresh()->status)->toBe('approved')
+            ->and($memberSheet->timesheet->fresh()->status)->toBe('approved')
+            ->and($ownSheet->fresh()->status)->toBe('pending');
+    });
+
+    test('rejecting a timesheet needs a reason', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiTimesheet($workspace, aiProject($workspace, $users['owner']), $users['member'], $users['owner']);
+
+        $call = aiCall($this, $users['owner'], 'decide_timesheets', ['decision' => 'reject', 'person' => $users['member']->email]);
+        expect($call['card'])->toBeNull()->and($call['result'])->toContain('reason is required');
+    });
+
+    test('more than 10 records need the typed phrase', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        foreach (range(1, 11) as $i) {
+            aiTimesheet($workspace, $project, $users['member'], $users['owner']);
+        }
+
+        $card = aiCall($this, $users['owner'], 'decide_timesheets', ['decision' => 'approve', 'person' => $users['member']->email])['card'];
+        expect($card['items'])->toHaveCount(11)->and($card['confirm_phrase'])->toBe('APPROVE 11');
+
+        aiConfirm($this, $users['owner'], $card['id'])->assertStatus(422);
+        aiConfirm($this, $users['owner'], $card['id'], 'wrong')->assertStatus(422);
+        aiConfirm($this, $users['owner'], $card['id'], 'approve 11')->assertJsonPath('card.status', 'done');
+        expect(\App\Models\TimesheetApproval::where('status', 'approved')->count())->toBe(11);
+    });
+
+    test('expenses: approval records the approver, rejection needs a reason, own expenses are left out', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        \App\Models\ProjectMember::create(['project_id' => $project->id, 'user_id' => $users['manager']->id, 'role' => 'manager', 'assigned_by' => $users['owner']->id]);
+        $taxi = aiExpense($project, $users['member']);
+        $own = aiExpense($project, $users['manager'], 'Own hotel');
+
+        $card = aiCall($this, $users['manager'], 'decide_expenses', ['decision' => 'approve', 'project' => 'Website Redesign'])['card'];
+        expect($card['items'])->toHaveCount(1);
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+
+        expect($taxi->fresh()->status)->toBe('approved')
+            ->and(\App\Models\ExpenseApproval::where('project_expense_id', $taxi->id)->value('approver_id'))->toBe($users['manager']->id)
+            ->and($own->fresh()->status)->toBe('pending');
+
+        $noReason = aiCall($this, $users['owner'], 'decide_expenses', ['decision' => 'reject', 'expense_ids' => (string) $own->id]);
+        expect($noReason['card'])->toBeNull()->and($noReason['result'])->toContain('reason is required');
+    });
+});
+
+describe('sprints, budgets and reports', function () {
+    test('tasks join an existing sprint with who added them; tasks of other projects are refused', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $other = aiProject($workspace, $users['owner'], 'Other Project');
+        $sprint = \App\Models\Sprint::withoutGlobalScope('workspace')->create(['project_id' => $project->id, 'workspace_id' => $workspace->id, 'name' => 'Sprint 7', 'status' => 'planning', 'created_by' => $users['owner']->id]);
+        aiTask($project, $users['owner'], 'Checkout page');
+        aiTask($other, $users['owner'], 'Elsewhere task');
+
+        $card = aiCall($this, $users['manager'], 'add_tasks_to_sprint', ['sprint' => 'Sprint 7', 'tasks' => 'Checkout page'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect(DB::table('sprint_tasks')->where('sprint_id', $sprint->id)->value('created_by'))->toBe($users['manager']->id);
+
+        $refused = aiCall($this, $users['manager'], 'add_tasks_to_sprint', ['sprint' => 'Sprint 7', 'tasks' => 'Elsewhere task']);
+        expect($refused['card'])->toBeNull()->and($refused['result'])->toContain('No task matches');
+    });
+
+    test('budget status and project report read the real numbers', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        aiTask($project, $users['owner'], 'Late task', ['end_date' => now()->subDays(3)->toDateString()]);
+        \App\Models\ProjectBudget::create(['project_id' => $project->id, 'workspace_id' => $workspace->id, 'total_budget' => 1000,
+            'period_type' => 'project', 'start_date' => now()->subMonth()->toDateString(), 'status' => 'active', 'currency' => 'INR', 'created_by' => $users['owner']->id]);
+
+        $budget = aiData(aiCall($this, $users['owner'], 'get_budget_status', []));
+        expect($budget['budgets'][0]['project'])->toBe('Website Redesign')->and($budget['budgets'][0]['total_budget'])->toEqual(1000);
+
+        $report = aiData(aiCall($this, $users['owner'], 'get_project_report', ['project' => 'Website Redesign']));
+        expect($report['tasks']['total'])->toBe(1)->and($report['tasks']['overdue'][0]['title'])->toBe('Late task');
+    });
+});
+
+describe('owner tools', function () {
+    test('create_project creates it with members, by the confirming owner', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        $card = aiCall($this, $users['owner'], 'create_project', ['title' => 'Sundal', 'status' => 'active', 'members' => $users['member']->email])['card'];
+        expect($card['details'])->toHaveKey('Members', $users['member']->name);
+        aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.status', 'done');
+
+        $project = Project::where('title', 'Sundal')->first();
+        expect($project->created_by)->toBe($users['owner']->id)
+            ->and($project->workspace_id)->toBe($workspace->id)
+            ->and($project->members()->where('user_id', $users['member']->id)->exists())->toBeTrue();
+    });
+
+    test('a manager cannot staff a project they do not manage', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner']);
+
+        $call = aiCall($this, $users['manager'], 'add_project_members', ['project' => 'Website Redesign', 'people' => $users['member']->email]);
+        expect($call['card'])->toBeNull()->and($call['result'])->toContain('only staff projects you manage');
+    });
+
+    test('send_invoice needs the invoice number typed', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $invoice = aiInvoice($workspace, aiProject($workspace, $users['owner']), $users['owner']);
+
+        $card = aiCall($this, $users['owner'], 'send_invoice', ['invoice' => $invoice->invoice_number])['card'];
+        expect($card['confirm_phrase'])->toBe($invoice->invoice_number);
+
+        aiConfirm($this, $users['owner'], $card['id'], 'nope')->assertStatus(422);
+        expect($invoice->fresh()->status)->toBe('draft');
+        aiConfirm($this, $users['owner'], $card['id'], $invoice->invoice_number)->assertJsonPath('card.status', 'done');
+        expect($invoice->fresh()->status)->toBe('sent');
+    });
+
+    test('invite_user follows the role rules: managers invite members only', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        expect(aiCall($this, $users['manager'], 'invite_user', ['email' => 'boss@acme.com', 'role' => 'manager'])['card'])->toBeNull();
+
+        // The Free plan's 2-user limit is already used: refused before any card.
+        $full = aiCall($this, $users['owner'], 'invite_user', ['email' => 'john@acme.com', 'role' => 'client']);
+        expect($full['card'])->toBeNull()->and($full['result'])->not->toBeEmpty();
+
+        Plan::where('is_default', true)->update(['max_users_per_workspace' => 10, 'max_clients_per_workspace' => 10]);
+        $card = aiCall($this, $users['owner'], 'invite_user', ['email' => 'john@acme.com', 'role' => 'client'])['card'];
+        aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect(\App\Models\WorkspaceInvitation::where('email', 'john@acme.com')->value('invited_by'))->toBe($users['owner']->id);
+    });
+
+    test('revenue summary adds billed and collected for the period', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $sent = aiInvoice($workspace, $project, $users['owner'], ['status' => 'partial_paid', 'invoice_date' => '2026-09-10', 'total_amount' => 1000, 'paid_amount' => 400]);
+        aiInvoice($workspace, $project, $users['owner'], ['status' => 'draft', 'invoice_date' => '2026-09-12', 'total_amount' => 999]);
+        \App\Models\Payment::create(['invoice_id' => $sent->id, 'amount' => 400, 'payment_method' => 'bank', 'payment_date' => '2026-09-20', 'created_by' => $users['owner']->id]);
+
+        $data = aiData(aiCall($this, $users['owner'], 'get_revenue_summary', ['from' => '2026-09-01', 'to' => '2026-09-30']));
+        expect($data['billed'])->toEqual(1000)->and($data['collected'])->toEqual(400)->and($data['outstanding_now'])->toEqual(600);
+    });
+
+    test('knowledge base search returns matching published articles only', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        \App\Models\KbArticle::withoutGlobalScope('workspace')->create(['workspace_id' => $workspace->id, 'kb_category_id' => 1, 'title' => 'How to submit a timesheet', 'content' => 'Open Timesheets and press Submit.', 'is_published' => true, 'created_by' => $users['owner']->id]);
+        \App\Models\KbArticle::withoutGlobalScope('workspace')->create(['workspace_id' => $workspace->id, 'kb_category_id' => 1, 'title' => 'Draft timesheet notes', 'content' => 'Unpublished', 'is_published' => false, 'created_by' => $users['owner']->id]);
+
+        $data = aiData(aiCall($this, $users['manager'], 'search_knowledge_base', ['query' => 'submit timesheet']));
+        expect($data['found'])->toBe(1)->and($data['articles'][0]['title'])->toBe('How to submit a timesheet');
+    });
+
+    test('list_contracts shows contracts expiring soon', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        \App\Models\Contract::withoutGlobalScope('workspace')->create(['subject' => 'Acme support', 'contract_type_id' => 1, 'contract_value' => 5000,
+            'start_date' => now()->subYear()->toDateString(), 'end_date' => now()->addDays(10)->toDateString(), 'workspace_id' => $workspace->id,
+            'created_by' => $users['owner']->id, 'currency' => 'USD']);
+
+        $data = aiData(aiCall($this, $users['owner'], 'list_contracts', ['expiring_within_days' => 30]));
+        expect($data['contracts'][0]['subject'])->toBe('Acme support');
+    });
+});
+
+describe('screens still work through the new shared actions', function () {
+    test('bug form, bug status, expense approval, timesheet approval, invoice send and project form', function () {
+        [$workspace, $users] = aiWorkspace();
+        $project = aiProject($workspace, $users['owner']);
+        $owner = $users['owner'];
+
+        $this->actingAs($owner)->post(route('bugs.store'), ['project_id' => $project->id, 'title' => 'Form bug', 'priority' => 'low', 'severity' => 'minor'])->assertSessionHasNoErrors();
+        $bug = Bug::where('title', 'Form bug')->first();
+        expect($bug->reported_by)->toBe($owner->id);
+
+        $resolved = BugStatus::where('workspace_id', $workspace->id)->where('name', 'Resolved')->first();
+        $this->actingAs($owner)->put(route('bugs.change-status', $bug), ['bug_status_id' => $resolved->id]);
+        expect($bug->fresh()->resolved_by)->toBe($owner->id);
+
+        $expense = aiExpense($project, $users['member']);
+        $this->actingAs($owner)->post(route('expense-approvals.approve', $expense), ['notes' => 'ok']);
+        expect($expense->fresh()->status)->toBe('approved');
+
+        $approval = aiTimesheet($workspace, $project, $users['member'], $owner);
+        $this->actingAs($owner)->post(route('timesheet-approvals.approve', $approval));
+        expect($approval->fresh()->status)->toBe('approved')->and($approval->timesheet->fresh()->status)->toBe('approved');
+
+        $invoice = aiInvoice($workspace, $project, $owner);
+        $this->actingAs($owner)->post(route('invoices.send', $invoice));
+        expect($invoice->fresh()->status)->toBe('sent');
+
+        $this->actingAs($owner)->post(route('projects.store'), ['title' => 'From form', 'status' => 'active', 'priority' => 'high', 'member_ids' => [$users['member']->id]])
+            ->assertSessionHasNoErrors();
+        expect(Project::where('title', 'From form')->first()->members()->count())->toBe(1);
     });
 });

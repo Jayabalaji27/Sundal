@@ -31,4 +31,12 @@ class AssignBug
 
         return $bug;
     }
+
+    /** Undo: put back the previous assignee (or none) and due date. */
+    public function revert(User $actor, Bug $bug, ?int $assignedTo, ?string $endDate): Bug
+    {
+        $bug->update(['assigned_to' => $assignedTo, 'end_date' => $endDate]);
+
+        return $bug;
+    }
 }

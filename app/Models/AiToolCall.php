@@ -19,6 +19,10 @@ class AiToolCall extends Model
     public const FAILED = 'failed';
     public const CANCELLED = 'cancelled';
     public const EXPIRED = 'expired';
+    public const UNDONE = 'undone';
+
+    /** Minutes after confirming during which the Undo link works. */
+    public const UNDO_MINUTES = 10;
 
     protected $fillable = [
         'workspace_id', 'user_id', 'ai_conversation_id', 'ai_message_id', 'prompt', 'tool', 'input', 'payload',
@@ -49,6 +53,13 @@ class AiToolCall extends Model
             && $this->created_at->lt(now()->subMinutes(config('ai_assistant.confirmation_ttl_minutes', 30)));
     }
 
+    public function canUndo(): bool
+    {
+        return $this->status === self::DONE
+            && !empty($this->result['undo'])
+            && $this->confirmed_at?->gt(now()->subMinutes(self::UNDO_MINUTES));
+    }
+
     /** Shape sent to the AI Assistant page for confirm cards and results. */
     public function toCard(): array
     {
@@ -58,7 +69,11 @@ class AiToolCall extends Model
             'summary' => $this->summary,
             'status' => $this->isExpired() ? self::EXPIRED : $this->status,
             'details' => $this->payload['details'] ?? [],
+            'items' => $this->payload['items'] ?? [],
+            'confirm_phrase' => $this->payload['confirm_phrase'] ?? null,
             'link' => $this->result['link'] ?? null,
+            'can_undo' => $this->canUndo(),
+            'undo_until' => $this->canUndo() ? $this->confirmed_at->addMinutes(self::UNDO_MINUTES)->toIso8601String() : null,
             'error' => $this->error,
         ];
     }

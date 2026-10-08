@@ -72,12 +72,33 @@ class AssignBugTool extends AiTool
         $bug = $this->resolver->byId($this->resolver->bugs($user), (int) $payload['bug_id'], __('bug'));
         $assignee = $this->resolver->byId($this->resolver->members($user), (int) $payload['assignee_id'], __('person'));
 
+        $before = ['assigned_to' => $bug->assigned_to, 'end_date' => $bug->end_date?->format('Y-m-d')];
+
         $this->assignBug->handle($user, $bug, $assignee, $payload['due_date'] ?? null);
+        $bug->refresh();
 
         return new ToolOutcome(
             __('Assigned bug ":title" to :name.', ['title' => $bug->title, 'name' => $assignee->name]),
             $bug,
             route('bugs.show', $bug->id, false),
+            [
+                'bug_id' => $bug->id,
+                'before' => $before,
+                'after' => ['assigned_to' => $bug->assigned_to, 'end_date' => $bug->end_date?->format('Y-m-d')],
+            ],
         );
+    }
+
+    public function undo(array $undo, User $user): string
+    {
+        $bug = $this->resolver->byId($this->resolver->bugs($user), (int) $undo['bug_id'], __('bug'));
+
+        if ((int) $bug->assigned_to !== (int) $undo['after']['assigned_to'] || $bug->end_date?->format('Y-m-d') !== $undo['after']['end_date']) {
+            throw new ToolInputException(__('Bug ":title" was changed again since, so it was not undone.', ['title' => $bug->title]));
+        }
+
+        $this->assignBug->revert($user, $bug, $undo['before']['assigned_to'], $undo['before']['end_date']);
+
+        return __('Bug ":title" assignment put back.', ['title' => $bug->title]);
     }
 }

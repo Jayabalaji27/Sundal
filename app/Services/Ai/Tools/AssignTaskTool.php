@@ -72,12 +72,33 @@ class AssignTaskTool extends AiTool
         $task = $this->resolver->byId($this->resolver->tasks($user), (int) $payload['task_id'], __('task'));
         $assignee = $this->resolver->byId($this->resolver->members($user), (int) $payload['assignee_id'], __('person'));
 
+        $before = ['assigned_to' => $task->assigned_to, 'end_date' => $task->end_date?->format('Y-m-d')];
+
         $this->assignTask->handle($user, $task, $assignee, $payload['due_date'] ?? null);
+        $task->refresh();
 
         return new ToolOutcome(
             __('Assigned task ":title" to :name.', ['title' => $task->title, 'name' => $assignee->name]),
             $task,
             route('tasks.show', $task->id, false),
+            [
+                'task_id' => $task->id,
+                'before' => $before,
+                'after' => ['assigned_to' => $task->assigned_to, 'end_date' => $task->end_date?->format('Y-m-d')],
+            ],
         );
+    }
+
+    public function undo(array $undo, User $user): string
+    {
+        $task = $this->resolver->byId($this->resolver->tasks($user), (int) $undo['task_id'], __('task'));
+
+        if ((int) $task->assigned_to !== (int) $undo['after']['assigned_to'] || $task->end_date?->format('Y-m-d') !== $undo['after']['end_date']) {
+            throw new ToolInputException(__('Task ":title" was changed again since, so it was not undone.', ['title' => $task->title]));
+        }
+
+        $this->assignTask->revert($user, $task, $undo['before']['assigned_to'], $undo['before']['end_date']);
+
+        return __('Task ":title" assignment put back.', ['title' => $task->title]);
     }
 }
