@@ -13,7 +13,7 @@ import {
     Ticket, Gift, DollarSign, MessageSquare, Globe, FolderOpen,
     ClipboardList, Clock, Bot, Video, Building2, BarChart3, BookOpen,
     TrendingUp, Radio, Bug, ListTodo, Receipt, FileIcon, Zap, AlertTriangle,
-    Bell, Mail, FolderKanban, Users, History
+    Bell, Mail, FolderKanban, Users, History, Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AppLogo from './app-logo';
@@ -206,6 +206,15 @@ export function AppSidebar() {
         // 11. AI (Risk Radar + Resource Conflicts + custom agents)
         if (!modulesLocked && (hasPermission(permissions, 'agent_use') || hasPermission(permissions, 'agent_view_any'))) {
             items.push({ title: t('AI'), href: route('ai.index'), icon: Bot, group: t('Intelligence') });
+        }
+
+        // AI Assistant: owners and managers only (aiAssistant is null for other roles).
+        // Owners without the AI add-on still see it, and the route sends them to the
+        // plans page; managers only see it when the owner's plan includes AI.
+        const aiAssistant: string | null = auth?.aiAssistant ?? null;
+        const isWorkspaceOwner = auth?.user?.workspace_role === 'owner';
+        if (aiAssistant && (aiAssistant !== 'plan' || isWorkspaceOwner)) {
+            items.push({ title: t('AI Assistant'), href: route('ai-assistant.index'), icon: Sparkles, group: t('Intelligence') });
         }
 
         // 12. Reports

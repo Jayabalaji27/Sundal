@@ -322,45 +322,14 @@ class TaskController extends Controller
             abort(403, 'Project not found in current workspace.');
         }
 
-        // Get first stage for the workspace
-        $firstStage = TaskStage::forWorkspace(auth()->user()->current_workspace_id)
-            ->ordered()
-            ->first();
+        // Shared with the AI assistant: creates the task in the first stage and
+        // fires the created/assigned notifications.
+        $task = app(\App\Actions\Tasks\CreateTask::class)->handle($user, $validated);
 
-        // assigned_to is optional: a task created without it is unassigned.
-        $assignedTo = $validated['assigned_to'] ?? null;
-
-        // One unit: if a follow-up step fails, no half-created task is left behind.
-        DB::transaction(function () use ($validated, $firstStage, $assignedTo) {
-            $task = Task::create([
-                ...$validated,
-                'assigned_to' => $assignedTo,
-                'task_stage_id' => $firstStage->id,
-                'created_by' => auth()->id(),
-                'progress' => 0
-            ]);
-
-            // Sync with Google Calendar if enabled
-            if ($validated['is_googlecalendar_sync'] ?? false) {
-                $this->syncTaskWithGoogleCalendar($task);
-            }
-
-            // Fire event for Slack notification
-            if (!config('app.is_demo', true)) {
-                event(new \App\Events\TaskCreated($task));
-            }
-
-            // Fire event for email notification if task is assigned
-            if ($assignedTo) {
-                $assignedUser = User::find($assignedTo);
-                if ($assignedUser) {
-                    $task->load('project');
-                    if (!config('app.is_demo', true)) {
-                        event(new \App\Events\TaskAssigned($task, $assignedUser, auth()->user()));
-                    }
-                }
-            }
-        });
+        // Sync with Google Calendar if enabled
+        if ($validated['is_googlecalendar_sync'] ?? false) {
+            $this->syncTaskWithGoogleCalendar($task);
+        }
 
         return back()->with('success', __('Task created successfully!'));
     }
@@ -502,14 +471,8 @@ class TaskController extends Controller
             'task_stage_id' => 'required|exists:task_stages,id'
         ]);
 
-        $oldStage = $task->taskStage->name ?? 'Unknown';
-        $task->update($validated);
-        $newStage = TaskStage::find($validated['task_stage_id'])->name ?? 'Unknown';
-
-        // Fire event for Slack notification
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\TaskStageUpdated($task, $oldStage, $newStage));
-        }
+        // Shared with the AI assistant: moves the task and fires the Slack event.
+        app(\App\Actions\Tasks\ChangeTaskStage::class)->handle($user, $task, TaskStage::findOrFail($validated['task_stage_id']));
 
         return back()->with('success', __('Task stage updated successfully!'));
     }

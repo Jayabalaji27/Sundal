@@ -437,6 +437,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('chat/conversations/{conversation}/messages', [ChatController::class, 'messages'])->middleware(['permission:chat_view', 'module.access'])->name('chat.messages');
         Route::post('chat/conversations/{conversation}/messages', [ChatController::class, 'sendMessage'])->middleware(['permission:chat_view', 'module.access'])->name('chat.send');
 
+        // AI Assistant (BYOA) — company owners and managers only (ai.assistant),
+        // and only with the AI add-on (module.access). Same ordering rule as the
+        // AI page above: the role check runs first so other roles get a clean 403.
+        Route::middleware(['ai.assistant', 'module.access'])->prefix('ai-assistant')->name('ai-assistant.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\AiAssistantController::class, 'index'])->name('index');
+            Route::post('messages', [\App\Http\Controllers\AiAssistantController::class, 'send'])->name('send');
+            Route::get('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'show'])->name('conversations.show');
+            Route::patch('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'update'])->name('conversations.update');
+            Route::delete('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'destroy'])->name('conversations.destroy');
+            Route::post('tool-calls/{toolCall}/confirm', [\App\Http\Controllers\AiAssistantController::class, 'confirm'])->name('tool-calls.confirm');
+            Route::post('tool-calls/{toolCall}/cancel', [\App\Http\Controllers\AiAssistantController::class, 'cancel'])->name('tool-calls.cancel');
+            Route::put('settings', [\App\Http\Controllers\AiAssistantSettingsController::class, 'update'])->name('settings.update');
+            Route::post('settings/test', [\App\Http\Controllers\AiAssistantSettingsController::class, 'test'])->name('settings.test');
+            Route::delete('settings', [\App\Http\Controllers\AiAssistantSettingsController::class, 'destroy'])->name('settings.destroy');
+        });
+
         // ── Backward-compat redirects (old → new) ─────────────────────────
         // Old standup/risk-radar/resource-conflicts links open inside the AI page
         // (their own pages still exist; these are additional entry points)

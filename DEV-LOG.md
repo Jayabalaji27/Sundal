@@ -457,10 +457,49 @@ failed before this change, so triage them separately.
 
 ---
 
+### RP-11 · 2026-10-08 · AI Assistant + BYOA, Phase 1 start (branch `feature/ai-assistant-byoa`)
+
+**Plan:** "Sundal AI Assistant & BYOA — Implementation Plan" (claude.ai doc). Scope: company
+owner + manager only, separate AI Assistant page, BYOA only (no Sundal-managed or local
+models), gated by the existing Pro Add-on (`module.access`). Tests: `tests/Feature/AiAssistantTest.php`.
+
+- **Provider layer** — `App\Services\Ai\AiProvider` interface. `PrismProvider`
+  (`prism-php/prism` v0.100.1, new dependency) for Anthropic, OpenAI, Gemini;
+  `AzureOpenAiProvider` over the existing `openai-php/client` (Prism has no Azure driver);
+  `FakeProvider` for tests. Config: `config/ai_assistant.php` (tested model list, caps, TTLs).
+- **Tables** — `ai_provider_settings` (encrypted key, last 4 shown), `ai_conversations`,
+  `ai_messages`, `ai_tool_calls` (audit, kept when a chat is deleted; prompt text removed),
+  `ai_usage` (monthly token cap).
+- **Access** — `AiAccess` + `ai.assistant` middleware: owner/manager only (others 403),
+  Pro Add-on via `module.access`, owner can switch managers off. Shared as `auth.aiAssistant`.
+- **Tools (8)** — read: list_projects, list_tasks, list_bugs, list_team_members; write:
+  create_task, assign_task, change_task_status, assign_bug. Writes only create a pending
+  confirm card; they run on Confirm, re-checking access, permission and every record.
+  `RecordResolver` scopes every lookup to the workspace + `Project::scopeVisibleTo` and asks
+  instead of guessing when a name matches several records.
+- **Action classes** (`app/Actions`) — `CreateTask`, `ChangeTaskStage` (now also used by
+  `TaskController::store` / `changeStage`), `AssignTask`, `AssignBug`. Acting user is passed in.
+- **Audit** — `LogsActivity` adds `via: ai_assistant` + `ai_tool_call_id` to project
+  activity metadata for confirmed AI actions (`AiActionContext`).
+- **Retention** — `ai:prune-conversations`, scheduled daily 02:30 (per-workspace retention
+  days; also expires stale confirm cards).
+- **Fix** — `TaskStageSeeder::createDefaultStagesForWorkspace` now sets `is_completed` on
+  Done; workspaces created after the 2026-10-02 migration counted Done tasks as open.
+
+Not in this step yet: streaming replies / queue worker (calls run in the request), undo,
+spatie activitylog for all modules, `RecordsCreator` trait, manager-workflow tools (Phase 2).
+
+Tests: `AiAssistantTest` 34/34 pass. Full suite 2026-10-08: 35 failures, all in the same 7
+files listed under RP-10 (pre-existing). Note: `php artisan test` needs
+`-d memory_limit=1G` locally, or Collision runs out of memory printing those failures.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)
 - [ ] Run `php artisan migrate` on production after deploy
+- [ ] AI Assistant: `npm run build` (new page) + `php artisan migrate` + scheduler running for `ai:prune-conversations`
 - [ ] Test all 6 custom modules end-to-end
 - [ ] Configure OpenAI API key for Agents/Chatbot
 - [ ] Configure Google OAuth for Google Meet/Calendar

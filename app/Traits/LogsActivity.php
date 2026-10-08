@@ -32,7 +32,7 @@ trait LogsActivity
             'user_id' => auth()->id() ?? 1,
             'action' => $this->getActivityAction($action),
             'description' => $this->getActivityDescription($action),
-            'metadata' => array_merge($this->getActivityMetadata(), $metadata)
+            'metadata' => array_merge($this->getActivityMetadata(), \App\Services\Ai\AiActionContext::metadata(), $metadata)
         ]);
     }
 

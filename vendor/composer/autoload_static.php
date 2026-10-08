@@ -14,18 +14,18 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
         '8825ede83f2f289127722d4e842cf7e8' => __DIR__ . '/..' . '/symfony/polyfill-intl-grapheme/bootstrap.php',
         'b6b991a57620e2fb6b2f66f03fe9ddc2' => __DIR__ . '/..' . '/symfony/string/Resources/functions.php',
         '662a729f963d39afe703c9d9b7ab4a8c' => __DIR__ . '/..' . '/symfony/polyfill-php83/bootstrap.php',
-        'a4a119a56e50fbb293281d9a48007e0e' => __DIR__ . '/..' . '/symfony/polyfill-php80/bootstrap.php',
         'f598d06aa772fa33d905e87be6398fb1' => __DIR__ . '/..' . '/symfony/polyfill-intl-idn/bootstrap.php',
+        'a4a119a56e50fbb293281d9a48007e0e' => __DIR__ . '/..' . '/symfony/polyfill-php80/bootstrap.php',
         '667aeda72477189d0494fecd327c3641' => __DIR__ . '/..' . '/symfony/var-dumper/Resources/functions/dump.php',
         '7b11c4dc42b3b3023073cb14e519683c' => __DIR__ . '/..' . '/ralouphie/getallheaders/src/getallheaders.php',
         '35a6ad97d21e794e7e22a17d806652e4' => __DIR__ . '/..' . '/nunomaduro/termwind/src/Functions.php',
-        '6124b4c8570aa390c21fafd04a26c69f' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/deep_copy.php',
         '37a3dc5111fe8f707ab4c132ef1dbc62' => __DIR__ . '/..' . '/guzzlehttp/guzzle/src/functions_include.php',
+        '6124b4c8570aa390c21fafd04a26c69f' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/deep_copy.php',
         'ec07570ca5a812141189b1fa81503674' => __DIR__ . '/..' . '/phpunit/phpunit/src/Framework/Assert/Functions.php',
         '9c67151ae59aff4788964ce8eb2a0f43' => __DIR__ . '/..' . '/clue/stream-filter/src/functions_include.php',
-        '8cff32064859f4559445b89279f3199c' => __DIR__ . '/..' . '/php-http/message/src/filters.php',
         '2203a247e6fda86070a5e4e07aed533a' => __DIR__ . '/..' . '/symfony/clock/Resources/now.php',
         'a1105708a18b76903365ca1c4aa61b02' => __DIR__ . '/..' . '/symfony/translation/Resources/functions.php',
+        '8cff32064859f4559445b89279f3199c' => __DIR__ . '/..' . '/php-http/message/src/filters.php',
         '09f6b20656683369174dd6fa83b7e5fb' => __DIR__ . '/..' . '/symfony/polyfill-uuid/bootstrap.php',
         '47e1160838b5e5a10346ac4084b58c23' => __DIR__ . '/..' . '/laravel/prompts/src/helpers.php',
         'e39a8b23c42d4e1452234d762b03835a' => __DIR__ . '/..' . '/ramsey/uuid/src/functions.php',
@@ -136,6 +136,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
         'ce9671a430e4846b44e1c68c7611f9f5' => __DIR__ . '/..' . '/mockery/mockery/library/Mockery.php',
         '61ba3e92ef91a7a0f1cc260ebd9290e4' => __DIR__ . '/..' . '/openai-php/client/src/OpenAI.php',
         'd634523d799d97a8ab4807b650bf5cea' => __DIR__ . '/..' . '/pestphp/pest-plugin-laravel/src/Autoload.php',
+        'a59b9c2bbe4313495dfa863f08526b63' => __DIR__ . '/..' . '/prism-php/prism/src/helpers.php',
         'd7354eb4c8441fbf08eec280b61c7c73' => __DIR__ . '/..' . '/rachidlaasri/laravel-installer/src/Helpers/functions.php',
         '13906c19e3d8fcd1341b24ed4d51cf72' => __DIR__ . '/..' . '/razorpay/razorpay/Deprecated.php',
         '377b22b161c09ed6e5152de788ca020a' => __DIR__ . '/..' . '/spatie/laravel-permission/src/helpers.php',
@@ -143,37 +144,37 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
     );
 
     public static $prefixLengthsPsr4 = array (
-        'v' => 
+        'v' =>
         array (
             'voku\\' => 5,
         ),
-        'p' => 
+        'p' =>
         array (
             'phpDocumentor\\Reflection\\' => 25,
         ),
-        'Z' => 
+        'Z' =>
         array (
             'ZipStream\\' => 10,
         ),
-        'Y' => 
+        'Y' =>
         array (
             'YooKassa\\Validator\\' => 19,
             'YooKassa\\' => 9,
         ),
-        'W' => 
+        'W' =>
         array (
             'WpOrg\\Requests\\' => 15,
             'Whoops\\' => 7,
             'Webmozart\\Assert\\' => 17,
         ),
-        'T' => 
+        'T' =>
         array (
             'TijsVerkoyen\\CssToInlineStyles\\' => 31,
             'Tighten\\Ziggy\\' => 14,
             'Tests\\' => 6,
             'Termwind\\' => 9,
         ),
-        'S' => 
+        'S' =>
         array (
             'Symfony\\Polyfill\\Uuid\\' => 22,
             'Symfony\\Polyfill\\Php83\\' => 23,
@@ -217,7 +218,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'Sentry\\' => 7,
             'Sabberworm\\CSS\\' => 15,
         ),
-        'R' => 
+        'R' =>
         array (
             'Razorpay\\Tests\\' => 15,
             'Razorpay\\Api\\' => 13,
@@ -225,7 +226,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'Ramsey\\Collection\\' => 18,
             'RachidLaasri\\LaravelInstaller\\' => 30,
         ),
-        'P' => 
+        'P' =>
         array (
             'Psy\\' => 4,
             'Psr\\SimpleCache\\' => 16,
@@ -236,6 +237,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'Psr\\Container\\' => 14,
             'Psr\\Clock\\' => 10,
             'Psr\\Cache\\' => 10,
+            'Prism\\Prism\\' => 12,
             'PhpParser\\' => 10,
             'PhpOption\\' => 10,
             'PhpOffice\\PhpSpreadsheet\\' => 25,
@@ -249,16 +251,16 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'PHPUnit\\Architecture\\' => 21,
             'PHPStan\\PhpDocParser\\' => 21,
         ),
-        'O' => 
+        'O' =>
         array (
             'OpenAI\\' => 7,
         ),
-        'N' => 
+        'N' =>
         array (
             'Nyholm\\Psr7\\' => 12,
             'NunoMaduro\\Collision\\' => 21,
         ),
-        'M' => 
+        'M' =>
         array (
             'Monolog\\' => 8,
             'Mollie\\Api\\' => 11,
@@ -268,7 +270,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'Masterminds\\' => 12,
             'Maatwebsite\\Excel\\' => 18,
         ),
-        'L' => 
+        'L' =>
         array (
             'League\\Uri\\' => 11,
             'League\\MimeTypeDetection\\' => 25,
@@ -285,19 +287,19 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'LaraBug\\' => 8,
             'Lab404\\Impersonate\\' => 19,
         ),
-        'J' => 
+        'J' =>
         array (
             'JmesPath\\' => 9,
             'Jean85\\' => 7,
         ),
-        'I' => 
+        'I' =>
         array (
             'Iyzipay\\' => 8,
             'Inertia\\' => 8,
             'Illuminate\\Support\\' => 19,
             'Illuminate\\' => 11,
         ),
-        'H' => 
+        'H' =>
         array (
             'Http\\Promise\\' => 13,
             'Http\\Message\\MultipartStream\\' => 29,
@@ -307,7 +309,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'Http\\Client\\Common\\' => 19,
             'Http\\Client\\' => 12,
         ),
-        'G' => 
+        'G' =>
         array (
             'GuzzleHttp\\UriTemplate\\' => 23,
             'GuzzleHttp\\Psr7\\' => 16,
@@ -315,7 +317,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'GuzzleHttp\\' => 11,
             'GrahamCampbell\\ResultType\\' => 26,
         ),
-        'F' => 
+        'F' =>
         array (
             'Fruitcake\\Cors\\' => 15,
             'FontLib\\' => 8,
@@ -323,11 +325,11 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'FedaPay\\' => 8,
             'Faker\\' => 6,
         ),
-        'E' => 
+        'E' =>
         array (
             'Egulias\\EmailValidator\\' => 23,
         ),
-        'D' => 
+        'D' =>
         array (
             'Ds\\' => 3,
             'Dotenv\\' => 7,
@@ -343,7 +345,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'Database\\Seeders\\' => 17,
             'Database\\Factories\\' => 19,
         ),
-        'C' => 
+        'C' =>
         array (
             'Cron\\' => 5,
             'Composer\\Semver\\' => 16,
@@ -356,12 +358,12 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             'Carbon\\Doctrine\\' => 16,
             'Carbon\\' => 7,
         ),
-        'B' => 
+        'B' =>
         array (
             'Brick\\Math\\' => 11,
             'Barryvdh\\DomPDF\\' => 16,
         ),
-        'A' => 
+        'A' =>
         array (
             'Aws\\' => 4,
             'App\\' => 4,
@@ -369,350 +371,354 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
     );
 
     public static $prefixDirsPsr4 = array (
-        'voku\\' => 
+        'voku\\' =>
         array (
             0 => __DIR__ . '/..' . '/voku/portable-ascii/src/voku',
         ),
-        'phpDocumentor\\Reflection\\' => 
+        'phpDocumentor\\Reflection\\' =>
         array (
             0 => __DIR__ . '/..' . '/phpdocumentor/reflection-docblock/src',
             1 => __DIR__ . '/..' . '/phpdocumentor/type-resolver/src',
             2 => __DIR__ . '/..' . '/phpdocumentor/reflection-common/src',
         ),
-        'ZipStream\\' => 
+        'ZipStream\\' =>
         array (
             0 => __DIR__ . '/..' . '/maennchen/zipstream-php/src',
         ),
-        'YooKassa\\Validator\\' => 
+        'YooKassa\\Validator\\' =>
         array (
             0 => __DIR__ . '/..' . '/yoomoney/yookassa-sdk-validator/src',
         ),
-        'YooKassa\\' => 
+        'YooKassa\\' =>
         array (
             0 => __DIR__ . '/..' . '/yoomoney/yookassa-sdk-php/lib',
         ),
-        'WpOrg\\Requests\\' => 
+        'WpOrg\\Requests\\' =>
         array (
             0 => __DIR__ . '/..' . '/rmccue/requests/src',
         ),
-        'Whoops\\' => 
+        'Whoops\\' =>
         array (
             0 => __DIR__ . '/..' . '/filp/whoops/src/Whoops',
         ),
-        'Webmozart\\Assert\\' => 
+        'Webmozart\\Assert\\' =>
         array (
             0 => __DIR__ . '/..' . '/webmozart/assert/src',
         ),
-        'TijsVerkoyen\\CssToInlineStyles\\' => 
+        'TijsVerkoyen\\CssToInlineStyles\\' =>
         array (
             0 => __DIR__ . '/..' . '/tijsverkoyen/css-to-inline-styles/src',
         ),
-        'Tighten\\Ziggy\\' => 
+        'Tighten\\Ziggy\\' =>
         array (
             0 => __DIR__ . '/..' . '/tightenco/ziggy/src',
         ),
-        'Tests\\' => 
+        'Tests\\' =>
         array (
             0 => __DIR__ . '/../..' . '/tests',
         ),
-        'Termwind\\' => 
+        'Termwind\\' =>
         array (
             0 => __DIR__ . '/..' . '/nunomaduro/termwind/src',
         ),
-        'Symfony\\Polyfill\\Uuid\\' => 
+        'Symfony\\Polyfill\\Uuid\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-uuid',
         ),
-        'Symfony\\Polyfill\\Php83\\' => 
+        'Symfony\\Polyfill\\Php83\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-php83',
         ),
-        'Symfony\\Polyfill\\Php80\\' => 
+        'Symfony\\Polyfill\\Php80\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-php80',
         ),
-        'Symfony\\Polyfill\\Mbstring\\' => 
+        'Symfony\\Polyfill\\Mbstring\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-mbstring',
         ),
-        'Symfony\\Polyfill\\Intl\\Normalizer\\' => 
+        'Symfony\\Polyfill\\Intl\\Normalizer\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-intl-normalizer',
         ),
-        'Symfony\\Polyfill\\Intl\\Idn\\' => 
+        'Symfony\\Polyfill\\Intl\\Idn\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-intl-idn',
         ),
-        'Symfony\\Polyfill\\Intl\\Grapheme\\' => 
+        'Symfony\\Polyfill\\Intl\\Grapheme\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-intl-grapheme',
         ),
-        'Symfony\\Polyfill\\Ctype\\' => 
+        'Symfony\\Polyfill\\Ctype\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-ctype',
         ),
-        'Symfony\\Contracts\\Translation\\' => 
+        'Symfony\\Contracts\\Translation\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/translation-contracts',
         ),
-        'Symfony\\Contracts\\Service\\' => 
+        'Symfony\\Contracts\\Service\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/service-contracts',
         ),
-        'Symfony\\Contracts\\HttpClient\\' => 
+        'Symfony\\Contracts\\HttpClient\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/http-client-contracts',
         ),
-        'Symfony\\Contracts\\EventDispatcher\\' => 
+        'Symfony\\Contracts\\EventDispatcher\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/event-dispatcher-contracts',
         ),
-        'Symfony\\Component\\Yaml\\' => 
+        'Symfony\\Component\\Yaml\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/yaml',
         ),
-        'Symfony\\Component\\VarDumper\\' => 
+        'Symfony\\Component\\VarDumper\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/var-dumper',
         ),
-        'Symfony\\Component\\Uid\\' => 
+        'Symfony\\Component\\Uid\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/uid',
         ),
-        'Symfony\\Component\\Translation\\' => 
+        'Symfony\\Component\\Translation\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/translation',
         ),
-        'Symfony\\Component\\String\\' => 
+        'Symfony\\Component\\String\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/string',
         ),
-        'Symfony\\Component\\Routing\\' => 
+        'Symfony\\Component\\Routing\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/routing',
         ),
-        'Symfony\\Component\\Process\\' => 
+        'Symfony\\Component\\Process\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/process',
         ),
-        'Symfony\\Component\\OptionsResolver\\' => 
+        'Symfony\\Component\\OptionsResolver\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/options-resolver',
         ),
-        'Symfony\\Component\\Mime\\' => 
+        'Symfony\\Component\\Mime\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/mime',
         ),
-        'Symfony\\Component\\Mailer\\' => 
+        'Symfony\\Component\\Mailer\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/mailer',
         ),
-        'Symfony\\Component\\HttpKernel\\' => 
+        'Symfony\\Component\\HttpKernel\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/http-kernel',
         ),
-        'Symfony\\Component\\HttpFoundation\\' => 
+        'Symfony\\Component\\HttpFoundation\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/http-foundation',
         ),
-        'Symfony\\Component\\HttpClient\\' => 
+        'Symfony\\Component\\HttpClient\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/http-client',
         ),
-        'Symfony\\Component\\Finder\\' => 
+        'Symfony\\Component\\Finder\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/finder',
         ),
-        'Symfony\\Component\\EventDispatcher\\' => 
+        'Symfony\\Component\\EventDispatcher\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/event-dispatcher',
         ),
-        'Symfony\\Component\\ErrorHandler\\' => 
+        'Symfony\\Component\\ErrorHandler\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/error-handler',
         ),
-        'Symfony\\Component\\CssSelector\\' => 
+        'Symfony\\Component\\CssSelector\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/css-selector',
         ),
-        'Symfony\\Component\\Console\\' => 
+        'Symfony\\Component\\Console\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/console',
         ),
-        'Symfony\\Component\\Clock\\' => 
+        'Symfony\\Component\\Clock\\' =>
         array (
             0 => __DIR__ . '/..' . '/symfony/clock',
         ),
-        'Svg\\' => 
+        'Svg\\' =>
         array (
             0 => __DIR__ . '/..' . '/dompdf/php-svg-lib/src/Svg',
         ),
-        'Stripe\\' => 
+        'Stripe\\' =>
         array (
             0 => __DIR__ . '/..' . '/stripe/stripe-php/lib',
         ),
-        'Spatie\\TemporaryDirectory\\' => 
+        'Spatie\\TemporaryDirectory\\' =>
         array (
             0 => __DIR__ . '/..' . '/spatie/temporary-directory/src',
         ),
-        'Spatie\\Permission\\' => 
+        'Spatie\\Permission\\' =>
         array (
             0 => __DIR__ . '/..' . '/spatie/laravel-permission/src',
         ),
-        'Spatie\\MediaLibrary\\' => 
+        'Spatie\\MediaLibrary\\' =>
         array (
             0 => __DIR__ . '/..' . '/spatie/laravel-medialibrary/src',
         ),
-        'Spatie\\LaravelPackageTools\\' => 
+        'Spatie\\LaravelPackageTools\\' =>
         array (
             0 => __DIR__ . '/..' . '/spatie/laravel-package-tools/src',
         ),
-        'Spatie\\Image\\' => 
+        'Spatie\\Image\\' =>
         array (
             0 => __DIR__ . '/..' . '/spatie/image/src',
         ),
-        'Spatie\\ImageOptimizer\\' => 
+        'Spatie\\ImageOptimizer\\' =>
         array (
             0 => __DIR__ . '/..' . '/spatie/image-optimizer/src',
         ),
-        'Sentry\\' => 
+        'Sentry\\' =>
         array (
             0 => __DIR__ . '/..' . '/sentry/sentry/src',
         ),
-        'Sabberworm\\CSS\\' => 
+        'Sabberworm\\CSS\\' =>
         array (
             0 => __DIR__ . '/..' . '/sabberworm/php-css-parser/src',
         ),
-        'Razorpay\\Tests\\' => 
+        'Razorpay\\Tests\\' =>
         array (
             0 => __DIR__ . '/..' . '/razorpay/razorpay/tests',
         ),
-        'Razorpay\\Api\\' => 
+        'Razorpay\\Api\\' =>
         array (
             0 => __DIR__ . '/..' . '/razorpay/razorpay/src',
         ),
-        'Ramsey\\Uuid\\' => 
+        'Ramsey\\Uuid\\' =>
         array (
             0 => __DIR__ . '/..' . '/ramsey/uuid/src',
         ),
-        'Ramsey\\Collection\\' => 
+        'Ramsey\\Collection\\' =>
         array (
             0 => __DIR__ . '/..' . '/ramsey/collection/src',
         ),
-        'RachidLaasri\\LaravelInstaller\\' => 
+        'RachidLaasri\\LaravelInstaller\\' =>
         array (
             0 => __DIR__ . '/..' . '/rachidlaasri/laravel-installer/src',
         ),
-        'Psy\\' => 
+        'Psy\\' =>
         array (
             0 => __DIR__ . '/..' . '/psy/psysh/src',
         ),
-        'Psr\\SimpleCache\\' => 
+        'Psr\\SimpleCache\\' =>
         array (
             0 => __DIR__ . '/..' . '/psr/simple-cache/src',
         ),
-        'Psr\\Log\\' => 
+        'Psr\\Log\\' =>
         array (
             0 => __DIR__ . '/..' . '/psr/log/src',
         ),
-        'Psr\\Http\\Message\\' => 
+        'Psr\\Http\\Message\\' =>
         array (
             0 => __DIR__ . '/..' . '/psr/http-factory/src',
             1 => __DIR__ . '/..' . '/psr/http-message/src',
         ),
-        'Psr\\Http\\Client\\' => 
+        'Psr\\Http\\Client\\' =>
         array (
             0 => __DIR__ . '/..' . '/psr/http-client/src',
         ),
-        'Psr\\EventDispatcher\\' => 
+        'Psr\\EventDispatcher\\' =>
         array (
             0 => __DIR__ . '/..' . '/psr/event-dispatcher/src',
         ),
-        'Psr\\Container\\' => 
+        'Psr\\Container\\' =>
         array (
             0 => __DIR__ . '/..' . '/psr/container/src',
         ),
-        'Psr\\Clock\\' => 
+        'Psr\\Clock\\' =>
         array (
             0 => __DIR__ . '/..' . '/psr/clock/src',
         ),
-        'Psr\\Cache\\' => 
+        'Psr\\Cache\\' =>
         array (
             0 => __DIR__ . '/..' . '/psr/cache/src',
         ),
-        'PhpParser\\' => 
+        'Prism\\Prism\\' =>
+        array (
+            0 => __DIR__ . '/..' . '/prism-php/prism/src',
+        ),
+        'PhpParser\\' =>
         array (
             0 => __DIR__ . '/..' . '/nikic/php-parser/lib/PhpParser',
         ),
-        'PhpOption\\' => 
+        'PhpOption\\' =>
         array (
             0 => __DIR__ . '/..' . '/phpoption/phpoption/src/PhpOption',
         ),
-        'PhpOffice\\PhpSpreadsheet\\' => 
+        'PhpOffice\\PhpSpreadsheet\\' =>
         array (
             0 => __DIR__ . '/..' . '/phpoffice/phpspreadsheet/src/PhpSpreadsheet',
         ),
-        'Pest\\Plugin\\' => 
+        'Pest\\Plugin\\' =>
         array (
             0 => __DIR__ . '/..' . '/pestphp/pest-plugin/src',
         ),
-        'Pest\\Mutate\\' => 
+        'Pest\\Mutate\\' =>
         array (
             0 => __DIR__ . '/..' . '/pestphp/pest-plugin-mutate/src',
         ),
-        'Pest\\Laravel\\' => 
+        'Pest\\Laravel\\' =>
         array (
             0 => __DIR__ . '/..' . '/pestphp/pest-plugin-laravel/src',
         ),
-        'Pest\\Arch\\' => 
+        'Pest\\Arch\\' =>
         array (
             0 => __DIR__ . '/..' . '/pestphp/pest-plugin-arch/src',
         ),
-        'Pest\\' => 
+        'Pest\\' =>
         array (
             0 => __DIR__ . '/..' . '/pestphp/pest/src',
         ),
-        'Paytabscom\\Laravel_paytabs\\' => 
+        'Paytabscom\\Laravel_paytabs\\' =>
         array (
             0 => __DIR__ . '/..' . '/paytabscom/laravel_paytabs/src',
         ),
-        'ParaTest\\' => 
+        'ParaTest\\' =>
         array (
             0 => __DIR__ . '/..' . '/brianium/paratest/src',
         ),
-        'PHPUnit\\Architecture\\' => 
+        'PHPUnit\\Architecture\\' =>
         array (
             0 => __DIR__ . '/..' . '/ta-tikoma/phpunit-architecture-test/src',
         ),
-        'PHPStan\\PhpDocParser\\' => 
+        'PHPStan\\PhpDocParser\\' =>
         array (
             0 => __DIR__ . '/..' . '/phpstan/phpdoc-parser/src',
         ),
-        'OpenAI\\' => 
+        'OpenAI\\' =>
         array (
             0 => __DIR__ . '/..' . '/openai-php/client/src',
         ),
-        'Nyholm\\Psr7\\' => 
+        'Nyholm\\Psr7\\' =>
         array (
             0 => __DIR__ . '/..' . '/nyholm/psr7/src',
         ),
-        'NunoMaduro\\Collision\\' => 
+        'NunoMaduro\\Collision\\' =>
         array (
             0 => __DIR__ . '/..' . '/nunomaduro/collision/src',
         ),
-        'Monolog\\' => 
+        'Monolog\\' =>
         array (
             0 => __DIR__ . '/..' . '/monolog/monolog/src/Monolog',
         ),
-        'Mollie\\Api\\' => 
+        'Mollie\\Api\\' =>
         array (
             0 => __DIR__ . '/..' . '/mollie/mollie-api-php/src',
         ),
-        'Mockery\\' => 
+        'Mockery\\' =>
         array (
             0 => __DIR__ . '/..' . '/mockery/mockery/library/Mockery',
         ),
-        'MercadoPago\\' => 
+        'MercadoPago\\' =>
         array (
             0 => __DIR__ . '/..' . '/mercadopago/dx-php/src/MercadoPago',
             1 => __DIR__ . '/..' . '/mercadopago/dx-php/tests',
@@ -720,282 +726,282 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
             3 => __DIR__ . '/..' . '/mercadopago/dx-php/src/MercadoPago/Entities',
             4 => __DIR__ . '/..' . '/mercadopago/dx-php/src/MercadoPago/Entities/Shared',
         ),
-        'Matrix\\' => 
+        'Matrix\\' =>
         array (
             0 => __DIR__ . '/..' . '/markbaker/matrix/classes/src',
         ),
-        'Masterminds\\' => 
+        'Masterminds\\' =>
         array (
             0 => __DIR__ . '/..' . '/masterminds/html5/src',
         ),
-        'Maatwebsite\\Excel\\' => 
+        'Maatwebsite\\Excel\\' =>
         array (
             0 => __DIR__ . '/..' . '/maatwebsite/excel/src',
         ),
-        'League\\Uri\\' => 
+        'League\\Uri\\' =>
         array (
             0 => __DIR__ . '/..' . '/league/uri',
             1 => __DIR__ . '/..' . '/league/uri-interfaces',
         ),
-        'League\\MimeTypeDetection\\' => 
+        'League\\MimeTypeDetection\\' =>
         array (
             0 => __DIR__ . '/..' . '/league/mime-type-detection/src',
         ),
-        'League\\Flysystem\\Local\\' => 
+        'League\\Flysystem\\Local\\' =>
         array (
             0 => __DIR__ . '/..' . '/league/flysystem-local',
         ),
-        'League\\Flysystem\\AwsS3V3\\' => 
+        'League\\Flysystem\\AwsS3V3\\' =>
         array (
             0 => __DIR__ . '/..' . '/league/flysystem-aws-s3-v3',
         ),
-        'League\\Flysystem\\' => 
+        'League\\Flysystem\\' =>
         array (
             0 => __DIR__ . '/..' . '/league/flysystem/src',
         ),
-        'League\\Config\\' => 
+        'League\\Config\\' =>
         array (
             0 => __DIR__ . '/..' . '/league/config/src',
         ),
-        'League\\CommonMark\\' => 
+        'League\\CommonMark\\' =>
         array (
             0 => __DIR__ . '/..' . '/league/commonmark/src',
         ),
-        'Laravel\\Tinker\\' => 
+        'Laravel\\Tinker\\' =>
         array (
             0 => __DIR__ . '/..' . '/laravel/tinker/src',
         ),
-        'Laravel\\SerializableClosure\\' => 
+        'Laravel\\SerializableClosure\\' =>
         array (
             0 => __DIR__ . '/..' . '/laravel/serializable-closure/src',
         ),
-        'Laravel\\Sail\\' => 
+        'Laravel\\Sail\\' =>
         array (
             0 => __DIR__ . '/..' . '/laravel/sail/src',
         ),
-        'Laravel\\Prompts\\' => 
+        'Laravel\\Prompts\\' =>
         array (
             0 => __DIR__ . '/..' . '/laravel/prompts/src',
         ),
-        'Laravel\\Pail\\' => 
+        'Laravel\\Pail\\' =>
         array (
             0 => __DIR__ . '/..' . '/laravel/pail/src',
         ),
-        'LaraBug\\' => 
+        'LaraBug\\' =>
         array (
             0 => __DIR__ . '/..' . '/larabug/larabug/src',
         ),
-        'Lab404\\Impersonate\\' => 
+        'Lab404\\Impersonate\\' =>
         array (
             0 => __DIR__ . '/..' . '/lab404/laravel-impersonate/src',
         ),
-        'JmesPath\\' => 
+        'JmesPath\\' =>
         array (
             0 => __DIR__ . '/..' . '/mtdowling/jmespath.php/src',
         ),
-        'Jean85\\' => 
+        'Jean85\\' =>
         array (
             0 => __DIR__ . '/..' . '/jean85/pretty-package-versions/src',
         ),
-        'Iyzipay\\' => 
+        'Iyzipay\\' =>
         array (
             0 => __DIR__ . '/..' . '/iyzico/iyzipay-php/src/Iyzipay',
         ),
-        'Inertia\\' => 
+        'Inertia\\' =>
         array (
             0 => __DIR__ . '/..' . '/inertiajs/inertia-laravel/src',
         ),
-        'Illuminate\\Support\\' => 
+        'Illuminate\\Support\\' =>
         array (
             0 => __DIR__ . '/..' . '/laravel/framework/src/Illuminate/Macroable',
             1 => __DIR__ . '/..' . '/laravel/framework/src/Illuminate/Collections',
             2 => __DIR__ . '/..' . '/laravel/framework/src/Illuminate/Conditionable',
         ),
-        'Illuminate\\' => 
+        'Illuminate\\' =>
         array (
             0 => __DIR__ . '/..' . '/laravel/framework/src/Illuminate',
         ),
-        'Http\\Promise\\' => 
+        'Http\\Promise\\' =>
         array (
             0 => __DIR__ . '/..' . '/php-http/promise/src',
         ),
-        'Http\\Message\\MultipartStream\\' => 
+        'Http\\Message\\MultipartStream\\' =>
         array (
             0 => __DIR__ . '/..' . '/php-http/multipart-stream-builder/src',
         ),
-        'Http\\Message\\' => 
+        'Http\\Message\\' =>
         array (
             0 => __DIR__ . '/..' . '/php-http/message-factory/src',
             1 => __DIR__ . '/..' . '/php-http/message/src',
         ),
-        'Http\\Factory\\Guzzle\\' => 
+        'Http\\Factory\\Guzzle\\' =>
         array (
             0 => __DIR__ . '/..' . '/http-interop/http-factory-guzzle/src',
         ),
-        'Http\\Discovery\\' => 
+        'Http\\Discovery\\' =>
         array (
             0 => __DIR__ . '/..' . '/php-http/discovery/src',
         ),
-        'Http\\Client\\Common\\' => 
+        'Http\\Client\\Common\\' =>
         array (
             0 => __DIR__ . '/..' . '/php-http/client-common/src',
         ),
-        'Http\\Client\\' => 
+        'Http\\Client\\' =>
         array (
             0 => __DIR__ . '/..' . '/php-http/httplug/src',
         ),
-        'GuzzleHttp\\UriTemplate\\' => 
+        'GuzzleHttp\\UriTemplate\\' =>
         array (
             0 => __DIR__ . '/..' . '/guzzlehttp/uri-template/src',
         ),
-        'GuzzleHttp\\Psr7\\' => 
+        'GuzzleHttp\\Psr7\\' =>
         array (
             0 => __DIR__ . '/..' . '/guzzlehttp/psr7/src',
         ),
-        'GuzzleHttp\\Promise\\' => 
+        'GuzzleHttp\\Promise\\' =>
         array (
             0 => __DIR__ . '/..' . '/guzzlehttp/promises/src',
         ),
-        'GuzzleHttp\\' => 
+        'GuzzleHttp\\' =>
         array (
             0 => __DIR__ . '/..' . '/guzzlehttp/guzzle/src',
         ),
-        'GrahamCampbell\\ResultType\\' => 
+        'GrahamCampbell\\ResultType\\' =>
         array (
             0 => __DIR__ . '/..' . '/graham-campbell/result-type/src',
         ),
-        'Fruitcake\\Cors\\' => 
+        'Fruitcake\\Cors\\' =>
         array (
             0 => __DIR__ . '/..' . '/fruitcake/php-cors/src',
         ),
-        'FontLib\\' => 
+        'FontLib\\' =>
         array (
             0 => __DIR__ . '/..' . '/dompdf/php-font-lib/src/FontLib',
         ),
-        'Fidry\\CpuCoreCounter\\' => 
+        'Fidry\\CpuCoreCounter\\' =>
         array (
             0 => __DIR__ . '/..' . '/fidry/cpu-core-counter/src',
         ),
-        'FedaPay\\' => 
+        'FedaPay\\' =>
         array (
             0 => __DIR__ . '/..' . '/fedapay/fedapay-php/lib',
         ),
-        'Faker\\' => 
+        'Faker\\' =>
         array (
             0 => __DIR__ . '/..' . '/fakerphp/faker/src/Faker',
         ),
-        'Egulias\\EmailValidator\\' => 
+        'Egulias\\EmailValidator\\' =>
         array (
             0 => __DIR__ . '/..' . '/egulias/email-validator/src',
         ),
-        'Ds\\' => 
+        'Ds\\' =>
         array (
             0 => __DIR__ . '/..' . '/php-ds/php-ds/src',
         ),
-        'Dotenv\\' => 
+        'Dotenv\\' =>
         array (
             0 => __DIR__ . '/..' . '/vlucas/phpdotenv/src',
         ),
-        'Dompdf\\' => 
+        'Dompdf\\' =>
         array (
             0 => __DIR__ . '/..' . '/dompdf/dompdf/src',
         ),
-        'Doctrine\\Persistence\\' => 
+        'Doctrine\\Persistence\\' =>
         array (
             0 => __DIR__ . '/..' . '/doctrine/persistence/src/Persistence',
         ),
-        'Doctrine\\Inflector\\' => 
+        'Doctrine\\Inflector\\' =>
         array (
             0 => __DIR__ . '/..' . '/doctrine/inflector/lib/Doctrine/Inflector',
         ),
-        'Doctrine\\Deprecations\\' => 
+        'Doctrine\\Deprecations\\' =>
         array (
             0 => __DIR__ . '/..' . '/doctrine/deprecations/src',
         ),
-        'Doctrine\\Common\\Lexer\\' => 
+        'Doctrine\\Common\\Lexer\\' =>
         array (
             0 => __DIR__ . '/..' . '/doctrine/lexer/src',
         ),
-        'Doctrine\\Common\\Annotations\\' => 
+        'Doctrine\\Common\\Annotations\\' =>
         array (
             0 => __DIR__ . '/..' . '/doctrine/annotations/lib/Doctrine/Common/Annotations',
         ),
-        'Doctrine\\Common\\' => 
+        'Doctrine\\Common\\' =>
         array (
             0 => __DIR__ . '/..' . '/doctrine/common/src',
             1 => __DIR__ . '/..' . '/doctrine/event-manager/src',
         ),
-        'Dflydev\\DotAccessData\\' => 
+        'Dflydev\\DotAccessData\\' =>
         array (
             0 => __DIR__ . '/..' . '/dflydev/dot-access-data/src',
         ),
-        'DeepCopy\\' => 
+        'DeepCopy\\' =>
         array (
             0 => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy',
         ),
-        'Database\\Seeders\\' => 
+        'Database\\Seeders\\' =>
         array (
             0 => __DIR__ . '/../..' . '/database/seeders',
             1 => __DIR__ . '/..' . '/laravel/pint/database/seeders',
         ),
-        'Database\\Factories\\' => 
+        'Database\\Factories\\' =>
         array (
             0 => __DIR__ . '/../..' . '/database/factories',
             1 => __DIR__ . '/..' . '/laravel/pint/database/factories',
         ),
-        'Cron\\' => 
+        'Cron\\' =>
         array (
             0 => __DIR__ . '/..' . '/dragonmantank/cron-expression/src/Cron',
         ),
-        'Composer\\Semver\\' => 
+        'Composer\\Semver\\' =>
         array (
             0 => __DIR__ . '/..' . '/composer/semver/src',
         ),
-        'Composer\\Pcre\\' => 
+        'Composer\\Pcre\\' =>
         array (
             0 => __DIR__ . '/..' . '/composer/pcre/src',
         ),
-        'Composer\\CaBundle\\' => 
+        'Composer\\CaBundle\\' =>
         array (
             0 => __DIR__ . '/..' . '/composer/ca-bundle/src',
         ),
-        'Complex\\' => 
+        'Complex\\' =>
         array (
             0 => __DIR__ . '/..' . '/markbaker/complex/classes/src',
         ),
-        'CoinGate\\' => 
+        'CoinGate\\' =>
         array (
             0 => __DIR__ . '/..' . '/coingate/coingate-php/lib',
         ),
-        'Clue\\StreamFilter\\' => 
+        'Clue\\StreamFilter\\' =>
         array (
             0 => __DIR__ . '/..' . '/clue/stream-filter/src',
         ),
-        'Cashfree\\' => 
+        'Cashfree\\' =>
         array (
             0 => __DIR__ . '/..' . '/cashfree/cashfree-pg/lib',
         ),
-        'Carbon\\Doctrine\\' => 
+        'Carbon\\Doctrine\\' =>
         array (
             0 => __DIR__ . '/..' . '/carbonphp/carbon-doctrine-types/src/Carbon/Doctrine',
         ),
-        'Carbon\\' => 
+        'Carbon\\' =>
         array (
             0 => __DIR__ . '/..' . '/nesbot/carbon/src/Carbon',
         ),
-        'Brick\\Math\\' => 
+        'Brick\\Math\\' =>
         array (
             0 => __DIR__ . '/..' . '/brick/math/src',
         ),
-        'Barryvdh\\DomPDF\\' => 
+        'Barryvdh\\DomPDF\\' =>
         array (
             0 => __DIR__ . '/..' . '/barryvdh/laravel-dompdf/src',
         ),
-        'Aws\\' => 
+        'Aws\\' =>
         array (
             0 => __DIR__ . '/..' . '/aws/aws-sdk-php/src',
         ),
-        'App\\' => 
+        'App\\' =>
         array (
             0 => __DIR__ . '/../..' . '/app',
             1 => __DIR__ . '/..' . '/laravel/pint/app',
@@ -1003,9 +1009,9 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
     );
 
     public static $prefixesPsr0 = array (
-        'H' => 
+        'H' =>
         array (
-            'HTMLPurifier' => 
+            'HTMLPurifier' =>
             array (
                 0 => __DIR__ . '/..' . '/ezyang/htmlpurifier/library',
             ),
@@ -1039,6 +1045,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
         'App\\Console\\Commands\\AssignDefaultPlanToUsers' => __DIR__ . '/../..' . '/app/Console/Commands/AssignDefaultPlanToUsers.php',
         'App\\Console\\Commands\\CreateTestUsers' => __DIR__ . '/../..' . '/app/Console/Commands/CreateTestUsers.php',
         'App\\Console\\Commands\\EnableCookieBanner' => __DIR__ . '/../..' . '/app/Console/Commands/EnableCookieBanner.php',
+        'App\\Console\\Commands\\RepairTimesheetWeeks' => __DIR__ . '/../..' . '/app/Console/Commands/RepairTimesheetWeeks.php',
         'App\\Console\\Commands\\SyncNotificationTemplates' => __DIR__ . '/../..' . '/app/Console/Commands/SyncNotificationTemplates.php',
         'App\\Console\\Commands\\TailLogs' => __DIR__ . '/../..' . '/app/Console/Commands/TailLogs.php',
         'App\\Console\\Kernel' => __DIR__ . '/../..' . '/app/Console/Kernel.php',
@@ -1125,7 +1132,6 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
         'App\\Http\\Controllers\\ImpersonateController' => __DIR__ . '/../..' . '/app/Http/Controllers/ImpersonateController.php',
         'App\\Http\\Controllers\\InvoiceController' => __DIR__ . '/../..' . '/app/Http/Controllers/InvoiceController.php',
         'App\\Http\\Controllers\\InvoicePaymentController' => __DIR__ . '/../..' . '/app/Http/Controllers/InvoicePaymentController.php',
-        'App\\Http\\Controllers\\InvoicePreviewController' => __DIR__ . '/../..' . '/app/Http/Controllers/InvoicePreviewController.php',
         'App\\Http\\Controllers\\IyzipayPaymentController' => __DIR__ . '/../..' . '/app/Http/Controllers/IyzipayPaymentController.php',
         'App\\Http\\Controllers\\KhaltiPaymentController' => __DIR__ . '/../..' . '/app/Http/Controllers/KhaltiPaymentController.php',
         'App\\Http\\Controllers\\KnowledgeBaseController' => __DIR__ . '/../..' . '/app/Http/Controllers/KnowledgeBaseController.php',
@@ -1170,6 +1176,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
         'App\\Http\\Controllers\\RiskRadarController' => __DIR__ . '/../..' . '/app/Http/Controllers/RiskRadarController.php',
         'App\\Http\\Controllers\\RoleController' => __DIR__ . '/../..' . '/app/Http/Controllers/RoleController.php',
         'App\\Http\\Controllers\\SSPayPaymentController' => __DIR__ . '/../..' . '/app/Http/Controllers/SSPayPaymentController.php',
+        'App\\Http\\Controllers\\SearchController' => __DIR__ . '/../..' . '/app/Http/Controllers/SearchController.php',
         'App\\Http\\Controllers\\Settings\\CurrencySettingController' => __DIR__ . '/../..' . '/app/Http/Controllers/Settings/CurrencySettingController.php',
         'App\\Http\\Controllers\\Settings\\EmailSettingController' => __DIR__ . '/../..' . '/app/Http/Controllers/Settings/EmailSettingController.php',
         'App\\Http\\Controllers\\Settings\\GoogleCalendarSettingsController' => __DIR__ . '/../..' . '/app/Http/Controllers/Settings/GoogleCalendarSettingsController.php',
@@ -1213,6 +1220,8 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
         'App\\Http\\Controllers\\YooKassaPaymentController' => __DIR__ . '/../..' . '/app/Http/Controllers/YooKassaPaymentController.php',
         'App\\Http\\Controllers\\ZapierController' => __DIR__ . '/../..' . '/app/Http/Controllers/ZapierController.php',
         'App\\Http\\Controllers\\ZoomMeetingController' => __DIR__ . '/../..' . '/app/Http/Controllers/ZoomMeetingController.php',
+        'App\\Http\\Middleware\\BlockClientProfileAccess' => __DIR__ . '/../..' . '/app/Http/Middleware/BlockClientProfileAccess.php',
+        'App\\Http\\Middleware\\BlockSuperAdminWorkspaceAccess' => __DIR__ . '/../..' . '/app/Http/Middleware/BlockSuperAdminWorkspaceAccess.php',
         'App\\Http\\Middleware\\CheckInstallation' => __DIR__ . '/../..' . '/app/Http/Middleware/CheckInstallation.php',
         'App\\Http\\Middleware\\CheckLandingPageEnabled' => __DIR__ . '/../..' . '/app/Http/Middleware/CheckLandingPageEnabled.php',
         'App\\Http\\Middleware\\CheckModuleAccess' => __DIR__ . '/../..' . '/app/Http/Middleware/CheckModuleAccess.php',
@@ -1387,6 +1396,7 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
         'App\\Services\\GoogleCalendarService' => __DIR__ . '/../..' . '/app/Services/GoogleCalendarService.php',
         'App\\Services\\GoogleMeetService' => __DIR__ . '/../..' . '/app/Services/GoogleMeetService.php',
         'App\\Services\\MailConfigService' => __DIR__ . '/../..' . '/app/Services/MailConfigService.php',
+        'App\\Services\\PayPalService' => __DIR__ . '/../..' . '/app/Services/PayPalService.php',
         'App\\Services\\PermissionService' => __DIR__ . '/../..' . '/app/Services/PermissionService.php',
         'App\\Services\\PlanLimitService' => __DIR__ . '/../..' . '/app/Services/PlanLimitService.php',
         'App\\Services\\ProjectHealthService' => __DIR__ . '/../..' . '/app/Services/ProjectHealthService.php',
@@ -10734,6 +10744,363 @@ class ComposerStaticInit920b632e4926ecdc5701a6728ffa86b0
         'PhpParser\\PrettyPrinter\\Standard' => __DIR__ . '/..' . '/nikic/php-parser/lib/PhpParser/PrettyPrinter/Standard.php',
         'PhpParser\\Token' => __DIR__ . '/..' . '/nikic/php-parser/lib/PhpParser/Token.php',
         'PhpToken' => __DIR__ . '/..' . '/symfony/polyfill-php80/Resources/stubs/PhpToken.php',
+        'Prism\\Prism\\Audio\\AudioResponse' => __DIR__ . '/..' . '/prism-php/prism/src/Audio/AudioResponse.php',
+        'Prism\\Prism\\Audio\\PendingRequest' => __DIR__ . '/..' . '/prism-php/prism/src/Audio/PendingRequest.php',
+        'Prism\\Prism\\Audio\\SpeechToTextRequest' => __DIR__ . '/..' . '/prism-php/prism/src/Audio/SpeechToTextRequest.php',
+        'Prism\\Prism\\Audio\\TextResponse' => __DIR__ . '/..' . '/prism-php/prism/src/Audio/TextResponse.php',
+        'Prism\\Prism\\Audio\\TextToSpeechRequest' => __DIR__ . '/..' . '/prism-php/prism/src/Audio/TextToSpeechRequest.php',
+        'Prism\\Prism\\Concerns\\CallsTools' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/CallsTools.php',
+        'Prism\\Prism\\Concerns\\ChecksSelf' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/ChecksSelf.php',
+        'Prism\\Prism\\Concerns\\ConfiguresClient' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/ConfiguresClient.php',
+        'Prism\\Prism\\Concerns\\ConfiguresGeneration' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/ConfiguresGeneration.php',
+        'Prism\\Prism\\Concerns\\ConfiguresModels' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/ConfiguresModels.php',
+        'Prism\\Prism\\Concerns\\ConfiguresProviders' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/ConfiguresProviders.php',
+        'Prism\\Prism\\Concerns\\ConfiguresStructuredOutput' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/ConfiguresStructuredOutput.php',
+        'Prism\\Prism\\Concerns\\ConfiguresTools' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/ConfiguresTools.php',
+        'Prism\\Prism\\Concerns\\GeneratesAudioFilename' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/GeneratesAudioFilename.php',
+        'Prism\\Prism\\Concerns\\HandlesStructuredJson' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/HandlesStructuredJson.php',
+        'Prism\\Prism\\Concerns\\HasFluentAttributes' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/HasFluentAttributes.php',
+        'Prism\\Prism\\Concerns\\HasMessages' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/HasMessages.php',
+        'Prism\\Prism\\Concerns\\HasPrompts' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/HasPrompts.php',
+        'Prism\\Prism\\Concerns\\HasProviderOptions' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/HasProviderOptions.php',
+        'Prism\\Prism\\Concerns\\HasProviderTools' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/HasProviderTools.php',
+        'Prism\\Prism\\Concerns\\HasSchema' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/HasSchema.php',
+        'Prism\\Prism\\Concerns\\HasTools' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/HasTools.php',
+        'Prism\\Prism\\Concerns\\InitializesClient' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/InitializesClient.php',
+        'Prism\\Prism\\Concerns\\ManagesStructuredSteps' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/ManagesStructuredSteps.php',
+        'Prism\\Prism\\Concerns\\NullableSchema' => __DIR__ . '/..' . '/prism-php/prism/src/Concerns/NullableSchema.php',
+        'Prism\\Prism\\Contracts\\HasSchemaType' => __DIR__ . '/..' . '/prism-php/prism/src/Contracts/HasSchemaType.php',
+        'Prism\\Prism\\Contracts\\Message' => __DIR__ . '/..' . '/prism-php/prism/src/Contracts/Message.php',
+        'Prism\\Prism\\Contracts\\PrismRequest' => __DIR__ . '/..' . '/prism-php/prism/src/Contracts/PrismRequest.php',
+        'Prism\\Prism\\Contracts\\ProviderMediaMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Contracts/ProviderMediaMapper.php',
+        'Prism\\Prism\\Contracts\\ProviderRequestMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Contracts/ProviderRequestMapper.php',
+        'Prism\\Prism\\Contracts\\Schema' => __DIR__ . '/..' . '/prism-php/prism/src/Contracts/Schema.php',
+        'Prism\\Prism\\Embeddings\\Content' => __DIR__ . '/..' . '/prism-php/prism/src/Embeddings/Content.php',
+        'Prism\\Prism\\Embeddings\\PendingRequest' => __DIR__ . '/..' . '/prism-php/prism/src/Embeddings/PendingRequest.php',
+        'Prism\\Prism\\Embeddings\\Request' => __DIR__ . '/..' . '/prism-php/prism/src/Embeddings/Request.php',
+        'Prism\\Prism\\Embeddings\\Response' => __DIR__ . '/..' . '/prism-php/prism/src/Embeddings/Response.php',
+        'Prism\\Prism\\Enums\\Citations\\CitationSourcePositionType' => __DIR__ . '/..' . '/prism-php/prism/src/Enums/Citations/CitationSourcePositionType.php',
+        'Prism\\Prism\\Enums\\Citations\\CitationSourceType' => __DIR__ . '/..' . '/prism-php/prism/src/Enums/Citations/CitationSourceType.php',
+        'Prism\\Prism\\Enums\\FinishReason' => __DIR__ . '/..' . '/prism-php/prism/src/Enums/FinishReason.php',
+        'Prism\\Prism\\Enums\\Provider' => __DIR__ . '/..' . '/prism-php/prism/src/Enums/Provider.php',
+        'Prism\\Prism\\Enums\\StreamEventType' => __DIR__ . '/..' . '/prism-php/prism/src/Enums/StreamEventType.php',
+        'Prism\\Prism\\Enums\\StructuredMode' => __DIR__ . '/..' . '/prism-php/prism/src/Enums/StructuredMode.php',
+        'Prism\\Prism\\Enums\\ToolChoice' => __DIR__ . '/..' . '/prism-php/prism/src/Enums/ToolChoice.php',
+        'Prism\\Prism\\Events\\Broadcasting\\ArtifactBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/ArtifactBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\CitationBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/CitationBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\ErrorBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/ErrorBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\ProviderToolEventBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/ProviderToolEventBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\StepFinishBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/StepFinishBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\StepStartBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/StepStartBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\StreamEndBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/StreamEndBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\StreamEventBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/StreamEventBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\StreamStartBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/StreamStartBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\TextCompleteBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/TextCompleteBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\TextDeltaBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/TextDeltaBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\TextStartBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/TextStartBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\ThinkingBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/ThinkingBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\ThinkingCompleteBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/ThinkingCompleteBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\ThinkingStartBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/ThinkingStartBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\ToolCallBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/ToolCallBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\ToolCallDeltaBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/ToolCallDeltaBroadcast.php',
+        'Prism\\Prism\\Events\\Broadcasting\\ToolResultBroadcast' => __DIR__ . '/..' . '/prism-php/prism/src/Events/Broadcasting/ToolResultBroadcast.php',
+        'Prism\\Prism\\Exceptions\\PrismException' => __DIR__ . '/..' . '/prism-php/prism/src/Exceptions/PrismException.php',
+        'Prism\\Prism\\Exceptions\\PrismProviderOverloadedException' => __DIR__ . '/..' . '/prism-php/prism/src/Exceptions/PrismProviderOverloadedException.php',
+        'Prism\\Prism\\Exceptions\\PrismRateLimitedException' => __DIR__ . '/..' . '/prism-php/prism/src/Exceptions/PrismRateLimitedException.php',
+        'Prism\\Prism\\Exceptions\\PrismRequestTooLargeException' => __DIR__ . '/..' . '/prism-php/prism/src/Exceptions/PrismRequestTooLargeException.php',
+        'Prism\\Prism\\Exceptions\\PrismServerException' => __DIR__ . '/..' . '/prism-php/prism/src/Exceptions/PrismServerException.php',
+        'Prism\\Prism\\Exceptions\\PrismStreamDecodeException' => __DIR__ . '/..' . '/prism-php/prism/src/Exceptions/PrismStreamDecodeException.php',
+        'Prism\\Prism\\Exceptions\\PrismStructuredDecodingException' => __DIR__ . '/..' . '/prism-php/prism/src/Exceptions/PrismStructuredDecodingException.php',
+        'Prism\\Prism\\Facades\\Prism' => __DIR__ . '/..' . '/prism-php/prism/src/Facades/Prism.php',
+        'Prism\\Prism\\Facades\\PrismServer' => __DIR__ . '/..' . '/prism-php/prism/src/Facades/PrismServer.php',
+        'Prism\\Prism\\Facades\\Tool' => __DIR__ . '/..' . '/prism-php/prism/src/Facades/Tool.php',
+        'Prism\\Prism\\Http\\Controllers\\PrismChatController' => __DIR__ . '/..' . '/prism-php/prism/src/Http/Controllers/PrismChatController.php',
+        'Prism\\Prism\\Http\\Controllers\\PrismModelController' => __DIR__ . '/..' . '/prism-php/prism/src/Http/Controllers/PrismModelController.php',
+        'Prism\\Prism\\Images\\PendingRequest' => __DIR__ . '/..' . '/prism-php/prism/src/Images/PendingRequest.php',
+        'Prism\\Prism\\Images\\Request' => __DIR__ . '/..' . '/prism-php/prism/src/Images/Request.php',
+        'Prism\\Prism\\Images\\Response' => __DIR__ . '/..' . '/prism-php/prism/src/Images/Response.php',
+        'Prism\\Prism\\Images\\ResponseBuilder' => __DIR__ . '/..' . '/prism-php/prism/src/Images/ResponseBuilder.php',
+        'Prism\\Prism\\Moderation\\PendingRequest' => __DIR__ . '/..' . '/prism-php/prism/src/Moderation/PendingRequest.php',
+        'Prism\\Prism\\Moderation\\Request' => __DIR__ . '/..' . '/prism-php/prism/src/Moderation/Request.php',
+        'Prism\\Prism\\Moderation\\Response' => __DIR__ . '/..' . '/prism-php/prism/src/Moderation/Response.php',
+        'Prism\\Prism\\Prism' => __DIR__ . '/..' . '/prism-php/prism/src/Prism.php',
+        'Prism\\Prism\\PrismManager' => __DIR__ . '/..' . '/prism-php/prism/src/PrismManager.php',
+        'Prism\\Prism\\PrismServer' => __DIR__ . '/..' . '/prism-php/prism/src/PrismServer.php',
+        'Prism\\Prism\\PrismServiceProvider' => __DIR__ . '/..' . '/prism-php/prism/src/PrismServiceProvider.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Anthropic' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Anthropic.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Concerns\\ExtractsCitations' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Concerns/ExtractsCitations.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Concerns\\ExtractsProviderToolCalls' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Concerns/ExtractsProviderToolCalls.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Concerns\\ExtractsText' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Concerns/ExtractsText.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Concerns\\ExtractsThinking' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Concerns/ExtractsThinking.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Concerns\\HandlesHttpRequests' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Concerns/HandlesHttpRequests.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Concerns\\NormalizesCacheControl' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Concerns/NormalizesCacheControl.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Concerns\\ProcessesRateLimits' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Concerns/ProcessesRateLimits.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Enums\\AnthropicCacheType' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Enums/AnthropicCacheType.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Handlers\\Stream' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Handlers/Stream.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Handlers\\StructuredStrategies\\AnthropicStructuredStrategy' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Handlers/StructuredStrategies/AnthropicStructuredStrategy.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Handlers\\StructuredStrategies\\JsonModeStructuredStrategy' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Handlers/StructuredStrategies/JsonModeStructuredStrategy.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Handlers\\StructuredStrategies\\NativeOutputFormatStructuredStrategy' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Handlers/StructuredStrategies/NativeOutputFormatStructuredStrategy.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Handlers\\StructuredStrategies\\ToolStructuredStrategy' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Handlers/StructuredStrategies/ToolStructuredStrategy.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Maps\\CitationsMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Maps/CitationsMapper.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Maps\\DocumentMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Maps/DocumentMapper.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Maps\\FinishReasonMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Maps/FinishReasonMap.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Maps\\ImageMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Maps/ImageMapper.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Maps\\MessageMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Maps/MessageMap.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Maps\\ToolChoiceMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Maps/ToolChoiceMap.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Maps\\ToolMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Maps/ToolMap.php',
+        'Prism\\Prism\\Providers\\Anthropic\\Parsers\\StreamEventParser' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/Parsers/StreamEventParser.php',
+        'Prism\\Prism\\Providers\\Anthropic\\ValueObjects\\AnthropicStreamState' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/ValueObjects/AnthropicStreamState.php',
+        'Prism\\Prism\\Providers\\Anthropic\\ValueObjects\\LegacyAnthropicCitation' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/ValueObjects/LegacyAnthropicCitation.php',
+        'Prism\\Prism\\Providers\\Anthropic\\ValueObjects\\LegacyAnthropicMessagePartWithCitations' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Anthropic/ValueObjects/LegacyAnthropicMessagePartWithCitations.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Concerns\\MapsFinishReason' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Concerns/MapsFinishReason.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Concerns\\ValidatesResponses' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Concerns/ValidatesResponses.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\DeepSeek' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/DeepSeek.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Handlers\\Stream' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Handlers/Stream.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Maps\\FinishReasonMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Maps/FinishReasonMap.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Maps\\ImageMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Maps/ImageMapper.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Maps\\MessageMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Maps/MessageMap.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Maps\\ToolCallMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Maps/ToolCallMap.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Maps\\ToolChoiceMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Maps/ToolChoiceMap.php',
+        'Prism\\Prism\\Providers\\DeepSeek\\Maps\\ToolMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/DeepSeek/Maps/ToolMap.php',
+        'Prism\\Prism\\Providers\\ElevenLabs\\ElevenLabs' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/ElevenLabs/ElevenLabs.php',
+        'Prism\\Prism\\Providers\\ElevenLabs\\Handlers\\Audio' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/ElevenLabs/Handlers/Audio.php',
+        'Prism\\Prism\\Providers\\ElevenLabs\\Maps\\TextToSpeechRequestMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/ElevenLabs/Maps/TextToSpeechRequestMapper.php',
+        'Prism\\Prism\\Providers\\Gemini\\Concerns\\ValidatesResponse' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Concerns/ValidatesResponse.php',
+        'Prism\\Prism\\Providers\\Gemini\\Gemini' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Gemini.php',
+        'Prism\\Prism\\Providers\\Gemini\\Handlers\\Audio' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Handlers/Audio.php',
+        'Prism\\Prism\\Providers\\Gemini\\Handlers\\Cache' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Handlers/Cache.php',
+        'Prism\\Prism\\Providers\\Gemini\\Handlers\\Embeddings' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Handlers/Embeddings.php',
+        'Prism\\Prism\\Providers\\Gemini\\Handlers\\Images' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Handlers/Images.php',
+        'Prism\\Prism\\Providers\\Gemini\\Handlers\\Stream' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Handlers/Stream.php',
+        'Prism\\Prism\\Providers\\Gemini\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\Gemini\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\Gemini\\Handlers\\TextToSpeechRequestMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Handlers/TextToSpeechRequestMapper.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\AudioVideoMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/AudioVideoMapper.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\CitationMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/CitationMapper.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\DocumentMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/DocumentMapper.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\FinishReasonMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/FinishReasonMap.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\ImageMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/ImageMapper.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\ImageRequestMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/ImageRequestMap.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\MessageMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/MessageMap.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\SchemaMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/SchemaMap.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\SearchGroundingMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/SearchGroundingMap.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\ToolCallMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/ToolCallMap.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\ToolChoiceMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/ToolChoiceMap.php',
+        'Prism\\Prism\\Providers\\Gemini\\Maps\\ToolMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Maps/ToolMap.php',
+        'Prism\\Prism\\Providers\\Gemini\\Support\\MediaUrlDetector' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/Support/MediaUrlDetector.php',
+        'Prism\\Prism\\Providers\\Gemini\\ValueObjects\\GeminiCachedObject' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/ValueObjects/GeminiCachedObject.php',
+        'Prism\\Prism\\Providers\\Gemini\\ValueObjects\\MessagePartWithSearchGroundings' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/ValueObjects/MessagePartWithSearchGroundings.php',
+        'Prism\\Prism\\Providers\\Gemini\\ValueObjects\\SearchGrounding' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Gemini/ValueObjects/SearchGrounding.php',
+        'Prism\\Prism\\Providers\\Groq\\Concerns\\ProcessRateLimits' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Concerns/ProcessRateLimits.php',
+        'Prism\\Prism\\Providers\\Groq\\Concerns\\ValidateResponse' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Concerns/ValidateResponse.php',
+        'Prism\\Prism\\Providers\\Groq\\Groq' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Groq.php',
+        'Prism\\Prism\\Providers\\Groq\\Handlers\\Audio' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Handlers/Audio.php',
+        'Prism\\Prism\\Providers\\Groq\\Handlers\\Stream' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Handlers/Stream.php',
+        'Prism\\Prism\\Providers\\Groq\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\Groq\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\Groq\\Maps\\FinishReasonMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Maps/FinishReasonMap.php',
+        'Prism\\Prism\\Providers\\Groq\\Maps\\ImageMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Maps/ImageMapper.php',
+        'Prism\\Prism\\Providers\\Groq\\Maps\\MessageMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Maps/MessageMap.php',
+        'Prism\\Prism\\Providers\\Groq\\Maps\\TextToSpeechRequestMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Maps/TextToSpeechRequestMapper.php',
+        'Prism\\Prism\\Providers\\Groq\\Maps\\ToolChoiceMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Maps/ToolChoiceMap.php',
+        'Prism\\Prism\\Providers\\Groq\\Maps\\ToolMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Groq/Maps/ToolMap.php',
+        'Prism\\Prism\\Providers\\Mistral\\Concerns\\ExtractsText' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Concerns/ExtractsText.php',
+        'Prism\\Prism\\Providers\\Mistral\\Concerns\\ExtractsThinking' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Concerns/ExtractsThinking.php',
+        'Prism\\Prism\\Providers\\Mistral\\Concerns\\MapsFinishReason' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Concerns/MapsFinishReason.php',
+        'Prism\\Prism\\Providers\\Mistral\\Concerns\\ProcessRateLimits' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Concerns/ProcessRateLimits.php',
+        'Prism\\Prism\\Providers\\Mistral\\Concerns\\ValidatesResponse' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Concerns/ValidatesResponse.php',
+        'Prism\\Prism\\Providers\\Mistral\\Handlers\\Audio' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Handlers/Audio.php',
+        'Prism\\Prism\\Providers\\Mistral\\Handlers\\Embeddings' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Handlers/Embeddings.php',
+        'Prism\\Prism\\Providers\\Mistral\\Handlers\\OCR' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Handlers/OCR.php',
+        'Prism\\Prism\\Providers\\Mistral\\Handlers\\Stream' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Handlers/Stream.php',
+        'Prism\\Prism\\Providers\\Mistral\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\Mistral\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\Mistral\\Maps\\DocumentMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Maps/DocumentMapper.php',
+        'Prism\\Prism\\Providers\\Mistral\\Maps\\FinishReasonMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Maps/FinishReasonMap.php',
+        'Prism\\Prism\\Providers\\Mistral\\Maps\\ImageMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Maps/ImageMapper.php',
+        'Prism\\Prism\\Providers\\Mistral\\Maps\\MessageMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Maps/MessageMap.php',
+        'Prism\\Prism\\Providers\\Mistral\\Maps\\ToolChoiceMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Maps/ToolChoiceMap.php',
+        'Prism\\Prism\\Providers\\Mistral\\Maps\\ToolMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Maps/ToolMap.php',
+        'Prism\\Prism\\Providers\\Mistral\\Mistral' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/Mistral.php',
+        'Prism\\Prism\\Providers\\Mistral\\ValueObjects\\OCRPageResponse' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/ValueObjects/OCRPageResponse.php',
+        'Prism\\Prism\\Providers\\Mistral\\ValueObjects\\OCRResponse' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Mistral/ValueObjects/OCRResponse.php',
+        'Prism\\Prism\\Providers\\Ollama\\Concerns\\MapsFinishReason' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Concerns/MapsFinishReason.php',
+        'Prism\\Prism\\Providers\\Ollama\\Concerns\\ValidatesResponse' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Concerns/ValidatesResponse.php',
+        'Prism\\Prism\\Providers\\Ollama\\Handlers\\Embeddings' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Handlers/Embeddings.php',
+        'Prism\\Prism\\Providers\\Ollama\\Handlers\\Stream' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Handlers/Stream.php',
+        'Prism\\Prism\\Providers\\Ollama\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\Ollama\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\Ollama\\Maps\\FinishReasonMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Maps/FinishReasonMap.php',
+        'Prism\\Prism\\Providers\\Ollama\\Maps\\ImageMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Maps/ImageMapper.php',
+        'Prism\\Prism\\Providers\\Ollama\\Maps\\MessageMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Maps/MessageMap.php',
+        'Prism\\Prism\\Providers\\Ollama\\Maps\\ToolMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Maps/ToolMap.php',
+        'Prism\\Prism\\Providers\\Ollama\\Ollama' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/Ollama.php',
+        'Prism\\Prism\\Providers\\Ollama\\ValueObjects\\OllamaStreamState' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Ollama/ValueObjects/OllamaStreamState.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Concerns\\BuildsTools' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Concerns/BuildsTools.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Concerns\\ExtractsCitations' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Concerns/ExtractsCitations.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Concerns\\MapsFinishReason' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Concerns/MapsFinishReason.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Concerns\\ProcessRateLimits' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Concerns/ProcessRateLimits.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Concerns\\ValidatesResponse' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Concerns/ValidatesResponse.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Handlers\\Audio' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Handlers/Audio.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Handlers\\Embeddings' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Handlers/Embeddings.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Handlers\\Images' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Handlers/Images.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Handlers\\Moderation' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Handlers/Moderation.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Handlers\\Stream' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Handlers/Stream.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\CitationsMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/CitationsMapper.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\DocumentMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/DocumentMapper.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\FinishReasonMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/FinishReasonMap.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\ImageMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/ImageMapper.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\ImageRequestMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/ImageRequestMap.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\MessageMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/MessageMap.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\ProviderToolCallMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/ProviderToolCallMap.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\TextToSpeechRequestMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/TextToSpeechRequestMapper.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\ToolCallMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/ToolCallMap.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\ToolChoiceMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/ToolChoiceMap.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Maps\\ToolMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Maps/ToolMap.php',
+        'Prism\\Prism\\Providers\\OpenAI\\OpenAI' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/OpenAI.php',
+        'Prism\\Prism\\Providers\\OpenAI\\Support\\StructuredModeResolver' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenAI/Support/StructuredModeResolver.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Concerns\\BuildsRequestOptions' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Concerns/BuildsRequestOptions.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Concerns\\MapsFinishReason' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Concerns/MapsFinishReason.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Concerns\\ValidatesResponses' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Concerns/ValidatesResponses.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Handlers\\Embeddings' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Handlers/Embeddings.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Handlers\\Stream' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Handlers/Stream.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Maps\\AudioMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Maps/AudioMapper.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Maps\\DocumentMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Maps/DocumentMapper.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Maps\\FinishReasonMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Maps/FinishReasonMap.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Maps\\ImageMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Maps/ImageMapper.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Maps\\MessageMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Maps/MessageMap.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Maps\\ToolCallMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Maps/ToolCallMap.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Maps\\ToolChoiceMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Maps/ToolChoiceMap.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Maps\\ToolMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Maps/ToolMap.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\Maps\\VideoMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/Maps/VideoMapper.php',
+        'Prism\\Prism\\Providers\\OpenRouter\\OpenRouter' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/OpenRouter/OpenRouter.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Concerns\\ExtractsAdditionalContent' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Concerns/ExtractsAdditionalContent.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Concerns\\ExtractsFinishReason' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Concerns/ExtractsFinishReason.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Concerns\\ExtractsMeta' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Concerns/ExtractsMeta.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Concerns\\ExtractsStructuredOutput' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Concerns/ExtractsStructuredOutput.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Concerns\\ExtractsUsage' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Concerns/ExtractsUsage.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Concerns\\HandlesHttpRequests' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Concerns/HandlesHttpRequests.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Handlers\\Stream' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Handlers/Stream.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Maps\\DocumentMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Maps/DocumentMapper.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Maps\\ImageMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Maps/ImageMapper.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Maps\\MessagesMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Maps/MessagesMapper.php',
+        'Prism\\Prism\\Providers\\Perplexity\\Perplexity' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Perplexity/Perplexity.php',
+        'Prism\\Prism\\Providers\\Provider' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Provider.php',
+        'Prism\\Prism\\Providers\\VoyageAI\\Embeddings' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/VoyageAI/Embeddings.php',
+        'Prism\\Prism\\Providers\\VoyageAI\\VoyageAI' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/VoyageAI/VoyageAI.php',
+        'Prism\\Prism\\Providers\\XAI\\Concerns\\ExtractsThinking' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Concerns/ExtractsThinking.php',
+        'Prism\\Prism\\Providers\\XAI\\Concerns\\MapsFinishReason' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Concerns/MapsFinishReason.php',
+        'Prism\\Prism\\Providers\\XAI\\Concerns\\ValidatesResponses' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Concerns/ValidatesResponses.php',
+        'Prism\\Prism\\Providers\\XAI\\Handlers\\Stream' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Handlers/Stream.php',
+        'Prism\\Prism\\Providers\\XAI\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\XAI\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\XAI\\Maps\\FinishReasonMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Maps/FinishReasonMap.php',
+        'Prism\\Prism\\Providers\\XAI\\Maps\\ImageMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Maps/ImageMapper.php',
+        'Prism\\Prism\\Providers\\XAI\\Maps\\MessageMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Maps/MessageMap.php',
+        'Prism\\Prism\\Providers\\XAI\\Maps\\ToolChoiceMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Maps/ToolChoiceMap.php',
+        'Prism\\Prism\\Providers\\XAI\\Maps\\ToolMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/Maps/ToolMap.php',
+        'Prism\\Prism\\Providers\\XAI\\XAI' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/XAI/XAI.php',
+        'Prism\\Prism\\Providers\\Z\\Concerns\\MapsFinishReason' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Concerns/MapsFinishReason.php',
+        'Prism\\Prism\\Providers\\Z\\Enums\\DocumentType' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Enums/DocumentType.php',
+        'Prism\\Prism\\Providers\\Z\\Handlers\\Structured' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Handlers/Structured.php',
+        'Prism\\Prism\\Providers\\Z\\Handlers\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Handlers/Text.php',
+        'Prism\\Prism\\Providers\\Z\\Maps\\DocumentMapper' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Maps/DocumentMapper.php',
+        'Prism\\Prism\\Providers\\Z\\Maps\\FinishReasonMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Maps/FinishReasonMap.php',
+        'Prism\\Prism\\Providers\\Z\\Maps\\MessageMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Maps/MessageMap.php',
+        'Prism\\Prism\\Providers\\Z\\Maps\\StructuredMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Maps/StructuredMap.php',
+        'Prism\\Prism\\Providers\\Z\\Maps\\ToolChoiceMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Maps/ToolChoiceMap.php',
+        'Prism\\Prism\\Providers\\Z\\Maps\\ToolMap' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Maps/ToolMap.php',
+        'Prism\\Prism\\Providers\\Z\\Z' => __DIR__ . '/..' . '/prism-php/prism/src/Providers/Z/Z.php',
+        'Prism\\Prism\\Rectors\\ReorderMethodsRector' => __DIR__ . '/..' . '/prism-php/prism/src/Rectors/ReorderMethodsRector.php',
+        'Prism\\Prism\\Schema\\AnyOfSchema' => __DIR__ . '/..' . '/prism-php/prism/src/Schema/AnyOfSchema.php',
+        'Prism\\Prism\\Schema\\ArraySchema' => __DIR__ . '/..' . '/prism-php/prism/src/Schema/ArraySchema.php',
+        'Prism\\Prism\\Schema\\BooleanSchema' => __DIR__ . '/..' . '/prism-php/prism/src/Schema/BooleanSchema.php',
+        'Prism\\Prism\\Schema\\EnumSchema' => __DIR__ . '/..' . '/prism-php/prism/src/Schema/EnumSchema.php',
+        'Prism\\Prism\\Schema\\NumberSchema' => __DIR__ . '/..' . '/prism-php/prism/src/Schema/NumberSchema.php',
+        'Prism\\Prism\\Schema\\ObjectSchema' => __DIR__ . '/..' . '/prism-php/prism/src/Schema/ObjectSchema.php',
+        'Prism\\Prism\\Schema\\RawSchema' => __DIR__ . '/..' . '/prism-php/prism/src/Schema/RawSchema.php',
+        'Prism\\Prism\\Schema\\StringSchema' => __DIR__ . '/..' . '/prism-php/prism/src/Schema/StringSchema.php',
+        'Prism\\Prism\\Streaming\\Adapters\\BroadcastAdapter' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Adapters/BroadcastAdapter.php',
+        'Prism\\Prism\\Streaming\\Adapters\\DataProtocolAdapter' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Adapters/DataProtocolAdapter.php',
+        'Prism\\Prism\\Streaming\\Adapters\\SSEAdapter' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Adapters/SSEAdapter.php',
+        'Prism\\Prism\\Streaming\\EventID' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/EventID.php',
+        'Prism\\Prism\\Streaming\\Events\\ArtifactEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/ArtifactEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\CitationEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/CitationEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\ErrorEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/ErrorEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\ProviderToolEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/ProviderToolEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\StepFinishEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/StepFinishEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\StepStartEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/StepStartEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\StreamEndEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/StreamEndEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\StreamEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/StreamEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\StreamStartEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/StreamStartEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\TextCompleteEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/TextCompleteEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\TextDeltaEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/TextDeltaEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\TextStartEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/TextStartEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\ThinkingCompleteEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/ThinkingCompleteEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\ThinkingEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/ThinkingEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\ThinkingStartEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/ThinkingStartEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\ToolCallDeltaEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/ToolCallDeltaEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\ToolCallEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/ToolCallEvent.php',
+        'Prism\\Prism\\Streaming\\Events\\ToolResultEvent' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/Events/ToolResultEvent.php',
+        'Prism\\Prism\\Streaming\\StreamCollector' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/StreamCollector.php',
+        'Prism\\Prism\\Streaming\\StreamState' => __DIR__ . '/..' . '/prism-php/prism/src/Streaming/StreamState.php',
+        'Prism\\Prism\\Structured\\PendingRequest' => __DIR__ . '/..' . '/prism-php/prism/src/Structured/PendingRequest.php',
+        'Prism\\Prism\\Structured\\Request' => __DIR__ . '/..' . '/prism-php/prism/src/Structured/Request.php',
+        'Prism\\Prism\\Structured\\Response' => __DIR__ . '/..' . '/prism-php/prism/src/Structured/Response.php',
+        'Prism\\Prism\\Structured\\ResponseBuilder' => __DIR__ . '/..' . '/prism-php/prism/src/Structured/ResponseBuilder.php',
+        'Prism\\Prism\\Structured\\Step' => __DIR__ . '/..' . '/prism-php/prism/src/Structured/Step.php',
+        'Prism\\Prism\\Testing\\Concerns\\CanGenerateFakeChunksFromTextResponses' => __DIR__ . '/..' . '/prism-php/prism/src/Testing/Concerns/CanGenerateFakeChunksFromTextResponses.php',
+        'Prism\\Prism\\Testing\\EmbeddingsResponseFake' => __DIR__ . '/..' . '/prism-php/prism/src/Testing/EmbeddingsResponseFake.php',
+        'Prism\\Prism\\Testing\\ImageResponseFake' => __DIR__ . '/..' . '/prism-php/prism/src/Testing/ImageResponseFake.php',
+        'Prism\\Prism\\Testing\\PrismFake' => __DIR__ . '/..' . '/prism-php/prism/src/Testing/PrismFake.php',
+        'Prism\\Prism\\Testing\\StructuredResponseFake' => __DIR__ . '/..' . '/prism-php/prism/src/Testing/StructuredResponseFake.php',
+        'Prism\\Prism\\Testing\\StructuredStepFake' => __DIR__ . '/..' . '/prism-php/prism/src/Testing/StructuredStepFake.php',
+        'Prism\\Prism\\Testing\\TextResponseFake' => __DIR__ . '/..' . '/prism-php/prism/src/Testing/TextResponseFake.php',
+        'Prism\\Prism\\Testing\\TextStepFake' => __DIR__ . '/..' . '/prism-php/prism/src/Testing/TextStepFake.php',
+        'Prism\\Prism\\Text\\PendingRequest' => __DIR__ . '/..' . '/prism-php/prism/src/Text/PendingRequest.php',
+        'Prism\\Prism\\Text\\Request' => __DIR__ . '/..' . '/prism-php/prism/src/Text/Request.php',
+        'Prism\\Prism\\Text\\Response' => __DIR__ . '/..' . '/prism-php/prism/src/Text/Response.php',
+        'Prism\\Prism\\Text\\ResponseBuilder' => __DIR__ . '/..' . '/prism-php/prism/src/Text/ResponseBuilder.php',
+        'Prism\\Prism\\Text\\Step' => __DIR__ . '/..' . '/prism-php/prism/src/Text/Step.php',
+        'Prism\\Prism\\Tool' => __DIR__ . '/..' . '/prism-php/prism/src/Tool.php',
+        'Prism\\Prism\\Tools\\LaravelMcpTool' => __DIR__ . '/..' . '/prism-php/prism/src/Tools/LaravelMcpTool.php',
+        'Prism\\Prism\\ValueObjects\\Artifact' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Artifact.php',
+        'Prism\\Prism\\ValueObjects\\Citation' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Citation.php',
+        'Prism\\Prism\\ValueObjects\\Embedding' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Embedding.php',
+        'Prism\\Prism\\ValueObjects\\EmbeddingsUsage' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/EmbeddingsUsage.php',
+        'Prism\\Prism\\ValueObjects\\GeneratedAudio' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/GeneratedAudio.php',
+        'Prism\\Prism\\ValueObjects\\GeneratedImage' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/GeneratedImage.php',
+        'Prism\\Prism\\ValueObjects\\Media\\Audio' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Media/Audio.php',
+        'Prism\\Prism\\ValueObjects\\Media\\Document' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Media/Document.php',
+        'Prism\\Prism\\ValueObjects\\Media\\Image' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Media/Image.php',
+        'Prism\\Prism\\ValueObjects\\Media\\Media' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Media/Media.php',
+        'Prism\\Prism\\ValueObjects\\Media\\Text' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Media/Text.php',
+        'Prism\\Prism\\ValueObjects\\Media\\Video' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Media/Video.php',
+        'Prism\\Prism\\ValueObjects\\MessagePartWithCitations' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/MessagePartWithCitations.php',
+        'Prism\\Prism\\ValueObjects\\Messages\\AssistantMessage' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Messages/AssistantMessage.php',
+        'Prism\\Prism\\ValueObjects\\Messages\\SystemMessage' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Messages/SystemMessage.php',
+        'Prism\\Prism\\ValueObjects\\Messages\\ToolResultMessage' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Messages/ToolResultMessage.php',
+        'Prism\\Prism\\ValueObjects\\Messages\\UserMessage' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Messages/UserMessage.php',
+        'Prism\\Prism\\ValueObjects\\Meta' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Meta.php',
+        'Prism\\Prism\\ValueObjects\\ModerationResult' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/ModerationResult.php',
+        'Prism\\Prism\\ValueObjects\\ProviderRateLimit' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/ProviderRateLimit.php',
+        'Prism\\Prism\\ValueObjects\\ProviderTool' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/ProviderTool.php',
+        'Prism\\Prism\\ValueObjects\\ProviderToolCall' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/ProviderToolCall.php',
+        'Prism\\Prism\\ValueObjects\\ToolCall' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/ToolCall.php',
+        'Prism\\Prism\\ValueObjects\\ToolError' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/ToolError.php',
+        'Prism\\Prism\\ValueObjects\\ToolOutput' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/ToolOutput.php',
+        'Prism\\Prism\\ValueObjects\\ToolResult' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/ToolResult.php',
+        'Prism\\Prism\\ValueObjects\\Usage' => __DIR__ . '/..' . '/prism-php/prism/src/ValueObjects/Usage.php',
         'Psr\\Cache\\CacheException' => __DIR__ . '/..' . '/psr/cache/src/CacheException.php',
         'Psr\\Cache\\CacheItemInterface' => __DIR__ . '/..' . '/psr/cache/src/CacheItemInterface.php',
         'Psr\\Cache\\CacheItemPoolInterface' => __DIR__ . '/..' . '/psr/cache/src/CacheItemPoolInterface.php',

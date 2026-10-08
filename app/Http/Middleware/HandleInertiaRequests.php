@@ -147,6 +147,10 @@ class HandleInertiaRequests extends Middleware
                 'roles' => fn() => $this->getUserRoles($request),
                 'permissions' => fn() => $this->getUserPermissions($request),
                 'modulesLocked' => fn() => \App\Http\Middleware\CheckModuleAccess::locksModulesFor($request->user()),
+                // null for roles that never get the AI Assistant (member, client, superadmin).
+                'aiAssistant' => fn() => \App\Services\Ai\AiAccess::role($request->user())
+                    ? \App\Services\Ai\AiAccess::status($request->user())
+                    : null,
             ],
             'workspaceSettings' => fn() => $this->getWorkspaceSettings($request),
             'unreadNotificationsCount' => fn() => $this->getUnreadNotificationsCount($request),

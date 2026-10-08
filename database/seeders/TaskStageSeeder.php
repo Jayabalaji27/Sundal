@@ -50,7 +50,10 @@ class TaskStageSeeder extends Seeder
                 'name' => $stage['name'],
                 'color' => $stage['color'],
                 'order' => $stage['order'],
-               'is_default' => (isset($stage['is_default'])) ? true : false
+               'is_default' => (isset($stage['is_default'])) ? true : false,
+                // Same rule as the 2026_10_02 is_completed migration, so new
+                // workspaces count tasks in Done as finished too.
+                'is_completed' => $stage['name'] === 'Done',
             ]);
         }
     }

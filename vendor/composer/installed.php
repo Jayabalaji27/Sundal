@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'laravel/react-starter-kit',
-        'pretty_version' => '1.0.0+no-version-set',
-        'version' => '1.0.0.0',
-        'reference' => null,
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => '73c3db570bb4b7f4fa662f6fbb086c9a7c120354',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -665,9 +665,9 @@
             'dev_requirement' => false,
         ),
         'laravel/react-starter-kit' => array(
-            'pretty_version' => '1.0.0+no-version-set',
-            'version' => '1.0.0.0',
-            'reference' => null,
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => '73c3db570bb4b7f4fa662f6fbb086c9a7c120354',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
@@ -1218,6 +1218,15 @@
             'install_path' => __DIR__ . '/../phpunit/phpunit',
             'aliases' => array(),
             'dev_requirement' => true,
+        ),
+        'prism-php/prism' => array(
+            'pretty_version' => 'v0.100.1',
+            'version' => '0.100.1.0',
+            'reference' => '5d6cc65b80b19cf3f22744703ac0c727b68cdca8',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../prism-php/prism',
+            'aliases' => array(),
+            'dev_requirement' => false,
         ),
         'psr/cache' => array(
             'pretty_version' => '3.0.0',
