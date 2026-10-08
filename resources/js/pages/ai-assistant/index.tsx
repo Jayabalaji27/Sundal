@@ -35,6 +35,8 @@ interface Message {
     content: string;
     created_at: string;
     cards: ToolCard[];
+    /** Shown in the chat only, never saved: the provider refused or failed. */
+    error?: boolean;
 }
 
 interface Conversation {
@@ -142,17 +144,32 @@ function Chat({ conversations: initial }: { conversations: Conversation[] }) {
     const [sending, setSending] = useState(false);
     const [loading, setLoading] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
+    // Set when send() creates a conversation: its messages are already on screen
+    // (including any error bubble), so don't reload and overwrite them.
+    const createdHereRef = useRef<number | null>(null);
 
     useEffect(() => {
         if (activeId === null) {
             setMessages([]);
             return;
         }
+        if (createdHereRef.current === activeId) {
+            createdHereRef.current = null;
+            return;
+        }
+        // Ignore the response if the user has switched chats (or started a new
+        // one) before it arrived, so an old conversation never lands in the new one.
+        let stale = false;
         setLoading(true);
         axios.get(route('ai-assistant.conversations.show', activeId))
-            .then(({ data }) => setMessages(data.messages))
-            .catch(() => toast.error(t('Could not load this conversation.')))
-            .finally(() => setLoading(false));
+            .then(({ data }) => { if (!stale) setMessages(data.messages); })
+            .catch(() => { if (!stale) toast.error(t('Could not load this conversation.')); })
+            .finally(() => { if (!stale) setLoading(false); });
+
+        return () => {
+            stale = true;
+            setLoading(false);
+        };
     }, [activeId]);
 
     useEffect(() => {
@@ -170,6 +187,7 @@ function Chat({ conversations: initial }: { conversations: Conversation[] }) {
         const apply = (data: any) => {
             if (!data?.conversation) return;
             setMessages(prev => [...prev.filter(m => m.id !== optimistic.id), ...data.messages]);
+            if (activeId === null) createdHereRef.current = data.conversation.id;
             setActiveId(current => current ?? data.conversation.id);
             setConversations(prev => [data.conversation, ...prev.filter(c => c.id !== data.conversation.id)]);
         };
@@ -179,7 +197,12 @@ function Chat({ conversations: initial }: { conversations: Conversation[] }) {
             apply(data);
         } catch (error: any) {
             apply(error?.response?.data);
-            toast.error(errorMessage(error, t('The assistant could not answer. Please try again.')));
+            // Keep the reason in the chat (e.g. "no credits left"), not only in a toast.
+            const reason = errorMessage(error, t('The assistant could not answer. Please try again.'));
+            setMessages(prev => [
+                ...prev,
+                { id: -Date.now() - 1, role: 'assistant', content: reason, created_at: new Date().toISOString(), cards: [], error: true },
+            ]);
         } finally {
             setSending(false);
         }
@@ -260,7 +283,11 @@ function Chat({ conversations: initial }: { conversations: Conversation[] }) {
                     {messages.map(message => (
                         <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                             <div className="max-w-[80%] space-y-2">
-                                <div className={`whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                                <div className={`whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
+                                    message.error
+                                        ? 'border border-destructive/40 bg-destructive/10 text-destructive'
+                                        : message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                                }`}>
                                     {message.content}
                                 </div>
                                 {message.cards.map(card => <ConfirmCard key={card.id} card={card} onChange={onCardChange} />)}
