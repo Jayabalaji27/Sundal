@@ -284,7 +284,7 @@ describe('chat', function () {
         $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
 
         expect(toolNames($fake))->toBe(collect(app(\App\Services\Ai\ToolRegistry::class)->all())->keys()->sort()->values()->all())
-            ->and(toolNames($fake))->toHaveCount(26);
+            ->and(toolNames($fake))->toHaveCount(27);
     });
 
     test('a manager gets the manager workflow tools their role allows', function () {
@@ -833,6 +833,59 @@ describe('owner tools', function () {
 
         $data = aiData(aiCall($this, $users['owner'], 'list_contracts', ['expiring_within_days' => 30]));
         expect($data['contracts'][0]['subject'])->toBe('Acme support');
+    });
+});
+
+describe('history log and creators', function () {
+    test('every change is in the history with who did it and whether it came from the AI', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+
+        // From the normal screen
+        $this->actingAs($users['manager'])->post(route('tasks.store'), ['project_id' => $project->id, 'title' => 'Story A', 'priority' => 'low']);
+        $task = Task::where('title', 'Story A')->first();
+
+        // From the assistant
+        $card = aiCall($this, $users['manager'], 'assign_task', ['task' => 'Story A', 'assignee' => $users['member']->email])['card'];
+        aiConfirm($this, $users['manager'], $card['id']);
+
+        $log = \Spatie\Activitylog\Models\Activity::where('subject_type', $task->getMorphClass())->where('subject_id', $task->id)->orderBy('id')->get();
+        expect($log->pluck('event')->all())->toBe(['created', 'updated'])
+            ->and($log->every(fn ($a) => (int) $a->causer_id === $users['manager']->id))->toBeTrue()
+            ->and($log[0]->properties['source'])->toBe('screen')
+            ->and($log[1]->properties['source'])->toBe('ai_assistant')
+            ->and($log[1]->properties['ai_tool_call_id'])->toBe($card['id'])
+            ->and($log[1]->properties['attributes']['assigned_to'])->toBe($users['member']->id)
+            ->and($log[1]->workspace_id)->toBe($workspace->id);
+
+        $history = aiData(aiCall($this, $users['owner'], 'get_record_history', ['type' => 'task', 'record' => 'Story A']));
+        expect($history['created_by'])->toBe($users['manager']->name)
+            ->and($history['history'][0]['who'])->toBe($users['manager']->name)
+            ->and($history['history'][0]['source'])->toBe('ai_assistant')
+            ->and($history['history'][0]['changes'][0]['field'])->toBe('assigned_to');
+    });
+
+    test('a record created without a creator gets the signed-in user', function () {
+        [$workspace, $users] = aiWorkspace();
+        $this->actingAs($users['manager']);
+
+        $note = \App\Models\Note::create(['workspace' => $workspace->id, 'title' => 'Minutes', 'text' => 'x', 'color' => '#ffffff']);
+        expect($note->created_by)->toBe($users['manager']->id);
+
+        $bug = Bug::create(['project_id' => aiProject($workspace, $users['owner'])->id, 'bug_status_id' => BugStatus::where('workspace_id', $workspace->id)->value('id'),
+            'title' => 'No reporter given', 'priority' => 'low', 'severity' => 'minor']);
+        expect($bug->reported_by)->toBe($users['manager']->id);
+    });
+
+    test('a change with no signed-in user is no longer credited to user 1 in the project feed', function () {
+        [$workspace, $users] = aiWorkspace();
+        $project = aiProject($workspace, $users['owner']);
+        auth()->logout();
+
+        aiTask($project, $users['owner'], 'Made by a job');
+
+        expect(ProjectActivity::where('project_id', $project->id)->where('user_id', 1)->exists())->toBeFalse();
     });
 });
 

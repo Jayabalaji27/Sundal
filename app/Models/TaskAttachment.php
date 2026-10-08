@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TaskAttachment extends Model
 {
+    use \App\Models\Concerns\RecordsCreator;
+
+    protected string $creatorColumn = 'uploaded_by';
     protected $fillable = [
         'task_id', 'media_item_id', 'uploaded_by'
     ];

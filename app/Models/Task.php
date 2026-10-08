@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Task extends Model
 {
-    use LogsActivity;
+    use LogsActivity, \App\Models\Concerns\RecordsCreator;
     protected $fillable = [
         'project_id', 'task_stage_id', 'milestone_id', 'title', 'description',
         'priority', 'start_date', 'end_date', 'assigned_to', 'created_by', 'progress'

@@ -138,6 +138,7 @@ return array(
     'a59b9c2bbe4313495dfa863f08526b63' => $vendorDir . '/prism-php/prism/src/helpers.php',
     'd7354eb4c8441fbf08eec280b61c7c73' => $vendorDir . '/rachidlaasri/laravel-installer/src/Helpers/functions.php',
     '13906c19e3d8fcd1341b24ed4d51cf72' => $vendorDir . '/razorpay/razorpay/Deprecated.php',
+    '72b1e3f4a2af9b30b3f137b3ec2057fc' => $vendorDir . '/spatie/laravel-activitylog/src/helpers.php',
     '377b22b161c09ed6e5152de788ca020a' => $vendorDir . '/spatie/laravel-permission/src/helpers.php',
     '2bce2cc1133f32e85be250c466e01419' => $baseDir . '/app/Helpers/helper.php',
 );

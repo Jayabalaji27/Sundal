@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ContractNote extends BaseModel
 {
-    use HasFactory;
+    use HasFactory, \App\Models\Concerns\RecordsCreator;
 
     protected $table = 'contracts_notes';
 

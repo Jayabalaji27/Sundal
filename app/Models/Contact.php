@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Contact extends Model
 {
-    use HasFactory;
+    use HasFactory, \App\Models\Concerns\RecordsCreator;
 
     protected $fillable = [
         'name',

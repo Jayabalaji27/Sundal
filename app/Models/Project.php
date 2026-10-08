@@ -13,7 +13,7 @@ use App\Models\Concerns\BelongsToWorkspace;
 
 class Project extends Model
 {
-    use SoftDeletes, BelongsToWorkspace;
+    use SoftDeletes, BelongsToWorkspace, \App\Models\Concerns\RecordsCreator;
 
     protected $fillable = [
         'workspace_id', 'portfolio_id', 'title', 'description', 'client_id', 'status', 'priority',

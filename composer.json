@@ -30,6 +30,7 @@
         "prism-php/prism": "^0.100.1",
         "rachidlaasri/laravel-installer": "^4.1",
         "razorpay/razorpay": "^2.8",
+        "spatie/laravel-activitylog": "4.*",
         "spatie/laravel-medialibrary": "^11.13",
         "spatie/laravel-permission": "^6.18",
         "stripe/stripe-php": "^17.3",

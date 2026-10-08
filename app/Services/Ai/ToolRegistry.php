@@ -49,6 +49,8 @@ class ToolRegistry
         Tools\InviteUserTool::class,
         Tools\GetRevenueSummary::class,
         Tools\SearchKnowledgeBase::class,
+        // Who created or changed a record (history log)
+        Tools\GetRecordHistory::class,
     ];
 
     /** @var AiTool[]|null */

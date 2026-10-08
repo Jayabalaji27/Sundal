@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ContractComment extends BaseModel
 {
-    use HasFactory;
+    use HasFactory, \App\Models\Concerns\RecordsCreator;
 
     protected $table = 'contracts_comments';
 

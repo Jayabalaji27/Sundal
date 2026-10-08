@@ -7,7 +7,7 @@ use App\Models\Concerns\BelongsToWorkspace;
 
 class KbArticle extends Model
 {
-    use BelongsToWorkspace;
+    use BelongsToWorkspace, \App\Models\Concerns\RecordsCreator;
 
     protected $fillable = ['workspace_id','kb_category_id','title','content','is_published','views','created_by'];
     protected $casts = ['is_published' => 'boolean'];

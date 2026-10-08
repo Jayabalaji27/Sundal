@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ProjectMilestone extends Model
 {
+    use \App\Models\Concerns\RecordsCreator;
     protected $fillable = [
         'project_id', 'title', 'description', 'due_date', 'status',
         'progress', 'order', 'created_by', 'completed_at', 'completed_by'

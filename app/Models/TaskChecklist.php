@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TaskChecklist extends Model
 {
+    use \App\Models\Concerns\RecordsCreator;
     protected $fillable = [
         'task_id',
         'title',

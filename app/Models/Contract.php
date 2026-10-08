@@ -10,7 +10,7 @@ use App\Models\Concerns\BelongsToWorkspace;
 
 class Contract extends BaseModel
 {
-    use HasFactory, BelongsToWorkspace;
+    use HasFactory, BelongsToWorkspace, \App\Models\Concerns\RecordsCreator;
 
     protected $fillable = [
         'contract_id',

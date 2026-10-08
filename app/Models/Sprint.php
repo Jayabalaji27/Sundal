@@ -8,7 +8,7 @@ use App\Models\Concerns\BelongsToWorkspace;
 
 class Sprint extends Model
 {
-    use BelongsToWorkspace;
+    use BelongsToWorkspace, \App\Models\Concerns\RecordsCreator;
 
     protected $fillable = [
         'project_id','workspace_id','name','goal','start_date','end_date','status','created_by'

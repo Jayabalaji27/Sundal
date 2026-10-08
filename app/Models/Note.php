@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Note extends Model
 {
-    use HasFactory;
+    use HasFactory, \App\Models\Concerns\RecordsCreator;
 
     protected $fillable = [
         'title',
