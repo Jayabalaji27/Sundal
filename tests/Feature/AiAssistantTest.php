@@ -77,11 +77,10 @@ function aiWorkspace(bool $withAddon = true): array
     return [$workspace, $users];
 }
 
-/** Signed in as someone who just opened the AI Assistant: password confirmed, AI session started. */
+/** Signed in as someone who just opened the AI Assistant: AI session started. */
 function asAi($test, User $user)
 {
     return $test->actingAs($user)->withSession([
-        'auth.password_confirmed_at' => time(),
         'ai_mode' => [
             'workspace_id' => (int) $user->current_workspace_id,
             'last_activity' => now()->getTimestamp(),
@@ -1294,6 +1293,9 @@ describe('deterministic forms', function () {
         ['create a to do task for a login page', 'create_task', 'Login page'],
         ['report a bug: checkout crashes', 'create_bug', 'Checkout crashes'],
         ['create a project in the name of sundal', 'create_project', 'Sundal'],
+        ['create a invoice in sundal project', null, null],
+        ['add a contract for acme', null, null],
+        ['create a task in sundal project', 'create_task', null],
         ['assign the login bug to Ravi', 'assign_bug', null],
         ['move API docs to done', 'change_task_status', null],
         ['which tasks are overdue?', null, null],
@@ -1303,10 +1305,10 @@ describe('deterministic forms', function () {
 
 // ── AI mode (own tab, session rules) ──────────────────────────────────────────
 
-/** Open the AI mode tab (password confirmed just now). */
+/** Open the AI mode tab with the current login. */
 function openAiMode($test, User $user)
 {
-    return $test->actingAs($user)->withSession(['auth.password_confirmed_at' => time()])->get(route('ai-mode'));
+    return $test->actingAs($user)->get(route('ai-mode'));
 }
 
 function aiModeHeaders(Workspace $workspace): array
@@ -1315,13 +1317,9 @@ function aiModeHeaders(Workspace $workspace): array
 }
 
 describe('ai mode', function () {
-    test('opening AI mode asks for the password unless confirmed in the last 30 minutes', function () {
+    test('AI mode opens with the current login, no password prompt', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
-
-        $this->actingAs($users['owner'])->get(route('ai-mode'))->assertRedirect(route('password.confirm'));
-        $this->actingAs($users['owner'])->withSession(['auth.password_confirmed_at' => time() - 31 * 60])->get(route('ai-mode'))
-            ->assertRedirect(route('password.confirm'));
 
         openAiMode($this, $users['owner'])->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('ai-assistant/index')
@@ -1391,15 +1389,15 @@ describe('ai mode', function () {
         $this->postJson(route('ai-mode.keep-alive'))->assertStatus(423);
     });
 
-    test('unlocking needs the right password and keeps the chat', function () {
+    test('Continue after the idle pause resumes with the current login', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
         openAiMode($this, $users['owner'])->assertOk();
         $this->travel(31)->minutes();
         $this->post(route('ai-mode.heartbeat'));
+        $this->getJson(route('ai-mode.status'))->assertJsonPath('code', 'locked_idle');
 
-        $this->postJson(route('ai-mode.unlock'), ['password' => 'wrong'])->assertJsonValidationErrors('password');
-        $this->postJson(route('ai-mode.unlock'), ['password' => 'password'])->assertOk()->assertJsonPath('code', 'ok');
+        $this->postJson(route('ai-mode.unlock'))->assertOk()->assertJsonPath('code', 'ok');
         $this->getJson(route('ai-mode.status'))->assertJsonPath('code', 'ok');
     });
 
@@ -1414,8 +1412,8 @@ describe('ai mode', function () {
         $this->postJson(route('ai-assistant.send'), ['content' => 'hi'], aiModeHeaders($workspace))
             ->assertStatus(423)->assertJsonPath('code', 'locked_app_closed');
 
-        // A password does not lift it; Sundal coming back does.
-        $this->postJson(route('ai-mode.unlock'), ['password' => 'password'])->assertJsonPath('code', 'locked_app_closed');
+        // Continue does not lift it; Sundal coming back does.
+        $this->postJson(route('ai-mode.unlock'))->assertJsonPath('code', 'locked_app_closed');
         $this->post(route('ai-mode.heartbeat'))->assertOk();
         $this->getJson(route('ai-mode.status'))->assertJsonPath('code', 'ok');
     });
@@ -1437,11 +1435,13 @@ describe('ai mode', function () {
 // ── Security hardening ────────────────────────────────────────────────────────
 
 describe('security', function () {
-    test('the normal AI Assistant page also asks for the password', function () {
+    test('the normal AI Assistant page opens with the current login and starts the AI session', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
+        fakeAi([['text' => 'ok']]);
 
-        $this->actingAs($users['owner'])->get(route('ai-assistant.index'))->assertRedirect(route('password.confirm'));
+        $this->actingAs($users['owner'])->get(route('ai-assistant.index'))->assertOk();
+        $this->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
     });
 
     test('the session rules cannot be skipped by leaving out the AI mode header', function () {
@@ -1454,7 +1454,7 @@ describe('security', function () {
             ->assertStatus(423)->assertJsonPath('code', 'ai_mode_ended');
 
         // Opened from the normal page: works, and Sundal-open does not apply there.
-        $this->actingAs($users['owner'])->withSession(['auth.password_confirmed_at' => time()])->get(route('ai-assistant.index'))->assertOk();
+        $this->actingAs($users['owner'])->get(route('ai-assistant.index'))->assertOk();
         $this->travel(5)->minutes();
         $this->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
 

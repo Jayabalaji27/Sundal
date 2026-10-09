@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Head, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
-import { Clock, Loader2, Lock, LogIn, RefreshCw, Sparkles } from 'lucide-react';
+import { Clock, Loader2, Lock, LogIn, Play, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { AI_ALIVE_EVERY_MS, type AiModeMessage, openChannel } from '@/lib/ai-mode';
 
@@ -213,39 +212,36 @@ function formatSeconds(seconds: number): string {
 
 function LockScreen({ reason, onUnlocked, onLock }: { reason: LockReason; onUnlocked: () => void; onLock: (reason: LockReason) => void }) {
     const { t } = useTranslation();
-    const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
-    const unlock = async (event: FormEvent) => {
-        event.preventDefault();
+    /** Resume after the idle pause with the current login (no password). */
+    const resume = async () => {
         setBusy(true);
         setError(null);
         try {
-            const { data } = await axios.post(route('ai-mode.unlock'), { password });
+            const { data } = await axios.post(route('ai-mode.unlock'));
             if (data.code === 'ok') onUnlocked();
             else onLock(data.code);
         } catch (e: any) {
-            setError(e?.response?.data?.errors?.password?.[0] ?? e?.response?.data?.message ?? t('Could not unlock.'));
+            setError(e?.response?.data?.message ?? t('Could not continue.'));
         } finally {
             setBusy(false);
-            setPassword('');
         }
     };
 
     const content: Record<LockReason, { title: string; text: string; action: ReactNode }> = {
         locked_idle: {
-            title: t('AI mode is locked'),
-            text: t('It was locked after a while without activity. Enter your password to continue where you left off.'),
+            title: t('AI mode is paused'),
+            text: t('It was paused after a while without activity. Continue where you left off.'),
             action: (
-                <form onSubmit={unlock} className="flex w-full max-w-xs flex-col gap-2">
-                    <Input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder={t('Password')} autoFocus />
+                <div className="flex flex-col items-center gap-2">
                     {error && <p className="text-xs text-destructive">{error}</p>}
-                    <Button type="submit" disabled={busy || !password}>
-                        {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Lock className="mr-2 h-4 w-4" />}
-                        {t('Unlock')}
+                    <Button onClick={resume} disabled={busy} autoFocus>
+                        {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                        {t('Continue')}
                     </Button>
-                </form>
+                </div>
             ),
         },
         locked_app_closed: {

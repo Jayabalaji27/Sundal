@@ -38,11 +38,19 @@ class IntentMatcher
             return ['tool' => $isBug ? 'change_bug_status' : 'change_task_status', 'args' => []];
         }
 
-        if (preg_match('/\b(create|add|make|log|raise|file|report|open)\b/', $t) && !preg_match('/\bsprint\b/', $t)) {
+        // Things the assistant has no create form for: no fallback card at all, rather
+        // than a wrong one ("create an invoice in the sundal project" is not a project).
+        if (preg_match('/\b(invoices?|contracts?|expenses?|timesheets?|milestones?|sprints?|budgets?|payments?|notes?|meetings?|clients?|users?)\b/', $t)
+            && !$isBug && !$isTask) {
+            return null;
+        }
+
+        if (preg_match('/\b(create|add|make|log|raise|file|report|open)\b/', $t)) {
             $tool = match (true) {
                 $isBug => 'create_bug',
                 $isTask => 'create_task',
-                (bool) preg_match('/\bproject\b/', $t) => 'create_project',
+                // Only when the project is what is being created, not where something goes.
+                (bool) preg_match('/\b(create|add|make|open|start)\s+(?:(?:a|an|the|new|one)\s+)*project\b/', $t) => 'create_project',
                 default => null,
             };
 

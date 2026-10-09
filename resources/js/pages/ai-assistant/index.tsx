@@ -1093,14 +1093,14 @@ function SettingsForm({ settings, providers, usage, retentionOptions, idleTimeou
                             <p className="text-xs text-muted-foreground">{t('The log of actions the assistant took is kept for the life of the workspace.')}</p>
                         </div>
                         <div className="space-y-1">
-                            <Label>{t('Lock AI mode after')}</Label>
+                            <Label>{t('Pause the AI Assistant after')}</Label>
                             <Select value={String(form.idle_timeout_minutes)} onValueChange={v => set('idle_timeout_minutes', Number(v))}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     {idleTimeoutOptions.map(minutes => <SelectItem key={minutes} value={String(minutes)}>{t('{{minutes}} minutes without activity', { minutes })}</SelectItem>)}
                                 </SelectContent>
                             </Select>
-                            <p className="text-xs text-muted-foreground">{t('The AI mode tab then asks for the password. Chats and waiting cards are kept.')}</p>
+                            <p className="text-xs text-muted-foreground">{t('It then waits for Continue. Chats and waiting cards are kept.')}</p>
                         </div>
                     </CardContent>
                 </Card>

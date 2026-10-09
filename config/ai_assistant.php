@@ -84,9 +84,8 @@ return [
     | switch in the Sundal header.
     */
     'mode' => [
-        // Opening AI mode asks for the password unless it was confirmed this recently.
-        'password_grace_minutes' => 30,
-        // AI mode locks after this long without the user doing anything in it.
+        // The assistant pauses after this long without the user doing anything in it;
+        // "Continue" resumes it with the current login.
         // The company owner picks one of the options; the first default is used otherwise.
         'idle_timeout_minutes' => 30,
         'idle_timeout_options' => [15, 30, 60],

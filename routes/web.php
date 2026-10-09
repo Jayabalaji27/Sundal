@@ -442,15 +442,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // AI page above: the role check runs first so other roles get a clean 403.
         // The page itself skips module.access: without the add-on, owners get an
         // upgrade page there (managers are sent to the dashboard by the controller).
-        // Both entry points (this page and AI mode) ask for the password unless it was
-        // confirmed in the last 30 minutes, and start the AI session (workspace + idle lock).
+        // Both entry points (this page and AI mode) use the current login and start the
+        // AI session (workspace lock + idle lock).
         Route::get('ai-assistant', [\App\Http\Controllers\AiAssistantController::class, 'index'])
-            ->middleware(['ai.assistant', 'password.confirm:password.confirm,' . (int) config('ai_assistant.mode.password_grace_minutes', 30) * 60])
+            ->middleware('ai.assistant')
             ->name('ai-assistant.index');
         // AI mode: the same assistant in its own browser tab, opened with the header
-        // switch. Asks for the password unless confirmed in the last 30 minutes.
+        // switch. Uses the current login (no password prompt).
         Route::get('ai-mode', [\App\Http\Controllers\AiAssistantController::class, 'aiMode'])
-            ->middleware(['ai.assistant', 'module.access', 'password.confirm:password.confirm,' . (int) config('ai_assistant.mode.password_grace_minutes', 30) * 60])
+            ->middleware(['ai.assistant', 'module.access'])
             ->name('ai-mode');
         Route::middleware(['ai.assistant', 'module.access'])->prefix('ai-mode')->name('ai-mode.')->group(function () {
             Route::post('heartbeat', [\App\Http\Controllers\AiModeController::class, 'heartbeat'])->name('heartbeat');

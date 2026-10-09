@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 
 /**
  * The AI session. Opening the AI Assistant (its page, or the AI mode tab,
- * both behind a recent password check) starts it; every assistant request
+ * both using the current login) starts it; every assistant request
  * then needs it, on top of the normal login and plan checks. Refused when:
  *
  *  - the assistant was opened in another workspace than the session's
@@ -91,7 +91,7 @@ class AiMode
         }
 
         if (now()->getTimestamp() - (int) $state['last_activity'] > self::idleSeconds($user)) {
-            return self::refuse(self::LOCKED_IDLE, 423, __('The AI Assistant was locked after :minutes minutes without activity. Reload the page and confirm your password to continue.', ['minutes' => intdiv(self::idleSeconds($user), 60)]));
+            return self::refuse(self::LOCKED_IDLE, 423, __('The AI Assistant was paused after :minutes minutes without activity. Reload the page to continue.', ['minutes' => intdiv(self::idleSeconds($user), 60)]));
         }
 
         // The AI mode tab only works while a Sundal tab is open (the normal page is Sundal).

@@ -652,6 +652,23 @@ Tests: `AiAssistantTest` 104/104 (6 new). Browser two-tab AI mode flow re-checke
 
 ---
 
+### RP-17 · 2026-10-10 · No password for the AI Assistant; fallback card fix
+
+- **No password prompt** (decision): the AI Assistant page and the AI mode tab use the
+  current browser login. `password.confirm` removed from both routes and the
+  `password_grace_minutes` setting removed. The AI session still starts on opening, so the
+  workspace lock, idle timeout and (AI mode) Sundal-open rules stay. The idle pause now ends
+  with **Continue** (`POST ai-mode/unlock`, current login) instead of a password.
+- **Wrong fallback card:** "create a invoice in sundal project" offered a New project card
+  (keyword fallback matched "create … project"). `IntentMatcher` now offers nothing for
+  things without a create form (invoice, contract, expense, timesheet, milestone, sprint,
+  budget, payment, note, meeting, client, user), and "project" only counts when it is what
+  is created ("create a project …"), not where ("… in sundal project").
+
+Tests: `AiAssistantTest` 107/107. Browser: AI mode opens straight to `/ai-mode`.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)
