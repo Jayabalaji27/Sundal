@@ -2,11 +2,18 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Models\BudgetCategory;
 use App\Models\Bug;
 use App\Models\BugStatus;
+use App\Models\Invoice;
+use App\Models\InvoiceItem;
 use App\Models\Project;
+use App\Models\ProjectBudget;
+use App\Models\ProjectExpense;
 use App\Models\Task;
 use App\Models\TaskStage;
+use App\Models\Timesheet;
+use App\Models\TimesheetEntry;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
@@ -97,6 +104,101 @@ class RecordResolver
         }
 
         return $this->one($query, $ref, 'name', __('person'));
+    }
+
+    // ── Finance and time: the lists the screens allow this user to change ────
+
+    public function draftInvoices(User $user): Builder
+    {
+        return ListInvoices::visible($user)->where('status', 'draft');
+    }
+
+    /** Sent, viewed, partly paid or overdue: what can be marked as paid. */
+    public function unpaidInvoices(User $user): Builder
+    {
+        return ListInvoices::visible($user)->whereIn('status', Invoice::OVERDUE_ELIGIBLE_STATUSES);
+    }
+
+    /** Expenses not yet approved (approved ones count against the budget). */
+    public function openExpenses(User $user): Builder
+    {
+        return ProjectExpense::visibleTo($user)->whereIn('project_expenses.status', ['pending', 'requires_info']);
+    }
+
+    public function budgets(User $user): Builder
+    {
+        return ProjectBudget::query()->whereIn('project_id', $this->projects($user)->select('id'));
+    }
+
+    public function budgetCategories(User $user, ?int $projectId = null): Builder
+    {
+        return BudgetCategory::whereHas('projectBudget', fn ($q) => $q
+            ->whereIn('project_id', $this->projects($user)->select('id'))
+            ->when($projectId, fn ($q) => $q->where('project_id', $projectId)));
+    }
+
+    /** The user's own time entries on timesheets they can still change. */
+    public function openTimeEntries(User $user): Builder
+    {
+        return TimesheetEntry::where('user_id', $user->id)->whereHas('timesheet', fn ($q) => $q
+            ->where('workspace_id', $user->current_workspace_id)
+            ->whereNotIn('status', ['submitted', 'approved']));
+    }
+
+    /** The user's own draft or rejected timesheets that have entries: what can be submitted. */
+    public function openTimesheets(User $user): Builder
+    {
+        return Timesheet::where('user_id', $user->id)
+            ->where('workspace_id', $user->current_workspace_id)
+            ->whereIn('status', ['draft', 'rejected'])
+            ->whereHas('entries');
+    }
+
+    /** Tasks not already on a sent or paid invoice (BUG-14). */
+    public function billableTasks(User $user, ?int $projectId = null): Builder
+    {
+        return $this->tasks($user)
+            ->when($projectId, fn ($q) => $q->where('project_id', $projectId))
+            ->whereNotIn('id', InvoiceItem::query()->whereNotNull('task_id')
+                ->whereHas('invoice', fn ($q) => $q->whereNotIn('status', ['draft', 'cancelled']))
+                ->select('task_id'));
+    }
+
+    /**
+     * One record from $query by id ("#12") or by $column, with the same
+     * rules and messages as project() or task().
+     */
+    public function find(Builder $query, string $ref, string $column, string $kind): Model
+    {
+        return $this->one($query, $ref, $column, $kind);
+    }
+
+    /** "#3;#5" or "Login page; Signup" → each resolved in $query. @return Collection<int, Model> */
+    public function many(Builder $query, string $refs, string $column, string $kind): Collection
+    {
+        $found = new Collection();
+        foreach (array_filter(array_map('trim', explode(';', $refs))) as $ref) {
+            $found->push($this->one(clone $query, $ref, $column, $kind));
+        }
+
+        return $found->unique(fn (Model $m) => $m->getKey())->values();
+    }
+
+    /** A number above 0 (and at most $max), or null when empty. */
+    public function number(mixed $value, string $label, ?float $max = null): ?float
+    {
+        if ($value === null || trim((string) $value) === '') {
+            return null;
+        }
+
+        $number = str_replace([',', ' '], '', (string) $value);
+        if (!is_numeric($number) || (float) $number <= 0 || ($max !== null && (float) $number > $max)) {
+            throw new ToolInputException($max !== null
+                ? __(':label must be a number above 0 and at most :max.', ['label' => $label, 'max' => $max + 0])
+                : __(':label must be a number above 0.', ['label' => $label]));
+        }
+
+        return round((float) $number, 2);
     }
 
     public function taskStage(User $user, string $ref): TaskStage

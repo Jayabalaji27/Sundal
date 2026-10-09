@@ -195,20 +195,8 @@ class ProjectExpenseController extends Controller
             'description' => 'nullable|string'
         ]);
 
-        $expense = ProjectExpense::create([
-            ...$validated,
-            'submitted_by' => auth()->id(),
-            'status' => 'pending',
-            'currency' => 'USD'
-        ]);
-
-        // Load relationships for email
-        $expense->load(['project.clients', 'budgetCategory', 'submitter']);
-
-        // Trigger expense notification event
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\ExpenseCreated($expense));
-        }
+        // Shared with the AI assistant.
+        app(\App\Actions\Expenses\CreateExpense::class)->handle(auth()->user(), $validated);
 
         return redirect()->route('expenses.index')->with('success', __('Expense created successfully!'));
     }
@@ -227,20 +215,8 @@ class ProjectExpenseController extends Controller
             'description' => 'nullable|string'
         ]);
 
-        // If expense was requires_info, change back to pending when updated
-        if ($expense->status === 'requires_info') {
-            $validated['status'] = 'pending';
-        }
-
-        $expense->update($validated);
-
-        // Load relationships for email
-        $expense->load(['project.clients', 'budgetCategory', 'submitter']);
-
-        // Trigger expense notification event
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\ExpenseCreated($expense));
-        }
+        // Shared with the AI assistant (a requires_info expense goes back to pending).
+        app(\App\Actions\Expenses\UpdateExpense::class)->handle(auth()->user(), $expense, $validated);
 
         return redirect()->route('expenses.index')->with('success', __('Expense updated successfully!'));
     }
@@ -250,7 +226,7 @@ class ProjectExpenseController extends Controller
         $this->authorizePermission('expense_delete');
         abort_unless($this->memberMayChange($expense), 403, __('You can only delete your own expenses that have not been approved yet.'));
 
-        $expense->delete();
+        app(\App\Actions\Expenses\DeleteExpense::class)->handle(auth()->user(), $expense);
         return back()->with('success', __('Expense deleted successfully!'));
     }
 
@@ -292,13 +268,6 @@ class ProjectExpenseController extends Controller
      */
     private function memberMayChange(ProjectExpense $expense): bool
     {
-        $user = auth()->user();
-        $workspace = $user->currentWorkspace;
-        if (!$workspace || $workspace->isOwner($user) || $workspace->getMemberRole($user) !== 'member') {
-            return true;
-        }
-
-        return (int) $expense->submitted_by === (int) $user->id
-            && in_array($expense->status, ['pending', 'requires_info'], true);
+        return \App\Actions\Expenses\UpdateExpense::mayChange(auth()->user(), $expense);
     }
 }

@@ -669,6 +669,52 @@ Tests: `AiAssistantTest` 107/107. Browser: AI mode opens straight to `/ai-mode`.
 
 ---
 
+### RP-18 · 2026-10-10 · AI Assistant module tools, phase 1: Finance and Time
+
+Goal: the assistant can do each module's everyday create/update/delete for company owners
+and managers (permissions decide per tool). Plan: per-action tools, never a generic CRUD
+tool; deletes only for everyday records; typed confirmation for money. Phase 1 = Finance +
+Time (17 tools, registry now 44). Phases 2–4 (projects/tasks/sprints/bugs, contracts and
+meetings, docs and team) follow.
+
+- **Shared Actions** (screens and assistant run the same rules): `Invoices/{CreateInvoice,
+  UpdateInvoice, DeleteInvoice, MarkInvoicePaid}`, `Expenses/{CreateExpense, UpdateExpense,
+  DeleteExpense}`, `Budgets/{CreateBudget, UpdateBudget}`, `Timesheets/{LogTime,
+  UpdateTimeEntry, DeleteTimeEntry, SubmitTimesheet}`, `Timer/{StartTimer, StopTimer}`.
+  `InvoiceController`, `ProjectExpenseController`, `ProjectBudgetController`,
+  `TimesheetEntryController`, `TimesheetController::submit` and `TimerController` now call
+  them (validation stays in the controllers). Side fixes: the invoice-created event fires
+  after the items exist; a budget update can no longer edit another budget's category by id.
+- **Finance tools:** `create_invoice` (draft billing unbilled tasks, one amount per task;
+  client = the project's only client; undo deletes the draft), `update_invoice` (title,
+  dates, notes; drafts; undo), `delete_invoice` (drafts; invoice number typed),
+  `mark_invoice_paid` (sent/overdue; number typed; undo), `list_expenses`,
+  `create_expense` / `update_expense` / `delete_expense` (not-yet-approved only; no future
+  dates; undo on create/update), `create_budget` (one per project, one "General" category),
+  `update_budget` (total, period, status; undo).
+- **Time tools (new Time topic):** `list_my_time`, `log_time`, `update_time_entry`,
+  `delete_time_entry` (own entries on unlocked timesheets only), `submit_timesheet` (the only
+  open one is picked without asking), `start_timer`, `stop_timer`.
+- **Forms:** new field kinds `number`, `unpaid_invoice`, `expense`, `budget_category`,
+  `time_entry`, `timesheet`, `billable_tasks` (several); date and text defaults; a list
+  narrowed by an earlier project field follows it (pick a project → that project's tasks).
+  `ReplyMatcher` reads a typed number ("750", "2.5 hours") when one is asked.
+- **Topics:** new "Time" button; Finance covers invoices, expenses and budgets. Under a
+  topic button, a draft still waiting in the chat keeps its tool. Tried and dropped:
+  narrowing the tools by keywords when no button is on. It broke real requests ("assign the
+  login bug fix to Ravi" named "bug" and lost the task tools), so without a button the
+  model still gets every tool (44). Revisit with prompt caching if token cost grows.
+- **Keyword fallback** offers the new cards ("create an invoice", "add an expense for…",
+  "log 3 hours…", "mark INV-104 as paid", "submit my timesheet", "start the timer"); a
+  message about a task or bug stays a task or bug.
+
+Tests: `AiAssistantTest` 130/130 (14 new, incl. the screens still working through the
+shared actions). QA role suites + `FunctionalTest` after the controller refactor: 148
+passed; the 2 project-health 403/404 failures in `FunctionalTest` also fail without these
+changes (pre-existing).
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)

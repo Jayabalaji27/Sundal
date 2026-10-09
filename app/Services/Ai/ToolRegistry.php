@@ -13,8 +13,10 @@ use App\Services\Ai\Tools\AiTool;
  *
  * Deliberately absent (stay on the normal screens): roles and permissions,
  * plans and payments, BYOA/API keys, webhooks, removing users, deleting a
- * workspace, any hard delete, creating sprints (removed from the product)
- * and creating contracts (needs an uploaded file).
+ * workspace, creating sprints (removed from the product) and creating
+ * contracts (needs an uploaded file). Hard deletes are limited to everyday
+ * records: draft invoices (with the number typed), unapproved expenses and
+ * the user's own unsubmitted time.
  */
 class ToolRegistry
 {
@@ -51,6 +53,25 @@ class ToolRegistry
         Tools\SearchKnowledgeBase::class,
         // Who created or changed a record (history log)
         Tools\GetRecordHistory::class,
+        // Module tools, phase 1: finance
+        Tools\CreateInvoiceTool::class,
+        Tools\UpdateInvoiceTool::class,
+        Tools\DeleteInvoiceTool::class,
+        Tools\MarkInvoicePaidTool::class,
+        Tools\ListExpenses::class,
+        Tools\CreateExpenseTool::class,
+        Tools\UpdateExpenseTool::class,
+        Tools\DeleteExpenseTool::class,
+        Tools\CreateBudgetTool::class,
+        Tools\UpdateBudgetTool::class,
+        // Module tools, phase 1: time
+        Tools\ListMyTime::class,
+        Tools\LogTimeTool::class,
+        Tools\UpdateTimeEntryTool::class,
+        Tools\DeleteTimeEntryTool::class,
+        Tools\SubmitTimesheetTool::class,
+        Tools\StartTimerTool::class,
+        Tools\StopTimerTool::class,
     ];
 
     /** @var AiTool[]|null */
@@ -76,16 +97,17 @@ class ToolRegistry
     }
 
     /**
-     * @param  string|null  $topic  a Topics key: only that topic's tools (still permission-filtered)
+     * @param  string|string[]|null  $topics  Topics keys: only those topics' tools (still permission-filtered); none means all
      * @return AiTool[] keyed by name
      */
-    public function forUser(User $user, bool $readOnly = false, ?string $topic = null): array
+    public function forUser(User $user, bool $readOnly = false, string|array|null $topics = null): array
     {
         if (!AiAccess::canUse($user)) {
             return [];
         }
 
-        $inTopic = Topics::valid($topic) ? Topics::toolNames($topic) : null;
+        $topics = array_values(array_filter((array) $topics, fn ($t) => Topics::valid($t)));
+        $inTopic = $topics ? Topics::toolNames($topics) : null;
 
         return array_filter(
             $this->all(),

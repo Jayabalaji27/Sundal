@@ -52,7 +52,14 @@
         {"prompt": "Who changed bug #8 last?", "expect": "get_record_history"},
         {"prompt": "hi", "expect": null},
         {"prompt": "Thanks, that's all.", "expect": null},
-        {"prompt": "Change my role to owner.", "expect": null}
+        {"prompt": "Change my role to owner.", "expect": null},
+        {"prompt": "Log 3 hours on Website Redesign for today, header work.", "expect": "log_time"},
+        {"prompt": "How many hours did I log this week?", "expect": "list_my_time"},
+        {"prompt": "Start the timer on Mobile App.", "expect": "start_timer"},
+        {"prompt": "Stop my timer.", "expect": "stop_timer"},
+        {"prompt": "Submit my timesheet for this week.", "expect": "submit_timesheet"},
+        {"prompt": "Add a 120 hosting expense to Website Redesign.", "expect": "create_expense"},
+        {"prompt": "Delete my taxi expense from yesterday.", "expect": ["delete_expense", "list_expenses"]}
     ],
     "owner": [
         {"prompt": "Create a project called Sundal.", "expect": "create_project"},
@@ -104,6 +111,13 @@
         {"prompt": "What can you do?", "expect": null},
         {"prompt": "Remove Priya from the workspace.", "expect": null},
         {"prompt": "Show my API keys.", "expect": null},
-        {"prompt": "Give me a summary of everything that's late: tasks, bugs and invoices.", "expect": ["list_tasks", "list_bugs", "list_invoices", "list_projects"]}
+        {"prompt": "Give me a summary of everything that's late: tasks, bugs and invoices.", "expect": ["list_tasks", "list_bugs", "list_invoices", "list_projects"]},
+        {"prompt": "Create an invoice for the Login page and Signup tasks in Website Redesign, 500 each.", "expect": "create_invoice"},
+        {"prompt": "Mark INV-2026-0004 as paid, bank transfer.", "expect": "mark_invoice_paid"},
+        {"prompt": "Change the due date of INV-2026-0004 to the end of the month.", "expect": "update_invoice"},
+        {"prompt": "Delete draft invoice INV-2026-0005.", "expect": "delete_invoice"},
+        {"prompt": "Set a budget of 20000 for Mobile App.", "expect": "create_budget"},
+        {"prompt": "Increase the Website Redesign budget to 8000.", "expect": "update_budget"},
+        {"prompt": "Show the expenses on Website Redesign.", "expect": "list_expenses"}
     ]
 }

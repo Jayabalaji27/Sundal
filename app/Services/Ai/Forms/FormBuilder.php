@@ -6,7 +6,6 @@ use App\Models\BugStatus;
 use App\Models\TaskStage;
 use App\Models\User;
 use App\Services\Ai\Tools\AiTool;
-use App\Services\Ai\Tools\ListInvoices;
 use App\Services\Ai\Tools\RecordResolver;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -57,11 +56,15 @@ class FormBuilder
         $said = $this->normalize($said);
         $fields = $tool->formFields($user);
 
-        $states = array_map(fn (FormField $field) => $this->initial($field, $args, $user, $said), $fields);
+        // In card order, so a list narrowed by an earlier project field uses its value.
+        $states = [];
+        foreach ($fields as $field) {
+            $states[$field->name] = $this->initial($field, $args, $user, $said, $this->narrowFor($field, $states, $args, $user));
+        }
         $consumed = collect($fields)->flatMap(fn (FormField $f) => array_filter([$f->name, $f->narrowBy]))->all();
 
         return [
-            'fields' => $states,
+            'fields' => array_values($states),
             // Arguments the form does not show (description, start date…) pass through as given.
             'fixed' => Arr::except($args, $consumed),
             'error' => null,
@@ -80,6 +83,7 @@ class FormBuilder
         $args = $form['fixed'] ?? [];
         $ok = true;
         $states = [];
+        $values = [];
 
         foreach ($form['fields'] ?? [] as $state) {
             $field = $fields->get($state['name']);
@@ -88,12 +92,29 @@ class FormBuilder
             }
 
             $value = array_key_exists($field->name, $submitted) ? $submitted[$field->name] : ($state['value'] ?? null);
+
+            // A list narrowed by an earlier project field follows it: a new project
+            // means new choices, and a stored pick from the old project is dropped.
+            if ($field->narrowBy && array_key_exists($field->narrowBy, $values)) {
+                $projectId = is_scalar($values[$field->narrowBy]) && (int) $values[$field->narrowBy] > 0 ? (int) $values[$field->narrowBy] : null;
+                if (($state['narrow'] ?? null) !== $projectId) {
+                    $state['narrow'] = $projectId;
+                    $state['options'] = $this->recordOptions($field, $user, $projectId);
+                    if (!array_key_exists($field->name, $submitted)) {
+                        $valid = array_column($state['options'], 'value');
+                        $value = $field->inputType() === 'multi'
+                            ? array_values(array_intersect(array_map('strval', (array) $value), $valid))
+                            : (in_array((string) $value, $valid, true) ? $value : null);
+                    }
+                }
+            }
             $state['value'] = $field->inputType() === 'multi' ? array_values(array_map('strval', (array) ($value ?? []))) : $value;
             $state['note'] = null;
             if (array_key_exists($field->name, $submitted)) {
                 $state['defaulted'] = false;
             }
-            [$arg, $state['error']] = $this->toArgument($field, $value, $user);
+            [$arg, $state['error']] = $this->toArgument($field, $value, $user, $state['narrow'] ?? null);
+            $values[$field->name] = $value;
 
             // Partial update (a clicked choice, a typed answer): a still-missing
             // value is not an error yet; it is asked next.
@@ -160,7 +181,25 @@ class FormBuilder
 
     // ── Building ─────────────────────────────────────────────────────────────
 
-    private function initial(FormField $field, array $args, User $user, string $said): array
+    /**
+     * The project a field's list is narrowed to: an earlier project field's
+     * value when the form has one, else the tool argument it names.
+     */
+    private function narrowFor(FormField $field, array $states, array $args, User $user): ?int
+    {
+        if (!$field->narrowBy) {
+            return null;
+        }
+        if (array_key_exists($field->narrowBy, $states)) {
+            $value = $states[$field->narrowBy]['value'];
+
+            return is_scalar($value) && (int) $value > 0 ? (int) $value : null;
+        }
+
+        return $this->narrowId($field, $args, $user);
+    }
+
+    private function initial(FormField $field, array $args, User $user, string $said, ?int $narrow = null): array
     {
         $state = [
             'name' => $field->name,
@@ -176,6 +215,8 @@ class FormBuilder
             'question' => $field->questionText(),
             // True while the value is the field's default, not something the user said.
             'defaulted' => false,
+            // The project its list is narrowed to, if any.
+            'narrow' => $narrow,
         ];
 
         $raw = $args[$field->name] ?? null;
@@ -184,10 +225,14 @@ class FormBuilder
 
         return match ($field->kind) {
             'enum' => $this->initialEnum($field, $state, $raw, $said),
-            'date' => $this->initialDate($state, $raw),
-            'text' => [...$state, 'value' => $raw !== null ? mb_substr($raw, 0, $field->maxLength) : null],
-            'members' => $this->initialMembers($field, $state, $raw, $user, $said),
-            default => $this->initialRecord($field, $state, $raw, $args, $user, $said),
+            'date' => $this->initialDate($field, $state, $raw),
+            'number' => $this->initialNumber($state, $raw, $said),
+            'text' => $raw !== null
+                ? [...$state, 'value' => mb_substr($raw, 0, $field->maxLength)]
+                : [...$state, 'value' => $field->default, 'defaulted' => $field->default !== null],
+            default => $field->inputType() === 'multi'
+                ? $this->initialMany($field, $state, $raw, $user, $said, $narrow)
+                : $this->initialRecord($field, $state, $raw, $user, $said, $narrow),
         };
     }
 
@@ -210,22 +255,41 @@ class FormBuilder
         return $state;
     }
 
-    private function initialDate(array $state, ?string $raw): array
+    private function initialDate(FormField $field, array $state, ?string $raw): array
     {
         if ($raw !== null) {
             $this->validDate($raw) ? $state['value'] = $raw : $state['note'] = __('":value" is not a date; pick one.', ['value' => $raw]);
+        }
+        if ($state['value'] === null && $field->default !== null) {
+            $state['value'] = $field->default;
+            $state['defaulted'] = true;
         }
 
         return $state;
     }
 
-    private function initialMembers(FormField $field, array $state, ?string $raw, User $user, string $said): array
+    /** A number counts only when the user said it ("500", "2.5 hours"); an invented one is left for them to enter. */
+    private function initialNumber(array $state, ?string $raw, string $said): array
     {
-        $state['options'] = $this->options('member', $this->query('member', $user));
+        $number = $raw !== null ? str_replace([',', ' '], '', $raw) : null;
+        if ($number === null || !is_numeric($number)) {
+            return $state;
+        }
+
+        preg_match_all('/\d+(?:\.\d+)?/', str_replace(',', '', $said), $m);
+        $saidIt = collect($m[0])->contains(fn ($n) => abs((float) $n - (float) $number) < 0.000001);
+
+        return $saidIt ? [...$state, 'value' => $number] : [...$state, 'note' => __('Enter the :label.', ['label' => mb_strtolower($state['label'])])];
+    }
+
+    private function initialMany(FormField $field, array $state, ?string $raw, User $user, string $said, ?int $narrow): array
+    {
+        $kind = $this->itemKind($field->kind);
+        $state['options'] = $this->options($kind, $this->query($kind, $user, $narrow));
 
         $notes = [];
         foreach (array_filter(array_map('trim', explode(';', (string) $raw))) as $ref) {
-            [$match, $note] = $this->pick('member', $ref, $user, $said, $this->query('member', $user));
+            [$match, $note] = $this->pick($kind, $ref, $user, $said, $this->query($kind, $user, $narrow));
             $match ? $state['value'][] = (string) $match->getKey() : $notes[] = $note;
         }
         $state['value'] = array_values(array_unique($state['value']));
@@ -234,9 +298,9 @@ class FormBuilder
         return $state;
     }
 
-    private function initialRecord(FormField $field, array $state, ?string $raw, array $args, User $user, string $said): array
+    private function initialRecord(FormField $field, array $state, ?string $raw, User $user, string $said, ?int $narrow): array
     {
-        $query = $this->query($field->kind, $user, $this->narrowId($field, $args, $user));
+        $query = $this->query($field->kind, $user, $narrow);
         $options = $this->options($field->kind, $query);
 
         if ($raw !== null) {
@@ -248,8 +312,8 @@ class FormBuilder
             // Nothing said: use the default ("none" = unassigned).
             $state['value'] = $field->default;
             $state['defaulted'] = true;
-        } elseif ($field->required && count($options) === 1 && $field->kind === 'project') {
-            // Only one project to choose from: nothing to ask.
+        } elseif ($field->required && count($options) === 1 && in_array($field->kind, ['project', 'timesheet'], true)) {
+            // Only one project (or open timesheet) to choose from: nothing to ask.
             $state['value'] = $options[0]['value'];
         }
 
@@ -309,7 +373,7 @@ class FormBuilder
     // ── Submitting ───────────────────────────────────────────────────────────
 
     /** @return array{0: mixed, 1: ?string} [tool argument or null, error or null] */
-    private function toArgument(FormField $field, mixed $value, User $user): array
+    private function toArgument(FormField $field, mixed $value, User $user, ?int $narrow = null): array
     {
         if ($value === null || $value === '' || $value === []) {
             return [null, $field->required ? __('Choose the :label.', ['label' => mb_strtolower($field->label)]) : null];
@@ -338,17 +402,30 @@ class FormBuilder
                 return mb_strlen($text) > $field->maxLength
                     ? [null, __('At most :max characters.', ['max' => $field->maxLength])]
                     : [$text, null];
+            case 'number':
+                $number = str_replace([',', ' '], '', (string) $value);
+                if (!is_numeric($number) || (float) $number <= 0) {
+                    return [null, __('Enter a number greater than 0.')];
+                }
+                if ($field->max !== null && (float) $number > $field->max) {
+                    return [null, __('At most :max.', ['max' => $field->max + 0])];
+                }
+
+                return [(string) round((float) $number, 2), null];
             case 'members':
+            case 'billable_tasks':
                 $ids = array_values(array_unique(array_map('intval', (array) $value)));
-                $found = $this->query('member', $user)->whereKey($ids)->count();
+                $found = $this->query($this->itemKind($field->kind), $user, $narrow)->whereKey($ids)->count();
 
                 return $found === count($ids)
                     ? [implode(';', array_map(fn ($id) => "#{$id}", $ids)), null]
-                    : [null, __('Someone you picked is no longer in this workspace.')];
+                    : [null, $field->kind === 'members'
+                        ? __('Someone you picked is no longer in this workspace.')
+                        : __('Something you picked is no longer available; choose again.')];
             default:
                 $id = (int) $value;
 
-                return $id > 0 && $this->query($field->kind, $user)->whereKey($id)->exists()
+                return $id > 0 && $this->query($field->kind, $user, $narrow)->whereKey($id)->exists()
                     ? ["#{$id}", null]
                     : [null, __('That :label is no longer available; choose again.', ['label' => mb_strtolower($field->label)])];
         }
@@ -369,8 +446,30 @@ class FormBuilder
                 ->when($projectId, fn ($q) => $q->where('project_id', $projectId))->orderByDesc('id'),
             'task_stage' => TaskStage::forWorkspace($workspaceId)->ordered(),
             'bug_status' => BugStatus::forWorkspace($workspaceId)->ordered(),
-            'invoice' => ListInvoices::visible($user)->where('status', 'draft')->with('client:id,name')->orderByDesc('id'),
+            'invoice' => $this->resolver->draftInvoices($user)->with('client:id,name')->orderByDesc('id'),
+            'unpaid_invoice' => $this->resolver->unpaidInvoices($user)->with('client:id,name')->orderByDesc('id'),
+            'expense' => $this->resolver->openExpenses($user)->with('project:id,title')
+                ->when($projectId, fn ($q) => $q->where('project_id', $projectId))->orderByDesc('id'),
+            'budget_category' => $this->resolver->budgetCategories($user, $projectId)->orderBy('sort_order'),
+            'time_entry' => $this->resolver->openTimeEntries($user)->with('project:id,title')->orderByDesc('date')->orderByDesc('id'),
+            'timesheet' => $this->resolver->openTimesheets($user)->orderByDesc('start_date'),
+            'billable_tasks' => $this->resolver->billableTasks($user, $projectId)->with('project:id,title')->orderByDesc('id'),
         };
+    }
+
+    /** members → member: the kind of one record in a multi field. */
+    private function itemKind(string $kind): string
+    {
+        return $kind === 'members' ? 'member' : $kind;
+    }
+
+    /** The choices for a record field narrowed to a project. */
+    private function recordOptions(FormField $field, User $user, ?int $projectId): array
+    {
+        $kind = $this->itemKind($field->kind);
+        $options = $this->options($kind, $this->query($kind, $user, $projectId));
+
+        return $field->allowNone ? [['value' => 'none', 'label' => __('Unassigned')], ...$options] : $options;
     }
 
     /** @return array<int, array{value: string, label: string}> */
@@ -385,8 +484,13 @@ class FormBuilder
     {
         return match ($kind) {
             'member', 'members' => "{$m->name} ({$m->email})",
-            'task', 'bug' => "{$m->title} · {$m->project?->title} (#{$m->id})",
+            'task', 'bug', 'billable_tasks' => "{$m->title} · {$m->project?->title} (#{$m->id})",
             'invoice' => trim("{$m->invoice_number} · " . ($m->client?->name ?? '') . ' · ' . number_format((float) $m->total_amount, 2), ' ·'),
+            'unpaid_invoice' => trim("{$m->invoice_number} · " . ($m->client?->name ?? '') . ' · ' . __('due :amount', ['amount' => number_format((float) $m->total_amount - (float) $m->paid_amount, 2)]), ' ·'),
+            'expense' => "{$m->title} · " . number_format((float) $m->amount, 2) . " · {$m->project?->title} (#{$m->id})",
+            'time_entry' => $m->date?->format('Y-m-d') . ' · ' . ((float) $m->hours + 0) . 'h · ' . $m->project?->title
+                . ($m->description ? ' · ' . mb_strimwidth((string) $m->description, 0, 40, '…') : '') . " (#{$m->id})",
+            'timesheet' => __('Week of :date', ['date' => $m->start_date?->format('Y-m-d')]) . ' · ' . ((float) $m->total_hours + 0) . 'h · ' . __(ucfirst((string) $m->status)),
             default => (string) $this->nameOf($kind, $m),
         };
     }
@@ -394,8 +498,10 @@ class FormBuilder
     private function nameOf(string $kind, Model $m): string
     {
         return (string) match ($kind) {
-            'project', 'task', 'bug' => $m->title,
-            'invoice' => $m->invoice_number,
+            'project', 'task', 'bug', 'billable_tasks', 'expense' => $m->title,
+            'invoice', 'unpaid_invoice' => $m->invoice_number,
+            'time_entry' => (string) $m->description,
+            'timesheet' => $m->start_date?->format('Y-m-d'),
             default => $m->name,
         };
     }
@@ -403,8 +509,10 @@ class FormBuilder
     private function column(string $kind): string
     {
         return match ($kind) {
-            'project', 'task', 'bug' => 'title',
-            'invoice' => 'invoice_number',
+            'project', 'task', 'bug', 'billable_tasks', 'expense' => 'title',
+            'invoice', 'unpaid_invoice' => 'invoice_number',
+            'time_entry' => 'description',
+            'timesheet' => 'start_date',
             default => 'name',
         };
     }
@@ -415,6 +523,10 @@ class FormBuilder
             'member', 'members' => __('person'),
             'task_stage' => __('stage'),
             'bug_status' => __('status'),
+            'unpaid_invoice' => __('invoice'),
+            'billable_tasks' => __('task'),
+            'budget_category' => __('budget category'),
+            'time_entry' => __('time entry'),
             default => __($kind),
         };
     }

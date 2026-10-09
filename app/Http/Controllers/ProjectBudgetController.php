@@ -216,33 +216,12 @@ class ProjectBudgetController extends Controller
         }
 
         try {
-            $budget = ProjectBudget::create([
-                'project_id' => $validated['project_id'],
-                'workspace_id' => $project->workspace_id,
-                'total_budget' => $validated['total_budget'],
-                'period_type' => $validated['period_type'],
-                'start_date' => $validated['start_date'],
-                'end_date' => $validated['end_date'],
-                'description' => $validated['description'],
-                'created_by' => $user->id
+            // Shared with the AI assistant.
+            app(\App\Actions\Budgets\CreateBudget::class)->handle($user, [
+                ...$validated,
+                'end_date' => $validated['end_date'] ?? null,
+                'description' => $validated['description'] ?? null,
             ]);
-            
-            // Create budget categories
-            foreach ($validated['categories'] as $index => $category) {
-                BudgetCategory::create([
-                    'project_budget_id' => $budget->id,
-                    'name' => $category['name'],
-                    'allocated_amount' => $category['allocated_amount'],
-                    'color' => $category['color'] ?? '#3B82F6',
-                    'description' => $category['description'] ?? '',
-                    'sort_order' => $category['sort_order'] ?? ($index + 1)
-                ]);
-            }
-            
-            // Fire event for Slack notification
-            if (!config('app.is_demo', true)) {
-                event(new \App\Events\BudgetCreated($budget));
-            }
 
             return redirect()->route('budgets.index')->with('success', __('Budget created successfully!'));
         } catch (\Exception $e) {
@@ -269,36 +248,11 @@ class ProjectBudgetController extends Controller
             'categories.*.description' => 'nullable|string'
         ]);
 
-        $budget->update([
-            'project_id' => $validated['project_id'],
-            'total_budget' => $validated['total_budget'],
-            'period_type' => $validated['period_type'],
-            'description' => $validated['description'],
-            'status' => $validated['status']
+        // Shared with the AI assistant. Categories left out of the list are deleted.
+        app(\App\Actions\Budgets\UpdateBudget::class)->handle(auth()->user(), $budget, [
+            ...$validated,
+            'description' => $validated['description'] ?? null,
         ]);
-
-        // Update categories
-        $updatedCategoryIds = [];
-        foreach($validated['categories'] as $index => $category){
-            if(!empty($category['id'])){
-                BudgetCategory::find($category['id'])->update([
-                    ...$category,
-                    'sort_order' => $index + 1
-                    ]);
-                    $updatedCategoryIds[] = $category['id'];
-            }else{
-                $newCategory = $budget->categories()->create([
-                    'name' => $category['name'],
-                    'allocated_amount' => $category['allocated_amount'],
-                    'color' => $category['color'] ?? '#3B82F6',
-                    'description' => $category['description'] ?? '',
-                    'sort_order' => $index + 1
-                ]);
-                $updatedCategoryIds[] = $newCategory->id;
-            }
-        }
-
-        $budget->categories()->whereNotIn('id',$updatedCategoryIds)->delete();
 
         return back()->with('success', __('Budget updated successfully!'));
     }

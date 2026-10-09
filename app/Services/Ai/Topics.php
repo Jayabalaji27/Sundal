@@ -23,8 +23,13 @@ class Topics
         'tasks' => ['list_tasks', 'create_task', 'assign_task', 'change_task_status', 'list_sprints', 'add_tasks_to_sprint'],
         'bugs' => ['list_bugs', 'create_bug', 'assign_bug', 'change_bug_status'],
         'projects' => ['create_project', 'add_project_members', 'get_project_report', 'get_budget_status', 'list_tasks', 'list_bugs'],
+        'time' => ['list_my_time', 'log_time', 'update_time_entry', 'delete_time_entry', 'submit_timesheet', 'start_timer', 'stop_timer', 'list_tasks'],
         'approvals' => ['list_timesheet_approvals', 'decide_timesheets', 'list_expense_approvals', 'decide_expenses'],
-        'finance' => ['list_invoices', 'send_invoice', 'get_revenue_summary', 'list_contracts', 'get_budget_status', 'list_expense_approvals'],
+        'finance' => [
+            'list_invoices', 'create_invoice', 'update_invoice', 'delete_invoice', 'send_invoice', 'mark_invoice_paid', 'get_revenue_summary',
+            'list_expenses', 'create_expense', 'update_expense', 'delete_expense', 'get_budget_status', 'create_budget', 'update_budget',
+            'list_contracts', 'list_expense_approvals',
+        ],
         'team' => ['invite_user'],
         'help' => ['search_knowledge_base'],
     ];
@@ -34,8 +39,12 @@ class Topics
         'tasks' => ['task', 'tasks', 'todo', 'to-do', 'story', 'stories', 'sprint', 'sprints', 'stage', 'kanban'],
         'bugs' => ['bug', 'bugs', 'defect', 'defects', 'issue', 'issues', 'crash', 'crashes'],
         'projects' => ['project', 'projects', 'milestone', 'milestones', 'report', 'reports', 'progress'],
+        'time' => ['hours', 'hour', 'hrs', 'timer', 'log time', 'logged', 'worked', 'timesheet', 'timesheets', 'time entry', 'time entries', 'my time', 'clock'],
         'approvals' => ['approve', 'approval', 'approvals', 'reject', 'timesheet', 'timesheets', 'expense', 'expenses', 'pending'],
-        'finance' => ['invoice', 'invoices', 'revenue', 'billed', 'billing', 'payment', 'payments', 'contract', 'contracts', 'budget', 'budgets', 'money'],
+        'finance' => [
+            'invoice', 'invoices', 'revenue', 'bill', 'billed', 'billing', 'payment', 'payments', 'paid', 'contract', 'contracts',
+            'budget', 'budgets', 'money', 'expense', 'expenses', 'spent', 'cost', 'costs',
+        ],
         'team' => ['invite', 'invitation', 'team', 'member', 'members', 'people', 'colleague', 'colleagues'],
         'help' => ['how do i', 'how to', 'how can i', 'policy', 'guide', 'help', 'documentation', 'knowledge base'],
     ];
@@ -46,6 +55,7 @@ class Topics
             'tasks' => __('Tasks'),
             'bugs' => __('Bugs'),
             'projects' => __('Projects'),
+            'time' => __('Time'),
             'approvals' => __('Approvals'),
             'finance' => __('Finance'),
             'team' => __('Team'),
@@ -58,10 +68,15 @@ class Topics
         return $topic !== null && array_key_exists($topic, self::TOOLS);
     }
 
-    /** @return string[] tool names a topic may use (before permissions) */
-    public static function toolNames(string $topic): array
+    /**
+     * @param  string|string[]  $topics  one topic, or several (their tools together)
+     * @return string[] tool names the topics may use (before permissions)
+     */
+    public static function toolNames(string|array $topics): array
     {
-        return array_values(array_unique([...self::TOOLS[$topic], ...self::SHARED]));
+        $names = collect((array) $topics)->filter(fn ($t) => self::valid($t))->flatMap(fn ($t) => self::TOOLS[$t]);
+
+        return $names->concat(self::SHARED)->unique()->values()->all();
     }
 
     /**
@@ -116,7 +131,7 @@ class Topics
     /** Topic for an IntentMatcher fallback: the create form a bare message in this topic most likely means. */
     public static function defaultForm(string $topic): ?string
     {
-        return ['tasks' => 'create_task', 'bugs' => 'create_bug', 'projects' => 'create_project', 'team' => 'invite_user'][$topic] ?? null;
+        return ['tasks' => 'create_task', 'bugs' => 'create_bug', 'projects' => 'create_project', 'time' => 'log_time', 'team' => 'invite_user'][$topic] ?? null;
     }
 
     /** For tests and the page: the topic keys in display order. */

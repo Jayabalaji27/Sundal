@@ -4,7 +4,8 @@ namespace App\Services\Ai\Forms;
 
 /**
  * Fallback with no AI: recognises a few clear commands by keyword
- * ("create a task…", "assign…", "report a bug…") so the matching form card
+ * ("create a task…", "assign…", "report a bug…", "create an invoice…",
+ * "log 3 hours…") so the matching form card
  * can still be offered when the provider fails or the model calls no tool.
  * It only picks the form and a title; the user fills the rest on the card.
  */
@@ -29,6 +30,35 @@ class IntentMatcher
             return ['tool' => 'send_invoice', 'args' => array_filter(['invoice' => isset($number[0]) ? strtoupper($number[0]) : null])];
         }
 
+        // Finance and time commands; "create a task to add invoice export" is still a task.
+        if (!$isBug && !$isTask) {
+            if (preg_match('/\bmark\b.*\bpaid\b/', $t) || preg_match('/\b(record|log)\b.*\bpayment\b/', $t)) {
+                preg_match('/\binv-[a-z0-9\-]+/', $t, $number);
+
+                return ['tool' => 'mark_invoice_paid', 'args' => array_filter(['invoice' => isset($number[0]) ? strtoupper($number[0]) : null])];
+            }
+            if (preg_match('/\b(create|add|make|raise|draft|new)\b.*\binvoice\b/', $t)) {
+                return ['tool' => 'create_invoice', 'args' => []];
+            }
+            if (preg_match('/\b(create|add|make|record|log|submit|new)\b.*\bexpense\b/', $t)) {
+                return ['tool' => 'create_expense', 'args' => array_filter(['title' => $this->title($text)])];
+            }
+            if (preg_match('/\b(create|add|make|set|new)\b.*\bbudget\b/', $t) && !preg_match('/\b(change|update|increase|raise|reduce)\b/', $t)) {
+                return ['tool' => 'create_budget', 'args' => []];
+            }
+            if (preg_match('/\bsubmit\b.*\btimesheets?\b/', $t)) {
+                return ['tool' => 'submit_timesheet', 'args' => []];
+            }
+            if (preg_match('/\bstart\b.*\btimer\b/', $t)) {
+                return ['tool' => 'start_timer', 'args' => []];
+            }
+        }
+
+        // "log 3 hours on Website", "add 2.5h for yesterday"
+        if (preg_match('/\b(log|add|record|track|book)\b/', $t) && preg_match('/\b(\d+(?:\.\d+)?)\s?(h|hrs?|hours?)\b/', $t, $hours)) {
+            return ['tool' => 'log_time', 'args' => ['hours' => $hours[1]]];
+        }
+
         if (preg_match('/\b(re)?assign\b/', $t) && !preg_match('/\b(create|add|make|report|log)\b/', $t)) {
             return ['tool' => $isBug ? 'assign_bug' : 'assign_task', 'args' => []];
         }
@@ -38,9 +68,9 @@ class IntentMatcher
             return ['tool' => $isBug ? 'change_bug_status' : 'change_task_status', 'args' => []];
         }
 
-        // Things the assistant has no create form for: no fallback card at all, rather
-        // than a wrong one ("create an invoice in the sundal project" is not a project).
-        if (preg_match('/\b(invoices?|contracts?|expenses?|timesheets?|milestones?|sprints?|budgets?|payments?|notes?|meetings?|clients?|users?)\b/', $t)
+        // Anything else about these has no fallback card at all, rather than a wrong
+        // one ("change the budget of the sundal project" is not a new project).
+        if (preg_match('/\b(invoices?|contracts?|expenses?|timesheets?|milestones?|sprints?|budgets?|payments?|notes?|meetings?|clients?|users?|timers?)\b/', $t)
             && !$isBug && !$isTask) {
             return null;
         }

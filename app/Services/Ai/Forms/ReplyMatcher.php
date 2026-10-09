@@ -27,6 +27,7 @@ class ReplyMatcher
         'make', 'set', 'change', 'put', 'use', 'assign', 'assigned', 'give', 'move', 'mark', 'call', 'name', 'named',
         'please', 'ok', 'okay', 'yes', 'sure', 'just', 'go', 'that', 'this', 'one', 'pls', 'thanks', 'thank', 'you',
         'priority', 'severity', 'status', 'stage', 'project', 'assignee', 'due', 'date', 'by', 'role', 'person',
+        'hours', 'hour', 'hrs', 'hr', 'h', 'amount', 'total', 'each', 'per', 'usd', 'dollars', 'rupees', 'rs', 'inr', 'eur',
     ];
 
     private const MAX_WORDS = 12;
@@ -38,6 +39,8 @@ class ReplyMatcher
      */
     public function match(array $form, array $ask, string $text, int $userId): array
     {
+        // "1,200" is one number, not two.
+        $text = preg_replace('/(?<=\d),(?=\d{3}\b)/', '', $text);
         $words = $this->words($text);
         if (!$words || count($words) > self::MAX_WORDS || str_ends_with(trim($text), '?') || in_array($words[0], self::NOT_AN_ANSWER, true)) {
             return [];
@@ -61,6 +64,8 @@ class ReplyMatcher
                 'select' => $this->matchOne($state['options'], $said, $this->isPeople($state) ? $userId : null),
                 'multi' => $this->matchMany($state['options'], $said, $this->isPeople($state) ? $userId : null),
                 'date' => $this->matchDate($said),
+                // Numbers are everywhere (dates, names): only for a number that was asked for.
+                'number' => in_array($name, $ask, true) ? $this->matchNumber($said) : [null, []],
                 default => [null, []],
             };
             if ($value !== null && $value !== []) {
@@ -169,6 +174,14 @@ class ReplyMatcher
         }
 
         return [null, []];
+    }
+
+    /** "500", "1,200.50", "2.5 hours" → the one number in the reply. */
+    private function matchNumber(string $said): array
+    {
+        preg_match_all('/ (\d+(?:\.\d+)?)(h|hrs?)? /', str_replace(',', '', $said), $m, PREG_SET_ORDER);
+
+        return count($m) === 1 && (float) $m[0][1] > 0 ? [$m[0][1], [trim($m[0][0])]] : [null, []];
     }
 
     /** "me" and "unassigned" only mean something in a list of people. */

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Link, router } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
-import { Bot, Bug, Check, CheckCheck, ExternalLink, FolderKanban, HelpCircle, ListTodo, Loader2, MessageSquarePlus, Pencil, Receipt, Send, Sparkles, Trash2, Undo2, Users, X } from 'lucide-react';
+import { Bot, Bug, Check, CheckCheck, Clock, ExternalLink, FolderKanban, HelpCircle, ListTodo, Loader2, MessageSquarePlus, Pencil, Receipt, Send, Sparkles, Trash2, Undo2, Users, X } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,7 +47,7 @@ interface ToolCard {
 interface FormFieldState {
     name: string;
     label: string;
-    type: 'select' | 'multi' | 'date' | 'text';
+    type: 'select' | 'multi' | 'date' | 'number' | 'text';
     required: boolean;
     value: string | string[] | null;
     options: { value: string; label: string }[];
@@ -294,8 +294,9 @@ const TOPIC_HINTS: Record<string, string> = {
     tasks: 'Describe the task, e.g. "Login page for Mobile App, high priority"',
     bugs: 'Describe the bug, e.g. "Login button does nothing on mobile"',
     projects: 'Ask about a project, or create one',
+    time: 'e.g. "Log 3 hours on Website Redesign for today"',
     approvals: 'e.g. "Approve the pending timesheets for Website Redesign"',
-    finance: 'e.g. "Which invoices are unpaid?"',
+    finance: 'e.g. "Create an invoice for the Website Redesign tasks"',
     team: 'e.g. "Invite john@acme.com as a client"',
     help: 'Ask how to do something in Sundal',
 };
@@ -304,8 +305,9 @@ const TOPIC_EXAMPLES: Record<string, string[]> = {
     tasks: ['Login page for the Mobile App project, high priority', "Move 'API docs' to Done", 'What tasks are overdue?', 'Assign the checkout task to me'],
     bugs: ['Login button does nothing on mobile', 'Which bugs are still open?', 'Assign the login bug to me'],
     projects: ['Create a project called Mobile App', 'Write the weekly report for my biggest project', 'Who is over budget this month?'],
+    time: ['Log 3 hours on Website Redesign for today', 'Start the timer on Mobile App', 'How many hours did I log this week?', 'Submit my timesheet'],
     approvals: ['Which timesheets are waiting for my approval?', 'Which expenses are pending?'],
-    finance: ['Which invoices are unpaid?', 'How much did we bill last month?', 'Which contracts expire this month?'],
+    finance: ['Create an invoice for the Website Redesign tasks', 'Mark INV-104 as paid', 'Add a 120 hosting expense to Mobile App', 'Which invoices are unpaid?'],
     team: ['Who is on my team?', 'Invite john@acme.com as a client'],
     help: ['How do I submit a timesheet?'],
 };
@@ -314,6 +316,7 @@ const TOPIC_ICONS: Record<string, typeof Bot> = {
     tasks: ListTodo,
     bugs: Bug,
     projects: FolderKanban,
+    time: Clock,
     approvals: CheckCheck,
     finance: Receipt,
     team: Users,
@@ -808,9 +811,9 @@ function ChoiceButtons({ field, question, disabled, onPick }: {
                 </div>
             )}
 
-            {(field.type === 'text' || field.type === 'date') && (
+            {(field.type === 'text' || field.type === 'date' || field.type === 'number') && (
                 <form className="flex gap-2" onSubmit={(e: FormEvent) => { e.preventDefault(); if (text.trim()) onPick(text.trim()); }}>
-                    <Input type={field.type === 'date' ? 'date' : 'text'} value={text} onChange={e => setText(e.target.value)} className="h-8 text-xs" autoFocus />
+                    <Input type={field.type} min={field.type === 'number' ? 0 : undefined} step={field.type === 'number' ? 'any' : undefined} value={text} onChange={e => setText(e.target.value)} className="h-8 text-xs" autoFocus />
                     <Button type="submit" size="sm" className="h-8" disabled={disabled || !text.trim()}>{t('OK')}</Button>
                 </form>
             )}
@@ -888,10 +891,12 @@ function CardForm({ cardId, fields, values, onChange }: {
                             </div>
                         )}
 
-                        {(field.type === 'date' || field.type === 'text') && (
+                        {(field.type === 'date' || field.type === 'text' || field.type === 'number') && (
                             <Input
                                 id={id}
-                                type={field.type === 'date' ? 'date' : 'text'}
+                                type={field.type}
+                                min={field.type === 'number' ? 0 : undefined}
+                                step={field.type === 'number' ? 'any' : undefined}
                                 className={`h-8 text-xs ${invalid ? 'border-destructive' : ''}`}
                                 value={(value as string) ?? ''}
                                 onChange={e => onChange(field.name, e.target.value)}
