@@ -174,8 +174,9 @@ export default function AiAssistantPage(props: Props) {
     }
 
     // AI mode tab: full screen, its own header and locks, no Sundal sidebar.
+    // The chat fills the whole page; settings and notices keep a readable width.
     if (props.standalone && props.aiMode) {
-        return <AiModeShell config={props.aiMode}>{body}</AiModeShell>;
+        return <AiModeShell config={props.aiMode}>{framed ? <div className="mx-auto max-w-7xl p-4 sm:p-6">{body}</div> : body}</AiModeShell>;
     }
 
     return (
@@ -537,7 +538,6 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
         setListOpen(false);
     };
 
-    const active = conversations.find(c => c.id === activeId);
     const firstName = String(auth?.user?.name ?? '').split(' ')[0];
     const showWelcome = !loading && messages.length === 0;
 
@@ -555,7 +555,7 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
     );
 
     return (
-        <div className={`relative flex min-h-[560px] overflow-hidden rounded-xl border bg-background ${standalone ? 'h-[calc(100dvh-7.5rem)]' : 'h-[calc(100dvh-11rem)]'}`}>
+        <div className={`relative flex overflow-hidden bg-background ${standalone ? 'h-full min-h-[480px]' : 'h-[calc(100dvh-11rem)] min-h-[560px] rounded-xl border'}`}>
             {/* Conversation list: always on wide screens, a sliding panel on small ones. */}
             {listOpen && <div className="absolute inset-0 z-20 bg-black/30 md:hidden" onClick={() => setListOpen(false)} aria-hidden />}
             <aside className={`${listOpen ? 'absolute inset-y-0 left-0 z-30 flex shadow-xl' : 'hidden'} w-72 shrink-0 flex-col border-r bg-background md:static md:flex md:bg-muted/40 md:shadow-none`}>
@@ -574,25 +574,23 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
                     <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => setListOpen(true)} aria-label={t('Conversations')}>
                         <PanelLeft className="h-4 w-4" />
                     </Button>
-                    <div className="min-w-0">
-                        <h2 className="truncate text-sm font-semibold">{active?.title || t('New chat')}</h2>
-                    </div>
-                    <div className="ml-auto flex items-center gap-1.5">
-                        {model && (
-                            <span className="hidden items-center gap-1.5 rounded-full border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground sm:inline-flex" title={`${model.provider} · ${model.name}`}>
-                                <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-                                <span className="max-w-[180px] truncate">{model.name}</span>
-                            </span>
-                        )}
+                    {/* The model this chat runs on, in place of a chat title. */}
+                    {model && (
+                        <div className="flex min-w-0 items-center gap-2" title={`${model.provider} · ${model.name}`}>
+                            <Sparkles className="h-4 w-4 shrink-0 text-violet-500" />
+                            <span className="truncate text-sm font-semibold">{model.name}</span>
+                            <span className="hidden shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground sm:inline">{model.provider}</span>
+                        </div>
+                    )}
+                    <div className="ml-auto flex items-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => open(null)} aria-label={t('New chat')} title={t('New chat')}>
+                            <Plus className="h-4 w-4" />
+                        </Button>
                         {onOpenSettings && (
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenSettings} aria-label={t('Settings')} title={t('Settings')}>
                                 <SettingsIcon className="h-4 w-4" />
                             </Button>
                         )}
-                        <Button size="sm" className="h-8" onClick={() => open(null)}>
-                            <Plus className="mr-1 h-4 w-4" />
-                            {t('New chat')}
-                        </Button>
                     </div>
                 </header>
 
@@ -638,7 +636,7 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
                 ) : (
                     <>
                         <div className="flex-1 overflow-y-auto">
-                            <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
+                            <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
                                 {loading && <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />}
                                 {!loading && messages.map(message => (
                                     <ChatMessage key={message.id} message={message} userName={auth?.user?.name ?? ''} onCardChange={onCardChange} />
@@ -657,7 +655,7 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
                             </div>
                         </div>
                         <div className="px-4 pb-3 pt-1">
-                            <div className="mx-auto max-w-3xl">
+                            <div className="mx-auto max-w-4xl">
                                 {composer}
                                 <p className="mt-2 text-center text-[11px] text-muted-foreground">
                                     {t('The AI Assistant can make mistakes. Nothing changes until you confirm a card.')}
@@ -694,6 +692,16 @@ function ConversationList({ conversations, activeId, search, onSearch, onOpen, o
                 <div className="flex items-center gap-2 px-1 pb-1">
                     <AssistantMark />
                     <span className="text-sm font-semibold">{t('AI Assistant')}</span>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="ml-auto h-8 w-8 rounded-full bg-background"
+                        onClick={() => onOpen(null)}
+                        aria-label={t('New chat')}
+                        title={t('New chat')}
+                    >
+                        <Plus className="h-4 w-4" />
+                    </Button>
                 </div>
                 <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
