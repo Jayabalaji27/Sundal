@@ -31,6 +31,29 @@ class AiAssistantController extends Controller
 
     public function index(Request $request, ToolRegistry $registry): Response|RedirectResponse
     {
+        return $this->page($request, $registry);
+    }
+
+    /**
+     * AI mode: the same page in its own browser tab, full screen, opened with
+     * the "AI mode" switch in the Sundal header. The route also asks for the
+     * password unless it was confirmed recently; opening it starts the AI mode
+     * session (workspace lock, idle clock, Sundal-open check).
+     */
+    public function aiMode(Request $request, ToolRegistry $registry): Response|RedirectResponse
+    {
+        $user = $request->user();
+        \App\Services\Ai\AiMode::start($request, $user);
+
+        return $this->page($request, $registry, [
+            'standalone' => true,
+            'aiMode' => [...\App\Services\Ai\AiMode::clientConfig($user), 'workspaceName' => $user->currentWorkspace?->name],
+        ]);
+    }
+
+    /** @param  array<string, mixed>  $extra  props for the AI mode tab */
+    private function page(Request $request, ToolRegistry $registry, array $extra = []): Response|RedirectResponse
+    {
         $user = $request->user();
         $isOwner = AiAccess::canManageSettings($user);
 
@@ -51,6 +74,7 @@ class AiAssistantController extends Controller
                 'providers' => null,
                 'retentionOptions' => [],
                 'topics' => [],
+                ...$extra,
             ]);
         }
 
@@ -74,6 +98,7 @@ class AiAssistantController extends Controller
                 'monthly_token_cap' => $settings->monthly_token_cap,
                 'managers_enabled' => $settings->managers_enabled,
                 'retention_days' => $settings->retention_days,
+                'idle_timeout_minutes' => $settings->idle_timeout_minutes,
                 'last_tested_at' => $settings->last_tested_at?->toIso8601String(),
                 'last_test_passed' => $settings->last_test_passed,
             ] : null,
@@ -89,6 +114,8 @@ class AiAssistantController extends Controller
             'retentionOptions' => config('ai_assistant.retention_options'),
             // Topic buttons in the message box, only those with tools this user may use.
             'topics' => $settings && AiAccess::canUse($user) ? Topics::forUser($user, $registry) : [],
+            'idleTimeoutOptions' => config('ai_assistant.mode.idle_timeout_options'),
+            ...$extra,
         ]);
     }
 

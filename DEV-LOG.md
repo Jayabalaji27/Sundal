@@ -594,6 +594,38 @@ me" → card updated, server reply, still 1 AI call for 2 messages.
 
 ---
 
+### RP-15 · 2026-10-10 · AI mode: the assistant in its own tab
+
+Like Outlook's "New Outlook" switch: an **AI mode** switch in the header (owners and
+managers; owners without the add-on are sent to the upgrade page) opens the assistant
+full screen in a new tab at `/ai-mode`. On = that tab is open; off closes it. Phones open it
+in the same tab. The sidebar "AI Assistant" item now shows on phones only; owners reach the
+AI settings from the AI mode tab.
+
+- **Authentication:** same login and checks (auth, plan, `ai.assistant`, `module.access`),
+  plus Laravel's `password.confirm` with a 30-minute grace when opening AI mode.
+- **Workspace lock:** the tab is bound to the workspace it was opened for; after a switch in
+  Sundal its requests get 409 `workspace_changed` (nothing runs in the wrong workspace).
+- **Idle timeout:** owner picks 15 / 30 / 60 min (`ai_provider_settings.idle_timeout_minutes`,
+  default 30). Only the user's POST actions count, never polling. 2-minute warning with
+  "Stay signed in"; then the tab locks (chat kept) and asks for the password.
+- **Only while Sundal is open:** Sundal tabs check in (`POST ai-mode/heartbeat`, 30 s);
+  no check-in for 120 s → 423 `locked_app_closed`. The tabs also talk over BroadcastChannel,
+  so closing Sundal locks AI mode within ~7 s (5 s grace for reloads) and reopening it
+  unlocks automatically. A password does not lift this lock.
+- **Sign-out** in Sundal tells the AI tab; any 401/419 shows "You are signed out".
+- `App\Services\Ai\AiMode` holds the rules; `EnsureAiModeSession` (`ai.mode`) applies them
+  to requests carrying `X-AI-Mode`; the normal AI Assistant page is unaffected.
+
+Note: the heartbeat and the AI tab's polling keep the normal 120-minute Laravel session
+alive while both tabs are open; the AI mode idle lock is what ends an unattended session.
+
+Tests: `AiAssistantTest` 98/98. Browser (Edge, two tabs): switch → new tab → password →
+AI mode; Sundal switch shows on; closing Sundal locked AI mode; reopening unlocked it;
+switching off from Sundal closed the AI tab. The idle lock was tested on the server only.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)

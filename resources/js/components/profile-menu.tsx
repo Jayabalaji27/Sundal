@@ -12,6 +12,7 @@ import {
 import { Link, router, usePage } from '@inertiajs/react';
 import { LogOut, Settings, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { notifySignedOut } from '@/lib/ai-mode';
 
 export function ProfileMenu() {
   const { t } = useTranslation();
@@ -19,6 +20,7 @@ export function ProfileMenu() {
   const user = auth?.user;
 
   const handleLogout = () => {
+    notifySignedOut();
     router.post(route('logout'));
   };
 

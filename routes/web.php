@@ -443,7 +443,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // The page itself skips module.access: without the add-on, owners get an
         // upgrade page there (managers are sent to the dashboard by the controller).
         Route::get('ai-assistant', [\App\Http\Controllers\AiAssistantController::class, 'index'])->middleware('ai.assistant')->name('ai-assistant.index');
-        Route::middleware(['ai.assistant', 'module.access'])->prefix('ai-assistant')->name('ai-assistant.')->group(function () {
+        // AI mode: the same assistant in its own browser tab, opened with the header
+        // switch. Asks for the password unless confirmed in the last 30 minutes.
+        Route::get('ai-mode', [\App\Http\Controllers\AiAssistantController::class, 'aiMode'])
+            ->middleware(['ai.assistant', 'module.access', 'password.confirm:password.confirm,' . (int) config('ai_assistant.mode.password_grace_minutes', 30) * 60])
+            ->name('ai-mode');
+        Route::middleware(['ai.assistant', 'module.access'])->prefix('ai-mode')->name('ai-mode.')->group(function () {
+            Route::post('heartbeat', [\App\Http\Controllers\AiModeController::class, 'heartbeat'])->name('heartbeat');
+            Route::get('status', [\App\Http\Controllers\AiModeController::class, 'status'])->name('status');
+            Route::post('keep-alive', [\App\Http\Controllers\AiModeController::class, 'keepAlive'])->name('keep-alive');
+            Route::post('unlock', [\App\Http\Controllers\AiModeController::class, 'unlock'])->name('unlock');
+        });
+
+        // ai.mode: requests from the AI mode tab are refused while it is locked.
+        Route::middleware(['ai.assistant', 'module.access', 'ai.mode'])->prefix('ai-assistant')->name('ai-assistant.')->group(function () {
             Route::post('messages', [\App\Http\Controllers\AiAssistantController::class, 'send'])->name('send');
             Route::get('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'show'])->name('conversations.show');
             Route::patch('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'update'])->name('conversations.update');

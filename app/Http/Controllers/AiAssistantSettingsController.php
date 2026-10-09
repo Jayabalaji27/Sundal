@@ -42,6 +42,7 @@ class AiAssistantSettingsController extends Controller
             'monthly_token_cap' => $validated['monthly_token_cap'] ?? null,
             'managers_enabled' => $validated['managers_enabled'],
             'retention_days' => $validated['retention_days'],
+            'idle_timeout_minutes' => $validated['idle_timeout_minutes'],
             'updated_by' => $user->id,
         ]);
 
@@ -125,6 +126,7 @@ class AiAssistantSettingsController extends Controller
             'monthly_token_cap' => ['nullable', 'integer', 'min:1000'],
             'managers_enabled' => ['boolean'],
             'retention_days' => ['nullable', Rule::in(config('ai_assistant.retention_options'))],
+            'idle_timeout_minutes' => ['nullable', Rule::in(config('ai_assistant.mode.idle_timeout_options'))],
         ], [
             'azure_endpoint.regex' => __('Use your Azure OpenAI resource address, for example https://my-company.openai.azure.com'),
         ]);
@@ -132,6 +134,7 @@ class AiAssistantSettingsController extends Controller
         $validated['api_key'] = isset($validated['api_key']) ? trim($validated['api_key']) : null;
         $validated['managers_enabled'] = (bool) ($validated['managers_enabled'] ?? true);
         $validated['retention_days'] = (int) ($validated['retention_days'] ?? config('ai_assistant.retention_days'));
+        $validated['idle_timeout_minutes'] = (int) ($validated['idle_timeout_minutes'] ?? ($existing?->idle_timeout_minutes ?: config('ai_assistant.mode.idle_timeout_minutes')));
 
         return $validated;
     }

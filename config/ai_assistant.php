@@ -79,6 +79,26 @@ return [
 
     'request_timeout' => env('AI_ASSISTANT_REQUEST_TIMEOUT', 60),
 
+    /*
+    | AI mode: the assistant in its own browser tab, opened with the "AI mode"
+    | switch in the Sundal header.
+    */
+    'mode' => [
+        // Opening AI mode asks for the password unless it was confirmed this recently.
+        'password_grace_minutes' => 30,
+        // AI mode locks after this long without the user doing anything in it.
+        // The company owner picks one of the options; the first default is used otherwise.
+        'idle_timeout_minutes' => 30,
+        'idle_timeout_options' => [15, 30, 60],
+        // Warning shown this long before the idle lock.
+        'idle_warning_seconds' => 120,
+        // AI mode only works while a Sundal tab is open. Sundal tabs check in every
+        // `heartbeat_seconds`; AI mode locks when none did for `heartbeat_tolerance_seconds`.
+        // Generous because browsers slow timers in background tabs to about once a minute.
+        'heartbeat_seconds' => 30,
+        'heartbeat_tolerance_seconds' => 120,
+    ],
+
     // PHP time limit for a reply answered during the web request (not queued).
     // Must be above request_timeout so a slow provider ends as a normal error.
     'sync_time_limit' => env('AI_ASSISTANT_SYNC_TIME_LIMIT', 300),

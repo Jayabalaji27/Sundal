@@ -17,7 +17,7 @@ class AiProviderSetting extends Model
     protected $fillable = [
         'workspace_id', 'provider', 'model', 'api_key', 'api_key_last4',
         'azure_endpoint', 'azure_deployment', 'organization', 'monthly_token_cap',
-        'managers_enabled', 'retention_days', 'last_tested_at', 'last_test_passed', 'updated_by',
+        'managers_enabled', 'retention_days', 'idle_timeout_minutes', 'last_tested_at', 'last_test_passed', 'updated_by',
     ];
 
     protected $hidden = ['api_key'];
@@ -27,6 +27,7 @@ class AiProviderSetting extends Model
         'managers_enabled' => 'boolean',
         'monthly_token_cap' => 'integer',
         'retention_days' => 'integer',
+        'idle_timeout_minutes' => 'integer',
         'last_tested_at' => 'datetime',
         'last_test_passed' => 'boolean',
     ];

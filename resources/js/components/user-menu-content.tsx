@@ -5,6 +5,7 @@ import { type User } from '@/types';
 import { Link } from '@inertiajs/react';
 import { LogOut, Settings } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { notifySignedOut } from '@/lib/ai-mode';
 
 interface UserMenuContentProps {
     user: User;
@@ -32,7 +33,7 @@ export function UserMenuContent({ user }: UserMenuContentProps) {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-                <Link className="block w-full" method="post" href={route('logout')} as="button" onClick={cleanup}>
+                <Link className="block w-full" method="post" href={route('logout')} as="button" onClick={() => { notifySignedOut(); cleanup(); }}>
                     <LogOut className="mr-2" />
                     {t("Log out")}
                 </Link>

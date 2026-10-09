@@ -41,6 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'plan.access' => \App\Http\Middleware\CheckPlanAccess::class,
             'plan.limits' => \App\Http\Middleware\CheckPlanLimits::class,
             'module.access' => \App\Http\Middleware\CheckModuleAccess::class,
+            'ai.mode' => \App\Http\Middleware\EnsureAiModeSession::class,
             'ai.assistant' => \App\Http\Middleware\EnsureAiAssistantAccess::class,
             'saas.only' => \App\Http\Middleware\SaasOnly::class,
             'block.client.profile' => \App\Http\Middleware\BlockClientProfileAccess::class,

@@ -20,6 +20,7 @@ import AppLogo from './app-logo';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { hasPermission } from '@/utils/authorization';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 declare const route: any;
 
@@ -35,6 +36,8 @@ export function AppSidebar() {
     const isRTL = ['ar', 'he'].includes(i18n.language);
 
     const isSuperAdmin = auth?.user?.type === 'superadmin';
+    // On desktop the AI Assistant opens from the "AI mode" switch in the header.
+    const isMobile = useIsMobile();
 
     // ─── SaaS Super Admin ────────────────────────────────────────────────────
     const getSuperAdminNavItems = (): NavItem[] => {
@@ -213,7 +216,7 @@ export function AppSidebar() {
         // plans page; managers only see it when the owner's plan includes AI.
         const aiAssistant: string | null = auth?.aiAssistant ?? null;
         const isWorkspaceOwner = auth?.user?.workspace_role === 'owner';
-        if (aiAssistant && (aiAssistant !== 'plan' || isWorkspaceOwner)) {
+        if (isMobile && aiAssistant && (aiAssistant !== 'plan' || isWorkspaceOwner)) {
             items.push({ title: t('AI Assistant'), href: route('ai-assistant.index'), icon: Sparkles, group: t('Intelligence') });
         }
 
@@ -272,7 +275,7 @@ export function AppSidebar() {
     // setState-in-useEffect loop that could trip React's update-depth limit.
     const mainNavItems = useMemo(
         () => getNavItems(),
-        [isSaasMode, isSuperAdmin, permissions, flags, auth?.user?.current_workspace_id, auth?.user?.workspace_role, t]
+        [isSaasMode, isSuperAdmin, permissions, flags, auth?.user?.current_workspace_id, auth?.user?.workspace_role, isMobile, t]
     );
 
     const { position, effectivePosition, isRtl } = useLayout();

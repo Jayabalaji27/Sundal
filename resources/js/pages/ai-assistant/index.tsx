@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/custom-toast';
+import { AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
 
 declare const route: any;
 
@@ -93,6 +94,7 @@ interface Settings {
     monthly_token_cap: number | null;
     managers_enabled: boolean;
     retention_days: number;
+    idle_timeout_minutes: number;
     last_tested_at: string | null;
     last_test_passed: boolean | null;
 }
@@ -106,7 +108,11 @@ interface Props {
     usage: { tokens_this_month: number; daily: { date: string; tokens: number }[] } | null;
     providers: Record<string, ProviderOption> | null;
     retentionOptions: number[];
+    idleTimeoutOptions?: number[];
     topics: TopicOption[];
+    /** Set when the page is the AI mode tab (route ai-mode). */
+    standalone?: boolean;
+    aiMode?: AiModeConfig;
 }
 
 const errorMessage = (error: any, fallback: string): string =>
@@ -140,6 +146,11 @@ export default function AiAssistantPage(props: Props) {
         );
     } else {
         body = <Chat conversations={props.conversations} topics={props.topics} />;
+    }
+
+    // AI mode tab: full screen, its own header and locks, no Sundal sidebar.
+    if (props.standalone && props.aiMode) {
+        return <AiModeShell config={props.aiMode}>{body}</AiModeShell>;
     }
 
     return (
@@ -894,7 +905,7 @@ function CardForm({ cardId, fields, values, onChange }: {
 
 // ─── Settings (company owner) ───────────────────────────────────────────────
 
-function SettingsForm({ settings, providers, usage, retentionOptions, configured }: Props) {
+function SettingsForm({ settings, providers, usage, retentionOptions, idleTimeoutOptions = [15, 30, 60], configured }: Props) {
     const { t } = useTranslation();
     const providerOptions = providers ?? {};
     const [form, setForm] = useState({
@@ -907,6 +918,7 @@ function SettingsForm({ settings, providers, usage, retentionOptions, configured
         monthly_token_cap: settings?.monthly_token_cap?.toString() ?? '',
         managers_enabled: settings?.managers_enabled ?? true,
         retention_days: settings?.retention_days ?? 90,
+        idle_timeout_minutes: settings?.idle_timeout_minutes ?? 30,
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [testing, setTesting] = useState(false);
@@ -1073,6 +1085,16 @@ function SettingsForm({ settings, providers, usage, retentionOptions, configured
                                 </SelectContent>
                             </Select>
                             <p className="text-xs text-muted-foreground">{t('The log of actions the assistant took is kept for the life of the workspace.')}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <Label>{t('Lock AI mode after')}</Label>
+                            <Select value={String(form.idle_timeout_minutes)} onValueChange={v => set('idle_timeout_minutes', Number(v))}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    {idleTimeoutOptions.map(minutes => <SelectItem key={minutes} value={String(minutes)}>{t('{{minutes}} minutes without activity', { minutes })}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">{t('The AI mode tab then asks for the password. Chats and waiting cards are kept.')}</p>
                         </div>
                     </CardContent>
                 </Card>

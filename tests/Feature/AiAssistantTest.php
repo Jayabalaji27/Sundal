@@ -1286,3 +1286,136 @@ describe('deterministic forms', function () {
         ['show tasks created this week', null, null],
     ]);
 });
+
+// ── AI mode (own tab, session rules) ──────────────────────────────────────────
+
+/** Open the AI mode tab (password confirmed just now). */
+function openAiMode($test, User $user)
+{
+    return $test->actingAs($user)->withSession(['auth.password_confirmed_at' => time()])->get(route('ai-mode'));
+}
+
+function aiModeHeaders(Workspace $workspace): array
+{
+    return ['X-AI-Mode' => '1', 'X-AI-Workspace' => (string) $workspace->id];
+}
+
+describe('ai mode', function () {
+    test('opening AI mode asks for the password unless confirmed in the last 30 minutes', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        $this->actingAs($users['owner'])->get(route('ai-mode'))->assertRedirect(route('password.confirm'));
+        $this->actingAs($users['owner'])->withSession(['auth.password_confirmed_at' => time() - 31 * 60])->get(route('ai-mode'))
+            ->assertRedirect(route('password.confirm'));
+
+        openAiMode($this, $users['owner'])->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('ai-assistant/index')
+            ->where('standalone', true)
+            ->where('aiMode.workspaceId', $workspace->id)
+            ->where('aiMode.idleSeconds', 30 * 60));
+    });
+
+    test('members and clients cannot open AI mode', function (string $role) {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        openAiMode($this, $users[$role])->assertForbidden();
+    })->with(['member', 'client']);
+
+    test('AI mode requests work after opening, and need the tab to have been opened', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        fakeAi([['text' => 'hello']]);
+
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'], aiModeHeaders($workspace))
+            ->assertStatus(423)->assertJsonPath('code', 'ai_mode_ended');
+
+        openAiMode($this, $users['owner'])->assertOk();
+        $this->postJson(route('ai-assistant.send'), ['content' => 'hi'], aiModeHeaders($workspace))->assertOk();
+
+        // The normal AI Assistant page (no header) is not affected by AI mode rules.
+        $this->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+    });
+
+    test('a workspace switch in Sundal locks the AI mode tab to its own workspace', function () {
+        [$workspace, $users] = aiWorkspace();
+        [$other] = aiWorkspace();
+        aiSettings($workspace);
+        WorkspaceMember::create(['workspace_id' => $other->id, 'user_id' => $users['owner']->id, 'role' => 'owner', 'status' => 'active']);
+        fakeAi([['text' => 'hello']]);
+        openAiMode($this, $users['owner'])->assertOk();
+
+        $users['owner']->update(['current_workspace_id' => $other->id]);
+
+        $this->actingAs($users['owner']->fresh())->postJson(route('ai-assistant.send'), ['content' => 'hi'], aiModeHeaders($workspace))
+            ->assertStatus(409)->assertJsonPath('code', 'workspace_changed');
+    });
+
+    test('AI mode locks after the idle timeout; polling does not count as activity, actions do', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['idle_timeout_minutes' => 15]);
+        fakeAi([['text' => 'ok'], ['text' => 'ok']]);
+        openAiMode($this, $users['owner'])->assertOk();
+
+        // 10 minutes of the tab polling: no activity.
+        $this->travel(10)->minutes();
+        $this->post(route('ai-mode.heartbeat'));
+        $this->getJson(route('ai-mode.status'), aiModeHeaders($workspace))->assertJsonPath('code', 'ok');
+
+        // An action restarts the clock.
+        $this->postJson(route('ai-assistant.send'), ['content' => 'hi'], aiModeHeaders($workspace))->assertOk();
+        $this->travel(10)->minutes();
+        $this->post(route('ai-mode.heartbeat'));
+        $this->getJson(route('ai-mode.status'))->assertJsonPath('code', 'ok');
+
+        // 16 minutes since the last action: locked.
+        $this->travel(6)->minutes();
+        $this->post(route('ai-mode.heartbeat'));
+        $this->postJson(route('ai-assistant.send'), ['content' => 'hi'], aiModeHeaders($workspace))
+            ->assertStatus(423)->assertJsonPath('code', 'locked_idle');
+        $this->postJson(route('ai-mode.keep-alive'))->assertStatus(423);
+    });
+
+    test('unlocking needs the right password and keeps the chat', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        openAiMode($this, $users['owner'])->assertOk();
+        $this->travel(31)->minutes();
+        $this->post(route('ai-mode.heartbeat'));
+
+        $this->postJson(route('ai-mode.unlock'), ['password' => 'wrong'])->assertJsonValidationErrors('password');
+        $this->postJson(route('ai-mode.unlock'), ['password' => 'password'])->assertOk()->assertJsonPath('code', 'ok');
+        $this->getJson(route('ai-mode.status'))->assertJsonPath('code', 'ok');
+    });
+
+    test('AI mode only works while a Sundal tab is open', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        fakeAi([['text' => 'ok']]);
+        openAiMode($this, $users['owner'])->assertOk();
+
+        // No Sundal tab checked in for 3 minutes (closed): locked, even with recent activity.
+        $this->travel(3)->minutes();
+        $this->postJson(route('ai-assistant.send'), ['content' => 'hi'], aiModeHeaders($workspace))
+            ->assertStatus(423)->assertJsonPath('code', 'locked_app_closed');
+
+        // A password does not lift it; Sundal coming back does.
+        $this->postJson(route('ai-mode.unlock'), ['password' => 'password'])->assertJsonPath('code', 'locked_app_closed');
+        $this->post(route('ai-mode.heartbeat'))->assertOk();
+        $this->getJson(route('ai-mode.status'))->assertJsonPath('code', 'ok');
+    });
+
+    test('the owner chooses the idle timeout from the allowed options', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $base = ['provider' => 'anthropic', 'model' => 'claude-sonnet-5-5', 'retention_days' => 90];
+
+        $this->actingAs($users['owner'])->putJson(route('ai-assistant.settings.update'), [...$base, 'idle_timeout_minutes' => 45])
+            ->assertJsonValidationErrors('idle_timeout_minutes');
+        $this->actingAs($users['owner'])->put(route('ai-assistant.settings.update'), [...$base, 'idle_timeout_minutes' => 60])->assertSessionHasNoErrors();
+
+        expect(AiProviderSetting::withoutGlobalScope('workspace')->first()->idle_timeout_minutes)->toBe(60);
+        openAiMode($this, $users['owner'])->assertInertia(fn (Assert $page) => $page->where('aiMode.idleSeconds', 3600));
+    });
+});
