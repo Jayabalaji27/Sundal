@@ -119,6 +119,12 @@ class AiAssistantController extends Controller
             // Topic buttons in the message box, only those with tools this user may use.
             'topics' => $settings && AiAccess::canUse($user) ? Topics::forUser($user, $registry) : [],
             'idleTimeoutOptions' => config('ai_assistant.mode.idle_timeout_options'),
+            // The model pill in the chat header (names only, never the key).
+            'model' => $settings && AiAccess::canUse($user) ? [
+                'provider' => config("ai_assistant.providers.{$settings->provider}.label", $settings->provider),
+                // Model ids contain dots and slashes ("openai/gpt-4.1"): no dot-notation lookup.
+                'name' => (config("ai_assistant.providers.{$settings->provider}.models") ?? [])[$settings->model]['label'] ?? $settings->model,
+            ] : null,
             ...$extra,
         ]);
     }

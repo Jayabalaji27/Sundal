@@ -713,6 +713,27 @@ shared actions). QA role suites + `FunctionalTest` after the controller refactor
 passed; the 2 project-health 403/404 failures in `FunctionalTest` also fail without these
 changes (pre-existing).
 
+### RP-19 · 2026-10-10 · AI Assistant: new chat interface
+
+Redesign of `ai-assistant/index.tsx` from three references (ChatGPT-style welcome screen,
+a chat app with a conversation sidebar, a prompt-card start page); only what fits Sundal.
+
+- **Welcome screen:** assistant orb, "Good morning, {name} — What can I do for you
+  today?", the message box in the middle, and four example cards with topic icons
+  (topic-specific examples when a topic is on).
+- **Conversation sidebar:** search, chats grouped Today / Yesterday / Previous 7 days /
+  Older, topic icon and time ago per chat, delete on hover. Slides over the chat on phones.
+- **Chat header:** chat title, connected model pill (new `model` prop: provider and model
+  names only), Settings (owners) and New chat. Owner settings moved from tabs to this
+  button, with "Back to the assistant".
+- **Messages:** avatar, name and time; assistant replies in cards with Copy; typing dots
+  while waiting; the confirm cards unchanged.
+- **Message box:** grows with the text, topic picker as a dropdown with the chosen topic
+  as a removable pill, character count, round send button; disclaimer underneath.
+- Left out on purpose: attachments, voice, likes, regenerate, folders (no backend for them).
+
+Checked in Edge: light, dark, 390px phone, owner settings. `AiAssistantTest` 130/130.
+
 ---
 
 ## Known Pending Items

@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
-import { Bot, Bug, Check, CheckCheck, Clock, ExternalLink, FolderKanban, HelpCircle, ListTodo, Loader2, MessageSquarePlus, Pencil, Receipt, Send, Sparkles, Trash2, Undo2, Users, X } from 'lucide-react';
+import {
+    ArrowLeft, ArrowUp, Bot, Bug, Check, CheckCheck, ChevronDown, Clock, Copy, ExternalLink, FolderKanban, HelpCircle, ListTodo, Loader2,
+    MessageSquare, PanelLeft, Pencil, Plus, Receipt, Search, Settings as SettingsIcon, Sparkles, Trash2, Undo2, Users, X,
+} from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,8 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/custom-toast';
 import { AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
@@ -99,6 +103,11 @@ interface Settings {
     last_test_passed: boolean | null;
 }
 
+interface ModelInfo {
+    provider: string;
+    name: string;
+}
+
 interface Props {
     access: 'allowed' | 'managers_off' | 'plan' | 'role';
     isOwner: boolean;
@@ -110,6 +119,8 @@ interface Props {
     retentionOptions: number[];
     idleTimeoutOptions?: number[];
     topics: TopicOption[];
+    /** The connected provider and model, for the pill in the chat header. */
+    model?: ModelInfo | null;
     /** Set when the page is the AI mode tab (route ai-mode). */
     standalone?: boolean;
     aiMode?: AiModeConfig;
@@ -124,28 +135,42 @@ const errorMessage = (error: any, fallback: string): string =>
 export default function AiAssistantPage(props: Props) {
     const { t } = useTranslation();
     const breadcrumbs = [{ title: t('Dashboard'), href: route('dashboard') }, { title: t('AI Assistant') }];
-    const [tab, setTab] = useState(props.configured ? 'assistant' : 'settings');
+    // Owners open Settings from the chat header; without a provider, Settings is all there is.
+    const [view, setView] = useState<'chat' | 'settings'>(props.configured ? 'chat' : 'settings');
+
+    const chat = (onOpenSettings?: () => void) => (
+        <Chat
+            conversations={props.conversations}
+            topics={props.topics}
+            model={props.model ?? null}
+            standalone={!!props.standalone}
+            onOpenSettings={onOpenSettings}
+        />
+    );
 
     let body;
+    let framed = true;
     if (props.access === 'plan') {
         body = <UpgradeNotice />;
     } else if (props.access === 'managers_off') {
         body = <Notice title={t('The AI Assistant is turned off for managers')} text={t('Your company owner has turned the AI Assistant off for managers.')} />;
     } else if (!props.configured && !props.isOwner) {
         body = <Notice title={t('No AI provider connected')} text={t('Ask your company owner to connect an AI provider on this page.')} />;
-    } else if (props.isOwner) {
+    } else if (props.isOwner && (view === 'settings' || !props.configured)) {
         body = (
-            <Tabs value={tab} onValueChange={setTab}>
-                <TabsList>
-                    <TabsTrigger value="assistant" disabled={!props.configured}>{t('Assistant')}</TabsTrigger>
-                    <TabsTrigger value="settings">{t('Settings')}</TabsTrigger>
-                </TabsList>
-                <TabsContent value="assistant" className="mt-4">{props.configured && <Chat conversations={props.conversations} topics={props.topics} />}</TabsContent>
-                <TabsContent value="settings" className="mt-4"><SettingsForm {...props} /></TabsContent>
-            </Tabs>
+            <div className="space-y-4">
+                {props.configured && (
+                    <Button variant="ghost" size="sm" className="-ml-2" onClick={() => setView('chat')}>
+                        <ArrowLeft className="mr-1.5 h-4 w-4" />
+                        {t('Back to the assistant')}
+                    </Button>
+                )}
+                <SettingsForm {...props} />
+            </div>
         );
     } else {
-        body = <Chat conversations={props.conversations} topics={props.topics} />;
+        body = chat(props.isOwner ? () => setView('settings') : undefined);
+        framed = false;
     }
 
     // AI mode tab: full screen, its own header and locks, no Sundal sidebar.
@@ -154,7 +179,7 @@ export default function AiAssistantPage(props: Props) {
     }
 
     return (
-        <PageTemplate title={t('AI Assistant')} breadcrumbs={breadcrumbs}>
+        <PageTemplate title={t('AI Assistant')} breadcrumbs={breadcrumbs} noPadding={!framed}>
             {body}
         </PageTemplate>
     );
@@ -280,13 +305,12 @@ function Notice({ title, text }: { title: string; text: string }) {
 
 // ─── Chat ───────────────────────────────────────────────────────────────────
 
-const EXAMPLES = [
-    'What tasks are overdue in my projects?',
-    'Assign the login bug to Ravi, due Friday.',
-    'Which timesheets are waiting for my approval?',
-    'Who is over budget this month?',
-    'Write the weekly report for my biggest project.',
-    'Create a project called Mobile App.',
+/** Starter prompts on the welcome screen, each with the topic it belongs to (for its icon). */
+const EXAMPLES: { text: string; topic: string }[] = [
+    { text: 'What tasks are overdue in my projects?', topic: 'tasks' },
+    { text: 'Assign the login bug to Ravi, due Friday.', topic: 'bugs' },
+    { text: 'Which timesheets are waiting for my approval?', topic: 'approvals' },
+    { text: 'Create an invoice for the Website Redesign tasks.', topic: 'finance' },
 ];
 
 /** The box hint while a topic button is on. */
@@ -323,6 +347,8 @@ const TOPIC_ICONS: Record<string, typeof Bot> = {
     help: HelpCircle,
 };
 
+const MAX_LENGTH = 4000;
+
 /** A card that moved to a newer message (a draft the AI updated) is shown only there. */
 function withFresh(prev: Message[], fresh: Message[]): Message[] {
     const moved = new Set(fresh.flatMap(m => m.cards.map(c => c.id)));
@@ -334,14 +360,67 @@ function withFresh(prev: Message[], fresh: Message[]): Message[] {
     ];
 }
 
-function Chat({ conversations: initial, topics }: { conversations: Conversation[]; topics: TopicOption[] }) {
+/** "Today", "Yesterday", "Previous 7 days", "Older" for the conversation list. */
+function dayGroup(iso: string | null | undefined): string {
+    if (!iso) return 'Today';
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const days = Math.floor((startOfToday.getTime() - new Date(iso).getTime()) / 86_400_000) + 1;
+    if (days <= 0) return 'Today';
+    if (days === 1) return 'Yesterday';
+    if (days <= 7) return 'Previous 7 days';
+    return 'Older';
+}
+
+/** "now", "5m", "3h", "2d", or a short date. */
+function timeAgo(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+    if (minutes < 1) return 'now';
+    if (minutes < 60) return `${minutes}m`;
+    if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h`;
+    if (minutes < 7 * 24 * 60) return `${Math.floor(minutes / (24 * 60))}d`;
+    return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+function greeting(): string {
+    const hour = new Date().getHours();
+    return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+}
+
+/** The assistant's round mark: a soft violet orb, also its avatar. */
+function AssistantMark({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+    return size === 'lg' ? (
+        <div className="relative mx-auto h-14 w-14" aria-hidden>
+            <div className="absolute inset-0 rounded-full bg-violet-500/40 blur-xl" />
+            <div className="relative h-14 w-14 rounded-full bg-gradient-to-br from-fuchsia-300 via-violet-500 to-violet-700 shadow-inner" />
+        </div>
+    ) : (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-fuchsia-400 via-violet-500 to-violet-700 text-white" aria-hidden>
+            <Sparkles className="h-4 w-4" />
+        </div>
+    );
+}
+
+function Chat({ conversations: initial, topics, model, standalone, onOpenSettings }: {
+    conversations: Conversation[];
+    topics: TopicOption[];
+    model: ModelInfo | null;
+    standalone: boolean;
+    /** Owners: opens the settings view. */
+    onOpenSettings?: () => void;
+}) {
     const { t } = useTranslation();
+    const { auth } = usePage().props as any;
     const [conversations, setConversations] = useState<Conversation[]>(initial);
     const [activeId, setActiveId] = useState<number | null>(initial[0]?.id ?? null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [search, setSearch] = useState('');
+    // Small screens: the conversation list slides over the chat.
+    const [listOpen, setListOpen] = useState(false);
     // The topic button stays on for the conversation until removed.
     const [topic, setTopic] = useState<string | null>(initial[0]?.topic ?? null);
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -392,7 +471,10 @@ function Chat({ conversations: initial, topics }: { conversations: Conversation[
             setMessages(prev => withFresh(prev.filter(m => m.id !== optimistic.id), data.messages));
             if (activeId === null) createdHereRef.current = data.conversation.id;
             setActiveId(current => current ?? data.conversation.id);
-            setConversations(prev => [data.conversation, ...prev.filter(c => c.id !== data.conversation.id)]);
+            setConversations(prev => [
+                { ...data.conversation, last_message_at: new Date().toISOString() },
+                ...prev.filter(c => c.id !== data.conversation.id),
+            ]);
         };
 
         try {
@@ -450,124 +532,372 @@ function Chat({ conversations: initial, topics }: { conversations: Conversation[
         }
     };
 
+    const open = (id: number | null) => {
+        setActiveId(id);
+        setListOpen(false);
+    };
+
+    const active = conversations.find(c => c.id === activeId);
+    const firstName = String(auth?.user?.name ?? '').split(' ')[0];
+    const showWelcome = !loading && messages.length === 0;
+
+    const composer = (
+        <Composer
+            value={input}
+            onChange={setInput}
+            onSend={() => send(input)}
+            sending={sending}
+            topics={topics}
+            topic={topic}
+            onTopic={setTopic}
+            large={showWelcome}
+        />
+    );
+
+    return (
+        <div className={`relative flex min-h-[560px] overflow-hidden rounded-xl border bg-background ${standalone ? 'h-[calc(100dvh-7.5rem)]' : 'h-[calc(100dvh-11rem)]'}`}>
+            {/* Conversation list: always on wide screens, a sliding panel on small ones. */}
+            {listOpen && <div className="absolute inset-0 z-20 bg-black/30 md:hidden" onClick={() => setListOpen(false)} aria-hidden />}
+            <aside className={`${listOpen ? 'absolute inset-y-0 left-0 z-30 flex shadow-xl' : 'hidden'} w-72 shrink-0 flex-col border-r bg-background md:static md:flex md:bg-muted/40 md:shadow-none`}>
+                <ConversationList
+                    conversations={conversations}
+                    activeId={activeId}
+                    search={search}
+                    onSearch={setSearch}
+                    onOpen={open}
+                    onDelete={remove}
+                />
+            </aside>
+
+            <section className="flex min-w-0 flex-1 flex-col">
+                <header className="flex items-center gap-2 border-b px-3 py-2.5 sm:px-4">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => setListOpen(true)} aria-label={t('Conversations')}>
+                        <PanelLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="min-w-0">
+                        <h2 className="truncate text-sm font-semibold">{active?.title || t('New chat')}</h2>
+                    </div>
+                    <div className="ml-auto flex items-center gap-1.5">
+                        {model && (
+                            <span className="hidden items-center gap-1.5 rounded-full border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground sm:inline-flex" title={`${model.provider} · ${model.name}`}>
+                                <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+                                <span className="max-w-[180px] truncate">{model.name}</span>
+                            </span>
+                        )}
+                        {onOpenSettings && (
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenSettings} aria-label={t('Settings')} title={t('Settings')}>
+                                <SettingsIcon className="h-4 w-4" />
+                            </Button>
+                        )}
+                        <Button size="sm" className="h-8" onClick={() => open(null)}>
+                            <Plus className="mr-1 h-4 w-4" />
+                            {t('New chat')}
+                        </Button>
+                    </div>
+                </header>
+
+                {showWelcome ? (
+                    <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 py-10 sm:justify-center">
+                        <div className="w-full max-w-3xl">
+                            <AssistantMark size="lg" />
+                            <h2 className="mt-6 text-center text-2xl font-semibold tracking-tight sm:text-3xl">
+                                {t(greeting())}{firstName ? `, ${firstName}` : ''}
+                            </h2>
+                            <p className="text-center text-2xl font-semibold tracking-tight sm:text-3xl">
+                                {t('What can I')}{' '}
+                                <span className="bg-gradient-to-r from-fuchsia-500 to-violet-600 bg-clip-text text-transparent">{t('do for you today?')}</span>
+                            </p>
+                            <p className="mx-auto mt-3 max-w-xl text-center text-sm text-muted-foreground">
+                                {t('Ask about your projects, tasks, time and invoices, or ask me to do the work. I show a card for you to confirm before changing anything.')}
+                            </p>
+
+                            <div className="mt-8">{composer}</div>
+
+                            <p className="mb-3 mt-10 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                {topic ? t('Try one for {{topic}}', { topic: topics.find(o => o.key === topic)?.label.toLowerCase() ?? '' }) : t('Get started with an example')}
+                            </p>
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                {(topic ? (TOPIC_EXAMPLES[topic] ?? []).slice(0, 4).map(text => ({ text, topic })) : EXAMPLES).map(example => {
+                                    const Icon = TOPIC_ICONS[example.topic] ?? Sparkles;
+                                    return (
+                                        <button
+                                            key={example.text}
+                                            type="button"
+                                            onClick={() => send(t(example.text))}
+                                            disabled={sending}
+                                            className="group flex min-h-[104px] flex-col justify-between rounded-xl border bg-muted/40 p-3.5 text-left text-sm transition-colors hover:border-violet-300 hover:bg-violet-50 disabled:opacity-60 dark:hover:border-violet-800 dark:hover:bg-violet-950/30"
+                                        >
+                                            <span>{t(example.text)}</span>
+                                            <Icon className="mt-3 h-4 w-4 text-muted-foreground transition-colors group-hover:text-violet-600" />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <div className="flex-1 overflow-y-auto">
+                            <div className="mx-auto max-w-3xl space-y-6 px-4 py-6">
+                                {loading && <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />}
+                                {!loading && messages.map(message => (
+                                    <ChatMessage key={message.id} message={message} userName={auth?.user?.name ?? ''} onCardChange={onCardChange} />
+                                ))}
+                                {sending && (
+                                    <div className="flex gap-3" aria-live="polite">
+                                        <AssistantMark />
+                                        <div className="flex items-center gap-1 rounded-2xl border bg-card px-4 py-3" aria-label={t('Thinking…')}>
+                                            {[0, 150, 300].map(delay => (
+                                                <span key={delay} className="h-1.5 w-1.5 animate-bounce rounded-full bg-violet-500" style={{ animationDelay: `${delay}ms` }} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={bottomRef} />
+                            </div>
+                        </div>
+                        <div className="px-4 pb-3 pt-1">
+                            <div className="mx-auto max-w-3xl">
+                                {composer}
+                                <p className="mt-2 text-center text-[11px] text-muted-foreground">
+                                    {t('The AI Assistant can make mistakes. Nothing changes until you confirm a card.')}
+                                </p>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </section>
+        </div>
+    );
+}
+
+/** Past conversations, newest first, grouped by day, with a search box. */
+function ConversationList({ conversations, activeId, search, onSearch, onOpen, onDelete }: {
+    conversations: Conversation[];
+    activeId: number | null;
+    search: string;
+    onSearch: (value: string) => void;
+    onOpen: (id: number | null) => void;
+    onDelete: (conversation: Conversation) => void;
+}) {
+    const { t } = useTranslation();
+    const query = search.trim().toLowerCase();
+    const shown = query ? conversations.filter(c => (c.title ?? '').toLowerCase().includes(query)) : conversations;
+    const groups = shown.reduce<Record<string, Conversation[]>>((all, c) => {
+        (all[dayGroup(c.last_message_at)] ??= []).push(c);
+        return all;
+    }, {});
+
+    return (
+        <>
+            <div className="space-y-2 p-3">
+                <div className="flex items-center gap-2 px-1 pb-1">
+                    <AssistantMark />
+                    <span className="text-sm font-semibold">{t('AI Assistant')}</span>
+                </div>
+                <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input value={search} onChange={e => onSearch(e.target.value)} placeholder={t('Search chats')} className="h-8 bg-background pl-8 text-xs" aria-label={t('Search chats')} />
+                </div>
+            </div>
+            <nav className="flex-1 overflow-y-auto px-2 pb-3" aria-label={t('Conversations')}>
+                {conversations.length === 0 && <p className="px-2 py-4 text-xs text-muted-foreground">{t('No conversations yet. Your chats appear here.')}</p>}
+                {conversations.length > 0 && shown.length === 0 && <p className="px-2 py-4 text-xs text-muted-foreground">{t('No chats match your search.')}</p>}
+                {['Today', 'Yesterday', 'Previous 7 days', 'Older'].filter(g => groups[g]).map(group => (
+                    <div key={group}>
+                        <p className="px-2 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t(group)}</p>
+                        <ul className="space-y-0.5">
+                            {groups[group].map(c => {
+                                const Icon = (c.topic && TOPIC_ICONS[c.topic]) || MessageSquare;
+                                const on = c.id === activeId;
+                                return (
+                                    <li key={c.id}>
+                                        <div
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={() => onOpen(c.id)}
+                                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c.id); } }}
+                                            aria-current={on ? 'true' : undefined}
+                                            className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${
+                                                on ? 'bg-background font-medium shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'
+                                            }`}
+                                        >
+                                            <Icon className={`h-4 w-4 shrink-0 ${on ? 'text-violet-600' : ''}`} />
+                                            <span className="min-w-0 flex-1 truncate">{c.title || t('New conversation')}</span>
+                                            <span className="text-[11px] text-muted-foreground group-hover:hidden">{t(timeAgo(c.last_message_at))}</span>
+                                            <button
+                                                type="button"
+                                                className="hidden rounded p-0.5 hover:bg-muted group-hover:block"
+                                                onClick={e => { e.stopPropagation(); onDelete(c); }}
+                                                aria-label={t('Delete')}
+                                                title={t('Delete')}
+                                            >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                            </button>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    </div>
+                ))}
+            </nav>
+        </>
+    );
+}
+
+/** The message box: grows with the text; topic picker and send button underneath. */
+function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, large }: {
+    value: string;
+    onChange: (value: string) => void;
+    onSend: () => void;
+    sending: boolean;
+    topics: TopicOption[];
+    topic: string | null;
+    onTopic: (topic: string | null) => void;
+    large: boolean;
+}) {
+    const { t } = useTranslation();
+    const ref = useRef<HTMLTextAreaElement>(null);
+    const current = topics.find(o => o.key === topic);
+    const CurrentIcon = (topic && TOPIC_ICONS[topic]) || Sparkles;
+
+    // Grow with the text, up to about 8 lines.
+    useEffect(() => {
+        const box = ref.current;
+        if (!box) return;
+        box.style.height = 'auto';
+        box.style.height = `${Math.min(box.scrollHeight, 200)}px`;
+    }, [value]);
+
     const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
-            send(input);
+            onSend();
         }
     };
 
-    const examples = topic ? TOPIC_EXAMPLES[topic] ?? EXAMPLES : EXAMPLES;
-
     return (
-        <div className="grid min-h-[600px] gap-4 md:grid-cols-[260px_1fr]">
-            <Card className="flex flex-col overflow-hidden">
-                <div className="border-b p-3">
-                    <Button className="w-full" variant="outline" size="sm" onClick={() => setActiveId(null)}>
-                        <MessageSquarePlus className="mr-2 h-4 w-4" />
-                        {t('New chat')}
-                    </Button>
-                </div>
-                <div className="flex-1 space-y-1 overflow-y-auto p-2">
-                    {conversations.length === 0 && <p className="p-2 text-sm text-muted-foreground">{t('No conversations yet.')}</p>}
-                    {conversations.map(c => (
-                        <div
-                            key={c.id}
-                            className={`group flex cursor-pointer items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-muted ${c.id === activeId ? 'bg-muted font-medium' : ''}`}
-                            onClick={() => setActiveId(c.id)}
-                        >
-                            <span className="truncate">{c.title || t('New conversation')}</span>
-                            <button
-                                type="button"
-                                className="ml-2 opacity-0 group-hover:opacity-100"
-                                onClick={e => { e.stopPropagation(); remove(c); }}
-                                aria-label={t('Delete')}
-                            >
-                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </Card>
-
-            <Card className="flex flex-col overflow-hidden">
-                <div className="flex-1 space-y-4 overflow-y-auto p-4" style={{ maxHeight: '65vh' }}>
-                    {loading && <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />}
-                    {!loading && messages.length === 0 && (
-                        <div className="flex flex-col items-center gap-3 py-12 text-center">
-                            <Sparkles className="h-10 w-10 text-violet-500" />
-                            <p className="text-sm text-muted-foreground">
-                                {t('Ask about your projects, tasks and bugs, or ask me to assign and update work. I always show a card for you to confirm before changing anything.')}
-                            </p>
-                            <div className="flex flex-wrap justify-center gap-2">
-                                {examples.map(example => (
-                                    <Button key={example} variant="outline" size="sm" onClick={() => send(t(example))}>{t(example)}</Button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                    {messages.map(message => (
-                        <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className="max-w-[80%] space-y-2">
-                                <div className={`whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
-                                    message.error
-                                        ? 'border border-destructive/40 bg-destructive/10 text-destructive'
-                                        : message.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                                }`}>
-                                    {message.role === 'assistant' && !message.error ? <FormattedText text={message.content} /> : message.content}
-                                </div>
-                                {message.cards.map(card => <ConfirmCard key={card.id} card={card} onChange={onCardChange} />)}
-                            </div>
-                        </div>
-                    ))}
-                    {sending && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin" /> {t('Thinking…')}
-                        </div>
-                    )}
-                    <div ref={bottomRef} />
-                </div>
-                <form className="space-y-2 border-t p-3" onSubmit={(e: FormEvent) => { e.preventDefault(); send(input); }}>
-                    <div className="flex items-end gap-2">
-                        <Textarea
-                            value={input}
-                            onChange={e => setInput(e.target.value)}
-                            onKeyDown={onKeyDown}
-                            placeholder={topic ? t(TOPIC_HINTS[topic]) : t('Ask the AI Assistant…')}
-                            rows={2}
-                            maxLength={4000}
-                            className="resize-none"
-                        />
-                        <Button type="submit" disabled={sending || !input.trim()} aria-label={t('Send')}>
-                            <Send className="h-4 w-4" />
-                        </Button>
-                    </div>
-                    {topics.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('Topic')}>
+        <form
+            className="rounded-2xl border bg-card shadow-sm transition focus-within:border-violet-300 focus-within:ring-4 focus-within:ring-violet-500/10 dark:focus-within:border-violet-700"
+            onSubmit={(e: FormEvent) => { e.preventDefault(); onSend(); }}
+        >
+            <div className="flex gap-2.5 px-4 pt-3.5">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" aria-hidden />
+                <textarea
+                    ref={ref}
+                    value={value}
+                    onChange={e => onChange(e.target.value)}
+                    onKeyDown={onKeyDown}
+                    placeholder={topic ? t(TOPIC_HINTS[topic]) : t('Ask a question or tell me what to do…')}
+                    rows={large ? 3 : 1}
+                    maxLength={MAX_LENGTH}
+                    aria-label={t('Message')}
+                    className="max-h-[200px] w-full resize-none border-0 !bg-transparent p-0 text-sm leading-6 shadow-none outline-none ring-0 placeholder:text-muted-foreground focus:ring-0"
+                />
+            </div>
+            <div className="flex items-center gap-2 px-3 pb-3 pt-2">
+                {topics.length > 0 && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button type="button" variant="outline" size="sm" className={`h-8 gap-1.5 rounded-full text-xs ${current ? 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300' : ''}`}>
+                                <CurrentIcon className="h-3.5 w-3.5" />
+                                {current ? current.label : t('Topic')}
+                                <ChevronDown className="h-3 w-3 opacity-60" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-56">
+                            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">{t('What is this chat about?')}</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
                             {topics.map(option => {
-                                const on = topic === option.key;
                                 const Icon = TOPIC_ICONS[option.key] ?? Sparkles;
                                 return (
-                                    <button
-                                        key={option.key}
-                                        type="button"
-                                        aria-pressed={on}
-                                        onClick={() => setTopic(on ? null : option.key)}
-                                        title={on ? t('Remove topic') : t('Ask about {{topic}}', { topic: option.label.toLowerCase() })}
-                                        className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors ${
-                                            on ? 'border-primary bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted'
-                                        }`}
-                                    >
-                                        <Icon className="h-3.5 w-3.5" />
+                                    <DropdownMenuItem key={option.key} onSelect={() => onTopic(option.key)}>
+                                        <Icon className="mr-2 h-4 w-4" />
                                         {option.label}
-                                        {on && <X className="h-3 w-3" />}
-                                    </button>
+                                        {option.key === topic && <Check className="ml-auto h-4 w-4 text-violet-600" />}
+                                    </DropdownMenuItem>
                                 );
                             })}
-                        </div>
-                    )}
-                </form>
-            </Card>
+                            {topic && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onSelect={() => onTopic(null)}>
+                                        <X className="mr-2 h-4 w-4" />
+                                        {t('Any topic')}
+                                    </DropdownMenuItem>
+                                </>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
+                {current && (
+                    <button type="button" onClick={() => onTopic(null)} className="rounded-full p-1 text-muted-foreground hover:bg-muted" aria-label={t('Remove topic')} title={t('Remove topic')}>
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                )}
+                <span className={`ml-auto hidden text-[11px] tabular-nums sm:inline ${value.length > MAX_LENGTH * 0.9 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                    {value.length}/{MAX_LENGTH}
+                </span>
+                <Button type="submit" size="icon" className="ml-auto h-8 w-8 rounded-full sm:ml-0" disabled={sending || !value.trim()} aria-label={t('Send')}>
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+                </Button>
+            </div>
+        </form>
+    );
+}
+
+/** One message: avatar, name and time, the text, and any confirm cards. */
+function ChatMessage({ message, userName, onCardChange }: {
+    message: Message;
+    userName: string;
+    onCardChange: (card: ToolCard, note: Message | null) => void;
+}) {
+    const { t } = useTranslation();
+    const mine = message.role === 'user';
+    const initials = userName.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?';
+    const time = new Date(message.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+    const copy = async () => {
+        try {
+            await navigator.clipboard.writeText(message.content);
+            toast.success(t('Copied'));
+        } catch {
+            toast.error(t('Could not copy.'));
+        }
+    };
+
+    return (
+        <div className="group flex gap-3">
+            {mine ? (
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground" aria-hidden>{initials}</div>
+            ) : (
+                <AssistantMark />
+            )}
+            <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex items-baseline gap-2 text-xs">
+                    <span className="font-semibold">{mine ? t('You') : t('AI Assistant')}</span>
+                    <span className="text-muted-foreground">{time}</span>
+                </div>
+                {message.content && (
+                    <div className={`whitespace-pre-wrap break-words text-sm leading-6 ${
+                        message.error
+                            ? 'rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-destructive'
+                            : mine ? '' : 'rounded-xl border bg-card px-4 py-3 shadow-sm'
+                    }`}>
+                        {!mine && !message.error ? <FormattedText text={message.content} /> : message.content}
+                    </div>
+                )}
+                {message.cards.map(card => <ConfirmCard key={card.id} card={card} onChange={onCardChange} />)}
+                {!mine && !message.error && message.content && (
+                    <div className="flex opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={copy}>
+                            <Copy className="mr-1 h-3.5 w-3.5" />
+                            {t('Copy')}
+                        </Button>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
