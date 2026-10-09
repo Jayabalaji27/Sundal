@@ -176,7 +176,7 @@ export default function AiAssistantPage(props: Props) {
     // AI mode tab: full screen, its own header and locks, no Sundal sidebar.
     // The chat fills the whole page; settings and notices keep a readable width.
     if (props.standalone && props.aiMode) {
-        return <AiModeShell config={props.aiMode}>{framed ? <div className="mx-auto max-w-7xl p-4 sm:p-6">{body}</div> : body}</AiModeShell>;
+        return <AiModeShell config={props.aiMode} model={props.model}>{framed ? <div className="mx-auto max-w-7xl p-4 sm:p-6">{body}</div> : body}</AiModeShell>;
     }
 
     return (
@@ -574,8 +574,10 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
                     <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => setListOpen(true)} aria-label={t('Conversations')}>
                         <PanelLeft className="h-4 w-4" />
                     </Button>
-                    {/* The model this chat runs on, in place of a chat title. */}
-                    {model && (
+                    {/* The model this chat runs on; in AI mode it is in the top bar, so the chat's title is shown here. */}
+                    {standalone ? (
+                        <h2 className="truncate text-sm font-semibold">{conversations.find(c => c.id === activeId)?.title || t('New chat')}</h2>
+                    ) : model && (
                         <div className="flex min-w-0 items-center gap-2" title={`${model.provider} · ${model.name}`}>
                             <Sparkles className="h-4 w-4 shrink-0 text-violet-500" />
                             <span className="truncate text-sm font-semibold">{model.name}</span>

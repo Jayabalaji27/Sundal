@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Head, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
-import { Clock, Loader2, Lock, LogIn, Play, RefreshCw, Sparkles } from 'lucide-react';
+import { Clock, Loader2, Lock, LogIn, Moon, Play, RefreshCw, Sparkles, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -32,7 +32,12 @@ const PING_WAIT_MS = 2000;
  * chat stays underneath) when the user is idle, when Sundal is closed, when
  * the workspace changes, or on sign-out.
  */
-export function AiModeShell({ config, children }: { config: AiModeConfig; children: ReactNode }) {
+export function AiModeShell({ config, model, children }: {
+    config: AiModeConfig;
+    /** The connected model, shown next to the title. */
+    model?: { provider: string; name: string } | null;
+    children: ReactNode;
+}) {
     const { t } = useTranslation();
     const { auth } = usePage().props as any;
     const [lock, setLock] = useState<LockReason | null>(null);
@@ -178,9 +183,15 @@ export function AiModeShell({ config, children }: { config: AiModeConfig; childr
                 <div className="flex min-w-0 items-center gap-2">
                     <Sparkles className="h-5 w-5 shrink-0 text-violet-500" />
                     <span className="whitespace-nowrap font-semibold">{t('Sundal AI mode')}</span>
-                    {config.workspaceName && <span className="hidden truncate text-sm text-muted-foreground sm:inline">· {config.workspaceName}</span>}
+                    {model && (
+                        <span className="hidden min-w-0 items-center gap-1.5 text-sm text-muted-foreground sm:flex" title={`${model.provider} · ${model.name}`}>
+                            <span aria-hidden>·</span>
+                            <span className="truncate">{model.name}</span>
+                        </span>
+                    )}
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
+                    <ThemeToggle />
                     <span className="hidden text-sm text-muted-foreground sm:inline">{auth?.user?.name}</span>
                     <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
                         {t('AI mode')}
@@ -204,6 +215,56 @@ export function AiModeShell({ config, children }: { config: AiModeConfig; childr
                 {lock && <LockScreen reason={lock} onUnlocked={() => { lastAction.current = Date.now(); setSecondsLeft(config.idleSeconds); setLock(null); }} onLock={setLock} />}
             </main>
         </div>
+    );
+}
+
+const THEME_KEY = 'sundal.aiMode.theme';
+
+/** Light or dark on the page right now. */
+const isDark = () => document.documentElement.classList.contains('dark');
+
+function applyDark(dark: boolean) {
+    document.documentElement.classList.toggle('dark', dark);
+    document.body.classList.toggle('dark', dark);
+}
+
+/**
+ * Light / dark for AI mode only. Sundal's theme is a company brand setting,
+ * so this is the viewer's own choice, remembered in this browser; without
+ * one, AI mode follows the company theme.
+ */
+function ThemeToggle() {
+    const { t } = useTranslation();
+    const [dark, setDark] = useState(false);
+
+    useEffect(() => {
+        let saved: string | null = null;
+        try {
+            saved = window.localStorage.getItem(THEME_KEY);
+        } catch {
+            // Storage blocked (private window): follow the company theme.
+        }
+        if (saved === 'dark' || saved === 'light') applyDark(saved === 'dark');
+        setDark(isDark());
+    }, []);
+
+    const toggle = () => {
+        const next = !isDark();
+        applyDark(next);
+        setDark(next);
+        try {
+            window.localStorage.setItem(THEME_KEY, next ? 'dark' : 'light');
+        } catch {
+            // Not remembered, but still switched for now.
+        }
+    };
+
+    const label = dark ? t('Switch to light theme') : t('Switch to dark theme');
+
+    return (
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggle} aria-label={label} title={label}>
+            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </Button>
     );
 }
 
