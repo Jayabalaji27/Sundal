@@ -67,6 +67,13 @@ class AiAssistantSettingsController extends Controller
         $user = $request->user();
         abort_unless(AiAccess::canManageSettings($user), 403);
 
+        // Each test is a paid call on the company's AI account.
+        $limiterKey = 'ai-connection-test:' . $user->id;
+        if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($limiterKey, 10)) {
+            return response()->json(['passed' => false, 'message' => __('Too many tests. Please wait a minute.')], 429);
+        }
+        \Illuminate\Support\Facades\RateLimiter::hit($limiterKey, 60);
+
         $existing = AiAccess::settings($user);
         $validated = $this->validated($request, $existing);
 
@@ -107,8 +114,11 @@ class AiAssistantSettingsController extends Controller
         $providers = array_keys(config('ai_assistant.providers'));
         $provider = $request->input('provider');
         $models = array_keys(config("ai_assistant.providers.{$provider}.models", []));
-        // A new key is needed when nothing is saved yet or the vendor changes.
-        $needsKey = !$existing || $existing->provider !== $provider;
+        // A new key is needed when nothing is saved yet, the vendor changes, or the
+        // Azure endpoint changes: the saved key is never sent to a new address.
+        $needsKey = !$existing
+            || $existing->provider !== $provider
+            || ($provider === 'azure_openai' && rtrim((string) $existing->azure_endpoint, '/') !== rtrim((string) $request->input('azure_endpoint'), '/'));
 
         $validated = $request->validate([
             'provider' => ['required', Rule::in($providers)],

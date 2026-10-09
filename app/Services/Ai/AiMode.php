@@ -8,18 +8,19 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
- * AI mode: the assistant in its own browser tab. Its requests carry the
- * X-AI-Mode header, and on top of the normal login and plan checks they are
- * refused when:
+ * The AI session. Opening the AI Assistant (its page, or the AI mode tab,
+ * both behind a recent password check) starts it; every assistant request
+ * then needs it, on top of the normal login and plan checks. Refused when:
  *
- *  - the tab was opened for another workspace than the session's current
- *    one (switched in Sundal meanwhile)                  → 409 workspace_changed
- *  - the user did nothing in AI mode for the idle timeout → 423 locked_idle
- *  - no Sundal tab has checked in recently                → 423 locked_app_closed
- *  - AI mode was never opened in this session            → 423 ai_mode_ended
+ *  - the assistant was opened in another workspace than the session's
+ *    current one (switched in Sundal meanwhile)           → 409 workspace_changed
+ *  - the user did nothing in the assistant for the idle timeout → 423 locked_idle
+ *  - it was never opened in this session                   → 423 ai_mode_ended
+ *  - AI mode tab only (X-AI-Mode header): no Sundal tab has
+ *    checked in recently                                   → 423 locked_app_closed
  *
- * Only the user's own actions (POST requests) count as activity; the tab's
- * automatic checks (GET) never keep AI mode alive.
+ * Only the user's own actions (POST requests) count as activity; automatic
+ * checks (GET) never keep the session alive.
  */
 class AiMode
 {
@@ -38,7 +39,7 @@ class AiMode
         return $request->header(self::HEADER) === '1';
     }
 
-    /** Opening the AI mode tab: remember its workspace and start the idle clock. */
+    /** Opening the assistant (page or AI mode tab): remember its workspace and start the idle clock. */
     public static function start(Request $request, User $user): void
     {
         $request->session()->put(self::SESSION_KEY, [
@@ -77,24 +78,25 @@ class AiMode
      *
      * @return array{code: string, status: int, message: string}|null
      */
-    public static function problem(Request $request, User $user): ?array
+    public static function problem(Request $request, User $user, bool $fromAiModeTab = true): ?array
     {
         $state = $request->session()->get(self::SESSION_KEY);
         if (!$state) {
-            return self::refuse(self::ENDED, 423, __('AI mode has ended. Reopen it from Sundal.'));
+            return self::refuse(self::ENDED, 423, __('Your AI Assistant session has ended. Reload the page to continue.'));
         }
 
         $workspace = (int) $request->header(self::WORKSPACE_HEADER, $state['workspace_id']);
         if ($workspace !== (int) $user->current_workspace_id || $workspace !== (int) $state['workspace_id']) {
-            return self::refuse(self::WORKSPACE_CHANGED, 409, __('You switched workspace in Sundal. Reload AI mode to work in the new workspace.'));
+            return self::refuse(self::WORKSPACE_CHANGED, 409, __('You switched workspace in Sundal. Reload the AI Assistant to work in the new workspace.'));
         }
 
         if (now()->getTimestamp() - (int) $state['last_activity'] > self::idleSeconds($user)) {
-            return self::refuse(self::LOCKED_IDLE, 423, __('AI mode was locked after :minutes minutes without activity.', ['minutes' => intdiv(self::idleSeconds($user), 60)]));
+            return self::refuse(self::LOCKED_IDLE, 423, __('The AI Assistant was locked after :minutes minutes without activity. Reload the page and confirm your password to continue.', ['minutes' => intdiv(self::idleSeconds($user), 60)]));
         }
 
+        // The AI mode tab only works while a Sundal tab is open (the normal page is Sundal).
         $lastSeen = (int) Cache::get((string) self::heartbeatKey($request), 0);
-        if (now()->getTimestamp() - $lastSeen > self::tolerance()) {
+        if ($fromAiModeTab && now()->getTimestamp() - $lastSeen > self::tolerance()) {
             return self::refuse(self::LOCKED_APP_CLOSED, 423, __('Sundal is closed. Open Sundal to keep using AI mode.'));
         }
 

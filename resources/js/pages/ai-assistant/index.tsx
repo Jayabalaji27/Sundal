@@ -163,7 +163,9 @@ export default function AiAssistantPage(props: Props) {
 /**
  * The model's replies use a little Markdown: **bold**, [links](/tasks/12) and
  * "- " bullets. Rendered as React elements, never as HTML, so a reply cannot
- * inject markup; only relative or http(s) links become anchors.
+ * inject markup. Only links inside Sundal (relative paths, as the tools
+ * return) are clickable: a reply could repeat a link planted in a record
+ * (prompt injection), so other addresses are shown as plain text instead.
  */
 function FormattedText({ text }: { text: string }) {
     const inline = (line: string, key: string) =>
@@ -171,8 +173,12 @@ function FormattedText({ text }: { text: string }) {
             const bold = part.match(/^\*\*([^*]+)\*\*$/);
             if (bold) return <strong key={`${key}-${i}`}>{bold[1]}</strong>;
             const link = part.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
-            if (link && /^(\/(?!\/)|https?:\/\/)/.test(link[2])) {
+            // "/tasks/12" yes; "//evil.com" and "/\evil.com" (other sites) no.
+            if (link && /^\/(?![/\\])/.test(link[2])) {
                 return <a key={`${key}-${i}`} href={link[2]} className="text-primary underline">{link[1]}</a>;
+            }
+            if (link) {
+                return <span key={`${key}-${i}`}>{link[1]} ({link[2]})</span>;
             }
             return <span key={`${key}-${i}`}>{part}</span>;
         });

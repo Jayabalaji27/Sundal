@@ -315,6 +315,11 @@ class FormBuilder
             return [null, $field->required ? __('Choose the :label.', ['label' => mb_strtolower($field->label)]) : null];
         }
 
+        // Only "several people" takes a list; everywhere else a list is not a valid pick.
+        if ($field->inputType() !== 'multi' && !is_scalar($value)) {
+            return [null, __('Choose a valid option.')];
+        }
+
         if ($field->allowNone && $value === 'none') {
             return [null, null];
         }

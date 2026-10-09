@@ -31,6 +31,10 @@ class AiAssistantController extends Controller
 
     public function index(Request $request, ToolRegistry $registry): Response|RedirectResponse
     {
+        // The page's requests follow the same session rules as AI mode (except
+        // "Sundal must be open": this page is Sundal).
+        \App\Services\Ai\AiMode::start($request, $request->user());
+
         return $this->page($request, $registry);
     }
 
@@ -214,10 +218,10 @@ class AiAssistantController extends Controller
     public function updateCard(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
     {
         $this->ensureCanUse($request);
-        $validated = $request->validate([
-            'fields' => 'required|array',
-            'fields.*' => 'nullable',
-        ]);
+        if ($limited = $this->throttleCards($request)) {
+            return $limited;
+        }
+        $validated = $request->validate($this->fieldRules(required: true));
 
         return $this->cardResponse($assistant->updateDraft($toolCall, $request->user(), $validated['fields']));
     }
@@ -225,11 +229,10 @@ class AiAssistantController extends Controller
     public function confirm(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
     {
         $this->ensureCanUse($request);
-        $validated = $request->validate([
-            'phrase' => 'nullable|string|max:100',
-            'fields' => 'nullable|array',
-            'fields.*' => 'nullable',
-        ]);
+        if ($limited = $this->throttleCards($request)) {
+            return $limited;
+        }
+        $validated = $request->validate(['phrase' => 'nullable|string|max:100', ...$this->fieldRules(required: false)]);
         $call = $assistant->confirm($toolCall, $request->user(), $validated['phrase'] ?? null, $validated['fields'] ?? null);
 
         return $this->cardResponse($call);
@@ -238,6 +241,9 @@ class AiAssistantController extends Controller
     public function undo(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
     {
         $this->ensureCanUse($request);
+        if ($limited = $this->throttleCards($request)) {
+            return $limited;
+        }
         $call = $assistant->undo($toolCall, $request->user());
 
         return $this->cardResponse($call);
@@ -246,9 +252,44 @@ class AiAssistantController extends Controller
     public function cancel(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
     {
         $this->ensureCanUse($request);
+        if ($limited = $this->throttleCards($request)) {
+            return $limited;
+        }
         $call = $assistant->cancel($toolCall, $request->user());
 
         return $this->cardResponse($call);
+    }
+
+    /**
+     * Card values: each is a single value (an id, an option, a date, a short
+     * text) or, for "several people", a short list of ids. Anything else is
+     * refused before it reaches the form checks.
+     */
+    private function fieldRules(bool $required): array
+    {
+        return [
+            'fields' => [$required ? 'required' : 'nullable', 'array', 'max:30'],
+            'fields.*' => ['nullable', function (string $attribute, mixed $value, \Closure $fail) {
+                $single = fn ($v) => is_int($v) || (is_string($v) && mb_strlen($v) <= 4000);
+                $ok = $single($value)
+                    || (is_array($value) && array_is_list($value) && count($value) <= 200 && collect($value)->every($single));
+                if (!$ok) {
+                    $fail(__('This value is not valid.'));
+                }
+            }],
+        ];
+    }
+
+    /** Card actions (confirm, cancel, undo, update): 60 a minute per user. */
+    private function throttleCards(Request $request): ?JsonResponse
+    {
+        $key = 'ai-cards:' . $request->user()->id;
+        if (RateLimiter::tooManyAttempts($key, 60)) {
+            return response()->json(['error' => __('Too many actions. Please wait a minute.')], 429);
+        }
+        RateLimiter::hit($key, 60);
+
+        return null;
     }
 
     private function cardResponse(AiToolCall $call): JsonResponse

@@ -626,6 +626,32 @@ switching off from Sundal closed the AI tab. The idle lock was tested on the ser
 
 ---
 
+### RP-16 · 2026-10-10 · AI Assistant security review and hardening
+
+Already sound: encrypted, never-returned BYOA keys; permission + workspace re-checked on
+every tool and on Confirm; fixed vendor endpoints (Azure host pattern, no SSRF); replies
+rendered as React elements (no HTML); confirmation for every write; rate-limited unlock.
+
+Fixed:
+1. **Session rules could be skipped** by calling the API without the `X-AI-Mode` header or
+   using `/ai-assistant`. Now both entry points need the password (30-min grace) and start
+   the AI session; every assistant request needs it (workspace lock + idle lock). Only
+   "Sundal must be open" stays specific to the AI mode tab.
+2. **External links in AI replies** (prompt-injection phishing): only Sundal-internal
+   relative links are clickable; others show as plain text.
+3. **Saved key sent to a new Azure endpoint**: changing the endpoint now requires the key.
+4. **Untyped card values**: `fields.*` must be a value or a short list of values (no nested
+   arrays, ≤ 4000 chars); a list where one value is expected is a card error, not a 500.
+5. **Rate limits**: card actions 60/min/user, connection tests 10/min/user.
+6. **Queued reply after a workspace switch**: does nothing and says so (was silent).
+
+Still to do outside the code: `APP_DEBUG=false` and `APP_ENV=production` in production;
+HTTPS so session cookies are secure; rotate the OpenRouter key that was pasted in chat.
+
+Tests: `AiAssistantTest` 104/104 (6 new). Browser two-tab AI mode flow re-checked.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)

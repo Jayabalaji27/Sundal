@@ -442,7 +442,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // AI page above: the role check runs first so other roles get a clean 403.
         // The page itself skips module.access: without the add-on, owners get an
         // upgrade page there (managers are sent to the dashboard by the controller).
-        Route::get('ai-assistant', [\App\Http\Controllers\AiAssistantController::class, 'index'])->middleware('ai.assistant')->name('ai-assistant.index');
+        // Both entry points (this page and AI mode) ask for the password unless it was
+        // confirmed in the last 30 minutes, and start the AI session (workspace + idle lock).
+        Route::get('ai-assistant', [\App\Http\Controllers\AiAssistantController::class, 'index'])
+            ->middleware(['ai.assistant', 'password.confirm:password.confirm,' . (int) config('ai_assistant.mode.password_grace_minutes', 30) * 60])
+            ->name('ai-assistant.index');
         // AI mode: the same assistant in its own browser tab, opened with the header
         // switch. Asks for the password unless confirmed in the last 30 minutes.
         Route::get('ai-mode', [\App\Http\Controllers\AiAssistantController::class, 'aiMode'])
@@ -455,7 +459,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('unlock', [\App\Http\Controllers\AiModeController::class, 'unlock'])->name('unlock');
         });
 
-        // ai.mode: requests from the AI mode tab are refused while it is locked.
+        // ai.mode: every assistant request needs a live AI session (opened page, same
+        // workspace, not idle); requests from the AI mode tab also need Sundal open.
         Route::middleware(['ai.assistant', 'module.access', 'ai.mode'])->prefix('ai-assistant')->name('ai-assistant.')->group(function () {
             Route::post('messages', [\App\Http\Controllers\AiAssistantController::class, 'send'])->name('send');
             Route::get('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'show'])->name('conversations.show');

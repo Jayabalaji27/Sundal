@@ -47,9 +47,22 @@ class ProcessAiMessage implements ShouldQueue
         Auth::guard('web')->setUser($user);
 
         try {
-            $conversation = AiConversation::where('user_id', $user->id)->find($this->conversationId);
+            // Found across workspaces on purpose, to tell the user why nothing happened.
+            $conversation = AiConversation::withoutGlobalScope('workspace')->where('user_id', $user->id)->find($this->conversationId);
             $message = AiMessage::find($this->messageId);
             if (!$conversation || !$message) {
+                return;
+            }
+
+            // The user switched workspace before the reply ran: the tools would act
+            // in the new workspace, so do nothing and say so.
+            if ((int) $conversation->workspace_id !== (int) $user->current_workspace_id) {
+                $conversation->messages()->create([
+                    'role' => 'assistant',
+                    'content' => __('You switched workspace before I could answer, so nothing was done. Switch back and ask again.'),
+                    'is_error' => true,
+                ]);
+
                 return;
             }
 
