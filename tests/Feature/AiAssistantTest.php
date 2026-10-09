@@ -383,43 +383,100 @@ describe('confirm cards', function () {
             ->and(ProjectActivity::where('metadata->ai_tool_call_id', $call->id)->where('user_id', $users['manager']->id)->exists())->toBeTrue();
     });
 
-    test('a value the user did not say is never used: the card asks for project, priority and assignee', function () {
+    test('only the must-know value is asked; defaults fill the rest; a clicked choice needs no AI call', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
         aiProject($workspace, $users['owner']);
         $mobile = aiProject($workspace, $users['owner'], 'Mobile App');
 
         // The model "helpfully" invents a project and a priority the user never gave.
-        fakeAi([
+        $fake = fakeAi([
             ['tool' => 'create_task', 'args' => ['project' => 'Website Redesign', 'title' => 'Login page', 'priority' => 'high']],
-            ['text' => 'Card shown.'],
+            ['text' => 'Which project should it go in? It will be medium priority and unassigned.'],
         ]);
         $card = $this->actingAs($users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'create a to do task for a login page'])
             ->json('messages.1.cards.0');
         $fields = collect($card['fields'])->keyBy('name');
 
-        expect($fields['title']['value'])->toBe('Login page')
-            ->and($fields['project']['value'])->toBeNull()
+        // One question, for the project only; the invented values were dropped for the defaults.
+        expect($card['stage'])->toBe('question')
+            ->and($card['ask'])->toBe(['project'])
+            ->and($card['question'])->toBe('Which project should it go in?')
+            ->and($fields['title']['value'])->toBe('Login page')
+            ->and($fields['priority']['value'])->toBe('medium')
+            ->and($fields['priority']['defaulted'])->toBeTrue()
+            ->and($fields['assignee']['value'])->toBe('none')
             ->and(collect($fields['project']['options'])->pluck('label')->all())->toContain('Website Redesign', 'Mobile App')
-            ->and($fields['priority']['value'])->toBeNull()
-            ->and($fields['assignee']['value'])->toBeNull()
-            ->and($fields['assignee']['options'][0])->toBe(['value' => 'none', 'label' => 'Unassigned'])
+            ->and($fake->toolResults[0]['result'])->toContain('Still needed from the user: Project')
+            ->and($fake->toolResults[0]['result'])->toContain('Priority: Medium');
+
+        // Clicking the "Mobile App" button: the draft is ready to confirm, no AI call.
+        $ready = $this->actingAs($users['manager'])->postJson(route('ai-assistant.tool-calls.update', $card['id']), ['fields' => ['project' => (string) $mobile->id]])
+            ->assertJsonPath('card.stage', 'review')
+            ->assertJsonPath('card.ask', [])
+            ->json('card');
+        expect($ready['summary'])->toBe('Create task "Login page" in Mobile App')
             ->and(Task::where('title', 'Login page')->exists())->toBeFalse();
 
-        // Confirming without picking keeps the card open with the reason on each field.
-        $open = aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'pending')->json('card.fields');
-        expect(collect($open)->whereNotNull('error')->pluck('name')->all())->toBe(['project', 'priority', 'assignee']);
-
-        // Picking on the card: no AI call is needed.
-        $this->actingAs($users['manager'])->postJson(route('ai-assistant.tool-calls.confirm', $card['id']), [
-            'fields' => ['project' => (string) $mobile->id, 'priority' => 'high', 'assignee' => 'none'],
-        ])->assertJsonPath('card.status', 'done');
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
 
         $task = Task::where('title', 'Login page')->first();
-        expect($task->created_by)->toBe($users['manager']->id)
+        expect($fake->requests)->toHaveCount(1)
+            ->and($task->created_by)->toBe($users['manager']->id)
             ->and($task->project_id)->toBe($mobile->id)
-            ->and($task->priority)->toBe('high')
+            ->and($task->priority)->toBe('medium')
             ->and($task->assigned_to)->toBeNull();
+    });
+
+    test('a typed short answer completes the draft with no AI call, and can change a default', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner']);
+        $mobile = aiProject($workspace, $users['owner'], 'Mobile App');
+
+        $fake = fakeAi([['tool' => 'create_task', 'args' => ['title' => 'Login page']], ['text' => 'Which project should it go in?']]);
+        $first = $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'create a task for a login page']);
+        [$cardId, $chat] = [$first->json('messages.1.cards.0.id'), $first->json('conversation.id')];
+
+        $reply = $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat, 'content' => 'mobile app, make it high'])
+            ->assertOk()
+            ->json('messages.1');
+        $fields = collect($reply['cards'][0]['fields'])->keyBy('name');
+
+        expect($fake->requests)->toHaveCount(1)
+            ->and($reply['content'])->toBe('Please check the card and confirm.')
+            ->and($reply['cards'][0]['id'])->toBe($cardId)
+            ->and($reply['cards'][0]['stage'])->toBe('review')
+            ->and($fields['project']['value'])->toBe((string) $mobile->id)
+            ->and($fields['priority']['value'])->toBe('high');
+
+        // On the confirmation stage, a short change ("assign it to me") is applied the same way.
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat, 'content' => 'assign it to me'])->assertOk();
+        expect($fake->requests)->toHaveCount(1)
+            ->and(AiToolCall::withoutGlobalScope('workspace')->find($cardId)->payload['form']['fields'][3]['value'])->toBe((string) $users['owner']->id);
+    });
+
+    test('a reply that is a new question goes to the AI, and a repeated tool call updates the same draft', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner']);
+        $mobile = aiProject($workspace, $users['owner'], 'Mobile App');
+
+        fakeAi([['tool' => 'create_task', 'args' => ['title' => 'Login page']], ['text' => 'Which project?']]);
+        $first = $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'create a task for a login page']);
+        [$cardId, $chat] = [$first->json('messages.1.cards.0.id'), $first->json('conversation.id')];
+
+        // Not a plain answer: the AI handles it, calls the tool again, and the draft is updated in place.
+        $fake = fakeAi([['tool' => 'create_task', 'args' => ['project' => 'Mobile App']], ['text' => 'Done, please confirm.']]);
+        $reply = $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat, 'content' => 'put it under the project for our mobile app please, the one we started last week'])
+            ->json('messages.1');
+
+        expect($fake->requests)->toHaveCount(1)
+            ->and($reply['cards'])->toHaveCount(1)
+            ->and($reply['cards'][0]['id'])->toBe($cardId)
+            ->and($reply['cards'][0]['stage'])->toBe('review')
+            ->and(AiToolCall::withoutGlobalScope('workspace')->where('tool', 'create_task')->count())->toBe(1)
+            ->and(collect($reply['cards'][0]['fields'])->firstWhere('name', 'project')['value'])->toBe((string) $mobile->id);
     });
 
     test('values the user did say are filled in, and the only project is picked for them', function () {
@@ -481,7 +538,8 @@ describe('confirm cards', function () {
             ->and($fields['assignee']['value'])->toBeNull()
             ->and($fields['assignee']['note'])->toContain('Several match')
             ->and(collect($fields['assignee']['options'])->take(2)->pluck('label')->implode(' '))->toContain('Ravi Kumar')->toContain('Ravi Shankar')
-            ->and($fake->toolResults[0]['result'])->toContain('Left for the user to pick on the card: Assignee');
+            ->and($response->json('messages.1.cards.0.ask'))->toBe(['assignee'])
+            ->and($fake->toolResults[0]['result'])->toContain('Still needed from the user: Assignee');
     });
 
     test('records in another workspace are invisible to the tools and never offered on a card', function () {
@@ -1083,34 +1141,98 @@ describe('deterministic forms', function () {
         expect(collect($createTask->parameters)->pluck('required')->unique()->all())->toBe([false]);
     });
 
-    test('a quick action opens the form with no AI call at all', function () {
+    test('the topic buttons offered match the tools the user may use', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        $this->actingAs($users['owner'])->get(route('ai-assistant.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('topics', collect(\App\Services\Ai\Topics::keys())
+                ->map(fn ($key) => ['key' => $key, 'label' => \App\Services\Ai\Topics::label($key)])->all()));
+    });
+
+    test('a topic narrows the tools, stays on the conversation, and is cleared with an empty value', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        $fake = fakeAi([['text' => 'ok']]);
+        $conversationId = $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi', 'topic' => 'tasks'])
+            ->assertJsonPath('conversation.topic', 'tasks')
+            ->json('conversation.id');
+
+        $expected = collect(\App\Services\Ai\Topics::toolNames('tasks'))->sort()->values()->all();
+        expect(toolNames($fake))->toBe($expected)
+            ->and($fake->requests[0]->system)->toContain('picked the "Tasks" topic');
+
+        // Next message without a topic value: the topic is still on.
+        $fake = fakeAi([['text' => 'ok']]);
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $conversationId, 'content' => 'login page for the website'])->assertOk();
+        expect(toolNames($fake))->toBe($expected);
+
+        // Removed: every tool again.
+        $fake = fakeAi([['text' => 'ok']]);
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $conversationId, 'content' => 'hi', 'topic' => ''])
+            ->assertJsonPath('conversation.topic', null);
+        expect(toolNames($fake))->toHaveCount(count(app(\App\Services\Ai\ToolRegistry::class)->all()));
+    });
+
+    test('a message clearly about another topic gets every tool, in the same single AI call', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        $fake = fakeAi([['text' => 'ok']]);
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'approve the pending timesheets', 'topic' => 'tasks'])->assertOk();
+
+        expect($fake->requests)->toHaveCount(1)
+            ->and(toolNames($fake))->toContain('decide_timesheets', 'create_task')
+            ->and($fake->requests[0]->system)->not->toContain('picked the');
+    });
+
+    test('a topic never adds tools the user may not use', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        $fake = fakeAi([['text' => 'ok']]);
+        $this->actingAs($users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'hi', 'topic' => 'finance'])->assertOk();
+
+        foreach ($fake->requests[0]->tools as $spec) {
+            expect(app(\App\Services\Ai\ToolRegistry::class)->find($spec->name)->allowedFor($users['manager']))->toBeTrue();
+        }
+        $this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi', 'topic' => 'nonsense'])->assertJsonValidationErrors('topic');
+    });
+
+    test('with the AI down, a bare message under a topic still starts that topic\'s draft', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
         aiProject($workspace, $users['owner']);
-        $fake = fakeAi([['text' => 'never used']]);
+        fakeAi([fn () => throw new \App\Services\Ai\AiProviderException('Your AI provider could not be reached.')]);
 
-        $this->actingAs($users['owner'])->get(route('ai-assistant.index'))
-            ->assertInertia(fn (Assert $page) => $page->where('quickActions.0', ['tool' => 'create_task', 'label' => 'New task']));
+        $error = collect($this->actingAs($users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'Checkout page', 'topic' => 'tasks'])
+            ->assertStatus(502)->json('messages'))->firstWhere('role', 'assistant');
 
-        $card = $this->actingAs($users['owner'])->postJson(route('ai-assistant.forms.start'), ['tool' => 'create_task'])
-            ->assertOk()
-            ->json('messages.0.cards.0');
-
-        $this->actingAs($users['owner'])->postJson(route('ai-assistant.tool-calls.confirm', $card['id']), [
-            'fields' => ['title' => 'Made by hand', 'priority' => 'low', 'assignee' => (string) $users['member']->id],
-        ])->assertJsonPath('card.status', 'done');
-
-        expect($fake->requests)->toBeEmpty()
-            ->and(Task::where('title', 'Made by hand')->value('assigned_to'))->toBe($users['member']->id);
+        $card = $error['cards'][0];
+        expect($card['tool'])->toBe('create_task')
+            ->and($card['stage'])->toBe('review')
+            ->and(collect($card['fields'])->firstWhere('name', 'title')['value'])->toBe('Checkout page');
     });
 
-    test('quick actions only open form tools the user may use', function () {
-        [$workspace, $users] = aiWorkspace();
-        aiSettings($workspace);
+    test('the reply matcher answers only plain short answers', function (string $reply, array $expected) {
+        $form = ['fields' => [
+            ['name' => 'project', 'type' => 'select', 'kind' => 'project', 'required' => true, 'value' => null, 'options' => [['value' => '1', 'label' => 'Website Redesign'], ['value' => '2', 'label' => 'Mobile App']]],
+            ['name' => 'priority', 'type' => 'select', 'kind' => 'enum', 'required' => true, 'value' => 'medium', 'options' => [['value' => 'low', 'label' => 'Low'], ['value' => 'medium', 'label' => 'Medium'], ['value' => 'high', 'label' => 'High']]],
+            ['name' => 'assignee', 'type' => 'select', 'kind' => 'member', 'required' => true, 'value' => 'none', 'options' => [['value' => 'none', 'label' => 'Unassigned'], ['value' => '7', 'label' => 'Ravi Kumar (ravi@x.com)'], ['value' => '9', 'label' => 'Priya Shah (priya@x.com)']]],
+        ]];
 
-        $this->actingAs($users['owner'])->postJson(route('ai-assistant.forms.start'), ['tool' => 'list_tasks'])->assertForbidden();
-        $this->actingAs($users['member'])->postJson(route('ai-assistant.forms.start'), ['tool' => 'create_task'])->assertForbidden();
-    });
+        expect(app(\App\Services\Ai\Forms\ReplyMatcher::class)->match($form, ['project'], $reply, 9))->toBe($expected);
+    })->with([
+        ['Mobile App', ['project' => '2']],
+        ['mobile, make it high', ['project' => '2', 'priority' => 'high']],
+        ['website redesign and assign to Ravi', ['project' => '1', 'assignee' => '7']],
+        ['the mobile one for me', ['project' => '2', 'assignee' => '9']],
+        ['which projects are overdue?', []],
+        ['show high priority bugs in mobile app', []],
+        ['high', []],
+        ['put it under the project for our mobile app please, the one we started last week', []],
+    ]);
 
     test('fallback: when the AI provider fails, a clear command still gets its form', function () {
         [$workspace, $users] = aiWorkspace();

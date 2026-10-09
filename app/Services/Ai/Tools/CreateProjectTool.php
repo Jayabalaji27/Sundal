@@ -62,9 +62,9 @@ class CreateProjectTool extends AiTool implements HasForm
     public function formFields(User $user): array
     {
         return array_values(array_filter([
-            new FormField('title', __('Name'), 'text', required: true),
-            new FormField('status', __('Status'), 'enum', required: true, options: FormField::labels(self::STATUSES), mustChoose: true),
-            new FormField('priority', __('Priority'), 'enum', required: true, options: FormField::labels(self::PRIORITIES), mustChoose: true),
+            new FormField('title', __('Name'), 'text', required: true, question: __('What should the project be called?')),
+            new FormField('status', __('Status'), 'enum', required: true, options: FormField::labels(self::STATUSES), default: 'planning'),
+            new FormField('priority', __('Priority'), 'enum', required: true, options: FormField::labels(self::PRIORITIES), default: 'medium'),
             new FormField('deadline', __('Deadline'), 'date'),
             $user->hasWorkspacePermission('project_assign_members')
                 ? new FormField('members', __('Members'), 'members')

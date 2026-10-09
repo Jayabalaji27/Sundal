@@ -40,7 +40,7 @@ class CreateTaskTool extends AiTool implements HasForm
     {
         return [
             'project' => ['type' => 'string', 'required' => true, 'description' => 'Project title or id.'],
-            'title' => ['type' => 'string', 'required' => true, 'description' => 'Task title, at most 255 characters.'],
+            'title' => ['type' => 'string', 'required' => true, 'description' => 'Only the name of the task itself, without the project, priority or person; at most 255 characters.'],
             'description' => ['type' => 'string', 'description' => 'Task description.'],
             'priority' => ['type' => 'enum', 'options' => self::PRIORITIES, 'description' => 'Defaults to medium.'],
             'assignee' => ['type' => 'string', 'description' => '"me" or a person\'s name or email.'],
@@ -57,11 +57,11 @@ class CreateTaskTool extends AiTool implements HasForm
     public function formFields(User $user): array
     {
         return array_values(array_filter([
-            new FormField('title', __('Title'), 'text', required: true),
+            new FormField('title', __('Title'), 'text', required: true, question: __('What should the task be called?')),
             new FormField('project', __('Project'), 'project', required: true),
-            new FormField('priority', __('Priority'), 'enum', required: true, options: FormField::labels(self::PRIORITIES), mustChoose: true),
+            new FormField('priority', __('Priority'), 'enum', required: true, options: FormField::labels(self::PRIORITIES), default: 'medium'),
             $user->hasWorkspacePermission('task_assign_users')
-                ? new FormField('assignee', __('Assignee'), 'member', required: true, allowNone: true)
+                ? new FormField('assignee', __('Assignee'), 'member', required: true, allowNone: true, default: 'none', question: __('Who should it be assigned to?'))
                 : null,
             new FormField('due_date', __('Due date'), 'date'),
         ]));

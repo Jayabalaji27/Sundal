@@ -57,7 +57,7 @@ class AddProjectMembersTool extends AiTool implements HasForm
 
         return [
             new FormField('project', __('Project'), 'project', required: true),
-            new FormField('people', __('People'), 'members', required: true),
+            new FormField('people', __('People'), 'members', required: true, question: __('Who should be added?')),
             new FormField('role', __('Project role'), 'enum', required: true, options: FormField::labels($roles), default: 'member'),
         ];
     }

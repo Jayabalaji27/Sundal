@@ -60,6 +60,16 @@ class AiToolCall extends Model
             && $this->confirmed_at?->gt(now()->subMinutes(self::UNDO_MINUTES));
     }
 
+    /** @return string[] required draft fields still without a value */
+    public function missingFields(): array
+    {
+        return collect($this->payload['form']['fields'] ?? [])
+            ->filter(fn (array $f) => $f['required'] && in_array($f['value'], [null, '', []], true))
+            ->pluck('name')
+            ->values()
+            ->all();
+    }
+
     /** Shape sent to the AI Assistant page for confirm cards and results. */
     public function toCard(): array
     {
@@ -71,7 +81,11 @@ class AiToolCall extends Model
             'details' => $this->payload['details'] ?? [],
             'items' => $this->payload['items'] ?? [],
             'confirm_phrase' => $this->payload['confirm_phrase'] ?? null,
-            // Form cards: the fields the user completes before confirming.
+            // Drafts: "question" while a must-know value is missing (answered with
+            // buttons or a short reply), then "review" (confirm, or Edit to change).
+            'stage' => $this->payload['stage'] ?? 'review',
+            'ask' => $this->missingFields(),
+            'question' => collect($this->payload['form']['fields'] ?? [])->firstWhere('name', $this->missingFields()[0] ?? null)['question'] ?? null,
             'fields' => $this->payload['form']['fields'] ?? [],
             'form_error' => $this->payload['form']['error'] ?? null,
             'link' => $this->result['link'] ?? null,

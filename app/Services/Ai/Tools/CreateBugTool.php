@@ -41,7 +41,7 @@ class CreateBugTool extends AiTool implements HasForm
     {
         return [
             'project' => ['type' => 'string', 'required' => true, 'description' => 'Project title or id.'],
-            'title' => ['type' => 'string', 'required' => true, 'description' => 'Short bug title, at most 255 characters.'],
+            'title' => ['type' => 'string', 'required' => true, 'description' => 'Only the name of the bug itself, without the project, priority or person. Short bug title, at most 255 characters.'],
             'description' => ['type' => 'string', 'description' => 'What is wrong.'],
             'severity' => ['type' => 'enum', 'options' => self::SEVERITIES, 'description' => 'Defaults to major.'],
             'priority' => ['type' => 'enum', 'options' => self::PRIORITIES, 'description' => 'Defaults to medium.'],
@@ -62,12 +62,12 @@ class CreateBugTool extends AiTool implements HasForm
     public function formFields(User $user): array
     {
         return array_values(array_filter([
-            new FormField('title', __('Title'), 'text', required: true),
+            new FormField('title', __('Title'), 'text', required: true, question: __('What should the bug be called?')),
             new FormField('project', __('Project'), 'project', required: true),
-            new FormField('severity', __('Severity'), 'enum', required: true, options: FormField::labels(self::SEVERITIES), mustChoose: true),
-            new FormField('priority', __('Priority'), 'enum', required: true, options: FormField::labels(self::PRIORITIES), mustChoose: true),
+            new FormField('severity', __('Severity'), 'enum', required: true, options: FormField::labels(self::SEVERITIES), default: 'major'),
+            new FormField('priority', __('Priority'), 'enum', required: true, options: FormField::labels(self::PRIORITIES), default: 'medium'),
             $user->hasWorkspacePermission('bug_assign')
-                ? new FormField('assignee', __('Assignee'), 'member', required: true, allowNone: true)
+                ? new FormField('assignee', __('Assignee'), 'member', required: true, allowNone: true, default: 'none', question: __('Who should it be assigned to?'))
                 : null,
             new FormField('due_date', __('Due date'), 'date'),
         ]));

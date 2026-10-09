@@ -2,12 +2,11 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Link, router } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
-import { Bot, Check, ExternalLink, Loader2, ChevronDown, MessageSquarePlus, Plus, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react';
+import { Bot, Bug, Check, CheckCheck, ExternalLink, FolderKanban, HelpCircle, ListTodo, Loader2, MessageSquarePlus, Pencil, Receipt, Send, Sparkles, Trash2, Undo2, Users, X } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -34,7 +33,12 @@ interface ToolCard {
     can_undo: boolean;
     undo_until: string | null;
     error: string | null;
-    /** Form cards: fields the user completes before confirming (no AI call). */
+    /** Drafts: "question" while a must-know value is missing, then "review". */
+    stage: 'question' | 'review';
+    /** Missing must-know fields, in order; the first is asked. */
+    ask: string[];
+    question: string | null;
+    /** The draft's values: shown as choice buttons, a summary, or the Edit form. */
     fields: FormFieldState[];
     form_error: string | null;
 }
@@ -51,8 +55,8 @@ interface FormFieldState {
     error: string | null;
 }
 
-interface QuickAction {
-    tool: string;
+interface TopicOption {
+    key: string;
     label: string;
 }
 
@@ -69,6 +73,7 @@ interface Message {
 interface Conversation {
     id: number;
     title: string | null;
+    topic?: string | null;
     last_message_at?: string | null;
 }
 
@@ -101,7 +106,7 @@ interface Props {
     usage: { tokens_this_month: number; daily: { date: string; tokens: number }[] } | null;
     providers: Record<string, ProviderOption> | null;
     retentionOptions: number[];
-    quickActions: QuickAction[];
+    topics: TopicOption[];
 }
 
 const errorMessage = (error: any, fallback: string): string =>
@@ -129,12 +134,12 @@ export default function AiAssistantPage(props: Props) {
                     <TabsTrigger value="assistant" disabled={!props.configured}>{t('Assistant')}</TabsTrigger>
                     <TabsTrigger value="settings">{t('Settings')}</TabsTrigger>
                 </TabsList>
-                <TabsContent value="assistant" className="mt-4">{props.configured && <Chat conversations={props.conversations} quickActions={props.quickActions} />}</TabsContent>
+                <TabsContent value="assistant" className="mt-4">{props.configured && <Chat conversations={props.conversations} topics={props.topics} />}</TabsContent>
                 <TabsContent value="settings" className="mt-4"><SettingsForm {...props} /></TabsContent>
             </Tabs>
         );
     } else {
-        body = <Chat conversations={props.conversations} quickActions={props.quickActions} />;
+        body = <Chat conversations={props.conversations} topics={props.topics} />;
     }
 
     return (
@@ -258,9 +263,6 @@ function Notice({ title, text }: { title: string; text: string }) {
 
 // ─── Chat ───────────────────────────────────────────────────────────────────
 
-/** Shown as buttons above the chat; the other quick actions are under "More". */
-const PRIMARY_ACTIONS = ['create_task', 'create_bug', 'assign_task', 'change_task_status'];
-
 const EXAMPLES = [
     'What tasks are overdue in my projects?',
     'Assign the login bug to Ravi, due Friday.',
@@ -270,7 +272,49 @@ const EXAMPLES = [
     'Create a project called Mobile App.',
 ];
 
-function Chat({ conversations: initial, quickActions }: { conversations: Conversation[]; quickActions: QuickAction[] }) {
+/** The box hint while a topic button is on. */
+const TOPIC_HINTS: Record<string, string> = {
+    tasks: 'Describe the task, e.g. "Login page for Mobile App, high priority"',
+    bugs: 'Describe the bug, e.g. "Login button does nothing on mobile"',
+    projects: 'Ask about a project, or create one',
+    approvals: 'e.g. "Approve the pending timesheets for Website Redesign"',
+    finance: 'e.g. "Which invoices are unpaid?"',
+    team: 'e.g. "Invite john@acme.com as a client"',
+    help: 'Ask how to do something in Sundal',
+};
+
+const TOPIC_EXAMPLES: Record<string, string[]> = {
+    tasks: ['Login page for the Mobile App project, high priority', "Move 'API docs' to Done", 'What tasks are overdue?', 'Assign the checkout task to me'],
+    bugs: ['Login button does nothing on mobile', 'Which bugs are still open?', 'Assign the login bug to me'],
+    projects: ['Create a project called Mobile App', 'Write the weekly report for my biggest project', 'Who is over budget this month?'],
+    approvals: ['Which timesheets are waiting for my approval?', 'Which expenses are pending?'],
+    finance: ['Which invoices are unpaid?', 'How much did we bill last month?', 'Which contracts expire this month?'],
+    team: ['Who is on my team?', 'Invite john@acme.com as a client'],
+    help: ['How do I submit a timesheet?'],
+};
+
+const TOPIC_ICONS: Record<string, typeof Bot> = {
+    tasks: ListTodo,
+    bugs: Bug,
+    projects: FolderKanban,
+    approvals: CheckCheck,
+    finance: Receipt,
+    team: Users,
+    help: HelpCircle,
+};
+
+/** A card that moved to a newer message (a draft the AI updated) is shown only there. */
+function withFresh(prev: Message[], fresh: Message[]): Message[] {
+    const moved = new Set(fresh.flatMap(m => m.cards.map(c => c.id)));
+    const freshIds = new Set(fresh.map(m => m.id));
+
+    return [
+        ...prev.filter(m => !freshIds.has(m.id)).map(m => ({ ...m, cards: m.cards.filter(c => !moved.has(c.id)) })),
+        ...fresh,
+    ];
+}
+
+function Chat({ conversations: initial, topics }: { conversations: Conversation[]; topics: TopicOption[] }) {
     const { t } = useTranslation();
     const [conversations, setConversations] = useState<Conversation[]>(initial);
     const [activeId, setActiveId] = useState<number | null>(initial[0]?.id ?? null);
@@ -278,6 +322,8 @@ function Chat({ conversations: initial, quickActions }: { conversations: Convers
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const [loading, setLoading] = useState(false);
+    // The topic button stays on for the conversation until removed.
+    const [topic, setTopic] = useState<string | null>(initial[0]?.topic ?? null);
     const bottomRef = useRef<HTMLDivElement>(null);
     // Set when send() creates a conversation: its messages are already on screen
     // (including any error bubble), so don't reload and overwrite them.
@@ -286,8 +332,10 @@ function Chat({ conversations: initial, quickActions }: { conversations: Convers
     useEffect(() => {
         if (activeId === null) {
             setMessages([]);
+            setTopic(null);
             return;
         }
+        setTopic(conversations.find(c => c.id === activeId)?.topic ?? null);
         if (createdHereRef.current === activeId) {
             createdHereRef.current = null;
             return;
@@ -321,14 +369,14 @@ function Chat({ conversations: initial, quickActions }: { conversations: Convers
 
         const apply = (data: any) => {
             if (!data?.conversation) return;
-            setMessages(prev => [...prev.filter(m => m.id !== optimistic.id), ...data.messages]);
+            setMessages(prev => withFresh(prev.filter(m => m.id !== optimistic.id), data.messages));
             if (activeId === null) createdHereRef.current = data.conversation.id;
             setActiveId(current => current ?? data.conversation.id);
             setConversations(prev => [data.conversation, ...prev.filter(c => c.id !== data.conversation.id)]);
         };
 
         try {
-            const { data } = await axios.post(route('ai-assistant.send'), { conversation_id: activeId, content });
+            const { data } = await axios.post(route('ai-assistant.send'), { conversation_id: activeId, content, topic: topic ?? '' });
             apply(data);
             if (data.pending) {
                 await waitForReply(data.conversation.id, data.messages.at(-1)?.id ?? 0);
@@ -350,27 +398,6 @@ function Chat({ conversations: initial, quickActions }: { conversations: Convers
         }
     };
 
-    // The most-used forms as buttons; the rest under "More".
-    const primaryActions = PRIMARY_ACTIONS.map(tool => quickActions.find(a => a.tool === tool)).filter((a): a is QuickAction => !!a);
-    const moreActions = quickActions.filter(a => !PRIMARY_ACTIONS.includes(a.tool));
-
-    /** Quick action: open a form card straight away, with no AI call. */
-    const openForm = async (tool: string) => {
-        if (sending) return;
-        setSending(true);
-        try {
-            const { data } = await axios.post(route('ai-assistant.forms.start'), { tool, conversation_id: activeId });
-            setMessages(prev => [...prev, ...data.messages]);
-            if (activeId === null) createdHereRef.current = data.conversation.id;
-            setActiveId(current => current ?? data.conversation.id);
-            setConversations(prev => [data.conversation, ...prev.filter(c => c.id !== data.conversation.id)]);
-        } catch (error) {
-            toast.error(errorMessage(error, t('Could not open the form.')));
-        } finally {
-            setSending(false);
-        }
-    };
-
     /** Queue mode: poll the conversation until the assistant's reply arrives (up to 3 minutes). */
     const waitForReply = async (conversationId: number, afterId: number) => {
         for (let attempt = 0; attempt < 120; attempt++) {
@@ -378,7 +405,7 @@ function Chat({ conversations: initial, quickActions }: { conversations: Convers
             const { data } = await axios.get(route('ai-assistant.conversations.show', conversationId));
             const fresh: Message[] = data.messages.filter((m: Message) => m.id > afterId);
             if (fresh.some(m => m.role === 'assistant')) {
-                setMessages(prev => [...prev.filter(m => m.id <= afterId), ...fresh]);
+                setMessages(prev => withFresh(prev.filter(m => m.id <= afterId), fresh));
                 return;
             }
         }
@@ -409,6 +436,8 @@ function Chat({ conversations: initial, quickActions }: { conversations: Convers
             send(input);
         }
     };
+
+    const examples = topic ? TOPIC_EXAMPLES[topic] ?? EXAMPLES : EXAMPLES;
 
     return (
         <div className="grid min-h-[600px] gap-4 md:grid-cols-[260px_1fr]">
@@ -451,7 +480,7 @@ function Chat({ conversations: initial, quickActions }: { conversations: Convers
                                 {t('Ask about your projects, tasks and bugs, or ask me to assign and update work. I always show a card for you to confirm before changing anything.')}
                             </p>
                             <div className="flex flex-wrap justify-center gap-2">
-                                {EXAMPLES.map(example => (
+                                {examples.map(example => (
                                     <Button key={example} variant="outline" size="sm" onClick={() => send(t(example))}>{t(example)}</Button>
                                 ))}
                             </div>
@@ -478,66 +507,68 @@ function Chat({ conversations: initial, quickActions }: { conversations: Convers
                     )}
                     <div ref={bottomRef} />
                 </div>
-                {quickActions.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5 border-t px-3 pt-3" aria-label={t('Quick actions')}>
-                        {primaryActions.map(action => (
-                            <Button
-                                key={action.tool}
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                disabled={sending}
-                                onClick={() => openForm(action.tool)}
-                            >
-                                <Plus className="mr-1 h-3 w-3" />
-                                {action.label}
-                            </Button>
-                        ))}
-                        {moreActions.length > 0 && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={sending}>
-                                        {t('More')} <ChevronDown className="ml-1 h-3 w-3" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start">
-                                    {moreActions.map(action => (
-                                        <DropdownMenuItem key={action.tool} onSelect={() => openForm(action.tool)}>
-                                            {action.label}
-                                        </DropdownMenuItem>
-                                    ))}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        )}
+                <form className="space-y-2 border-t p-3" onSubmit={(e: FormEvent) => { e.preventDefault(); send(input); }}>
+                    <div className="flex items-end gap-2">
+                        <Textarea
+                            value={input}
+                            onChange={e => setInput(e.target.value)}
+                            onKeyDown={onKeyDown}
+                            placeholder={topic ? t(TOPIC_HINTS[topic]) : t('Ask the AI Assistant…')}
+                            rows={2}
+                            maxLength={4000}
+                            className="resize-none"
+                        />
+                        <Button type="submit" disabled={sending || !input.trim()} aria-label={t('Send')}>
+                            <Send className="h-4 w-4" />
+                        </Button>
                     </div>
-                )}
-                <form
-                    className={`flex items-end gap-2 p-3 ${quickActions.length > 0 ? '' : 'border-t'}`}
-                    onSubmit={(e: FormEvent) => { e.preventDefault(); send(input); }}
-                >
-                    <Textarea
-                        value={input}
-                        onChange={e => setInput(e.target.value)}
-                        onKeyDown={onKeyDown}
-                        placeholder={t('Ask the AI Assistant…')}
-                        rows={2}
-                        maxLength={4000}
-                        className="resize-none"
-                    />
-                    <Button type="submit" disabled={sending || !input.trim()} aria-label={t('Send')}>
-                        <Send className="h-4 w-4" />
-                    </Button>
+                    {topics.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('Topic')}>
+                            {topics.map(option => {
+                                const on = topic === option.key;
+                                const Icon = TOPIC_ICONS[option.key] ?? Sparkles;
+                                return (
+                                    <button
+                                        key={option.key}
+                                        type="button"
+                                        aria-pressed={on}
+                                        onClick={() => setTopic(on ? null : option.key)}
+                                        title={on ? t('Remove topic') : t('Ask about {{topic}}', { topic: option.label.toLowerCase() })}
+                                        className={`inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs transition-colors ${
+                                            on ? 'border-primary bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-muted'
+                                        }`}
+                                    >
+                                        <Icon className="h-3.5 w-3.5" />
+                                        {option.label}
+                                        {on && <X className="h-3 w-3" />}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </form>
             </Card>
         </div>
     );
 }
 
+/** "Title: Login page · Priority: Medium · Assignee: Unassigned" for a draft. */
+function knownValues(fields: FormFieldState[]): string {
+    return fields
+        .filter(f => !isEmpty(f.value))
+        .map(f => {
+            const values = Array.isArray(f.value) ? f.value : [f.value as string];
+            const labels = values.map(v => f.options.find(o => o.value === v)?.label ?? v);
+            return `${f.label}: ${labels.join(', ')}`;
+        })
+        .join(' · ');
+}
+
 function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: ToolCard, note: Message | null) => void }) {
     const { t } = useTranslation();
-    const [busy, setBusy] = useState<'confirm' | 'cancel' | 'undo' | null>(null);
+    const [busy, setBusy] = useState<'confirm' | 'cancel' | 'undo' | 'update' | null>(null);
     const [phrase, setPhrase] = useState('');
+    const [editing, setEditing] = useState(false);
     // Hide the Undo button once its 10 minutes are over, without a reload.
     const [undoOpen, setUndoOpen] = useState(card.can_undo);
     useEffect(() => {
@@ -548,33 +579,41 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
         return () => clearTimeout(timer);
     }, [card.can_undo, card.undo_until]);
 
-    // Form cards: the user's picks, reset whenever the server sends the card back.
     const fields = card.fields ?? [];
-    const isForm = card.status === 'pending' && fields.length > 0;
+    const pending = card.status === 'pending';
+    // A draft still missing a must-know value: one question, answered with buttons.
+    const asking = pending && card.stage === 'question' && (card.ask?.length ?? 0) > 0;
+    const askField = asking ? fields.find(f => f.name === card.ask[0]) : undefined;
+
+    // Edit form values, reset whenever the server sends the card back.
     const [values, setValues] = useState<Record<string, string | string[]>>(() => formValues(fields));
     useEffect(() => setValues(formValues(fields)), [card.fields]);
-    const missing = isForm && fields.some(f => f.required && isEmpty(values[f.name]));
 
     const phraseOk = !card.confirm_phrase || phrase.trim().toLowerCase() === card.confirm_phrase.toLowerCase();
 
-    const act = async (action: 'confirm' | 'cancel' | 'undo') => {
+    const post = async (action: 'confirm' | 'cancel' | 'undo' | 'update', body: object = {}) => {
         setBusy(action);
         try {
-            const body = action === 'confirm'
-                ? { ...(card.confirm_phrase ? { phrase } : {}), ...(isForm ? { fields: values } : {}) }
-                : {};
             const { data } = await axios.post(route(`ai-assistant.tool-calls.${action}`, card.id), body);
             onChange(data.card, data.message);
             if (data.card.status === 'failed') toast.error(data.card.error || t('The action failed.'));
+            return data.card as ToolCard;
         } catch (error) {
             toast.error(errorMessage(error, t('Could not update this card.')));
+            return null;
         } finally {
             setBusy(null);
         }
     };
 
+    /** A clicked choice, a typed answer or the Edit form: no AI call. */
+    const update = async (fieldValues: Record<string, string | string[]>) => {
+        const updated = await post('update', { fields: fieldValues });
+        if (updated && !(updated.fields ?? []).some(f => f.error)) setEditing(false);
+    };
+
     const statusLabel: Record<CardStatus, string> = {
-        pending: t('Waiting for you'),
+        pending: asking ? t('Needs an answer') : t('Waiting for you'),
         done: t('Done'),
         failed: t('Failed'),
         cancelled: t('Cancelled'),
@@ -582,8 +621,10 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
         undone: t('Undone'),
     };
 
+    const known = knownValues(fields);
+
     return (
-        <Card className={card.status === 'pending' ? 'border-violet-300 dark:border-violet-700' : ''}>
+        <Card className={pending ? 'border-violet-300 dark:border-violet-700' : ''}>
             <CardContent className="space-y-3 p-3">
                 <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium">{card.summary}</p>
@@ -591,26 +632,49 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                         {statusLabel[card.status]}
                     </Badge>
                 </div>
-                {isForm ? (
-                    <CardForm cardId={card.id} fields={fields} values={values} onChange={(name, value) => setValues(prev => ({ ...prev, [name]: value }))} />
+
+                {pending && editing ? (
+                    <>
+                        <CardForm cardId={card.id} fields={fields} values={values} onChange={(name, value) => setValues(prev => ({ ...prev, [name]: value }))} />
+                        <div className="flex gap-2">
+                            <Button size="sm" onClick={() => update(values)} disabled={busy !== null}>
+                                {busy === 'update' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
+                                {t('Save')}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setValues(formValues(fields)); }} disabled={busy !== null}>
+                                {t('Back')}
+                            </Button>
+                        </div>
+                    </>
+                ) : asking && askField ? (
+                    <>
+                        <ChoiceButtons field={askField} question={card.question ?? askField.label} disabled={busy !== null} onPick={value => update({ [askField.name]: value })} />
+                        {known && <p className="text-xs text-muted-foreground">{known}</p>}
+                    </>
                 ) : (
-                    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                        {Object.entries(card.details).map(([label, value]) => (
-                            <div key={label} className="contents">
-                                <dt className="text-muted-foreground">{label}</dt>
-                                <dd>{value}</dd>
-                            </div>
-                        ))}
-                    </dl>
+                    <>
+                        {Object.keys(card.details).length > 0 ? (
+                            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                                {Object.entries(card.details).map(([label, value]) => (
+                                    <div key={label} className="contents">
+                                        <dt className="text-muted-foreground">{label}</dt>
+                                        <dd>{value}</dd>
+                                    </div>
+                                ))}
+                            </dl>
+                        ) : known && <p className="text-xs text-muted-foreground">{known}</p>}
+                        {card.items.length > 0 && (
+                            <ul className="max-h-48 list-disc space-y-0.5 overflow-y-auto rounded-md bg-muted/50 py-2 pl-6 pr-2 text-xs">
+                                {card.items.map((item, i) => <li key={i}>{item}</li>)}
+                            </ul>
+                        )}
+                    </>
                 )}
-                {card.status === 'pending' && card.form_error && <p className="text-xs text-destructive">{card.form_error}</p>}
-                {card.items.length > 0 && (
-                    <ul className="max-h-48 list-disc space-y-0.5 overflow-y-auto rounded-md bg-muted/50 py-2 pl-6 pr-2 text-xs">
-                        {card.items.map((item, i) => <li key={i}>{item}</li>)}
-                    </ul>
-                )}
+
+                {pending && card.form_error && <p className="text-xs text-destructive">{card.form_error}</p>}
                 {card.error && <p className="text-xs text-destructive">{card.error}</p>}
-                {card.status === 'pending' && card.confirm_phrase && (
+
+                {pending && !editing && !asking && card.confirm_phrase && (
                     <div className="space-y-1">
                         <Label htmlFor={`phrase-${card.id}`} className="text-xs">
                             {t('This cannot be undone. Type {{phrase}} to confirm.', { phrase: card.confirm_phrase })}
@@ -618,23 +682,28 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                         <Input id={`phrase-${card.id}`} value={phrase} onChange={e => setPhrase(e.target.value)} className="h-8 text-xs" autoComplete="off" />
                     </div>
                 )}
-                {card.status === 'pending' && (
-                    <div className="flex gap-2">
-                        <Button
-                            size="sm"
-                            onClick={() => act('confirm')}
-                            disabled={busy !== null || !phraseOk || missing}
-                            title={missing ? t('Fill in the required fields first.') : undefined}
-                        >
-                            {busy === 'confirm' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
-                            {t('Confirm')}
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => act('cancel')} disabled={busy !== null}>
+
+                {pending && !editing && (
+                    <div className="flex flex-wrap gap-2">
+                        {!asking && (
+                            <Button size="sm" onClick={() => post('confirm', card.confirm_phrase ? { phrase } : {})} disabled={busy !== null || !phraseOk || !!card.form_error}>
+                                {busy === 'confirm' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
+                                {t('Confirm')}
+                            </Button>
+                        )}
+                        {fields.length > 0 && (
+                            <Button size="sm" variant="outline" onClick={() => setEditing(true)} disabled={busy !== null}>
+                                <Pencil className="mr-1 h-3 w-3" />
+                                {t('Edit')}
+                            </Button>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={() => post('cancel')} disabled={busy !== null}>
                             <X className="mr-1 h-3 w-3" />
                             {t('Cancel')}
                         </Button>
                     </div>
                 )}
+
                 {card.status === 'done' && (card.link || undoOpen) && (
                     <div className="flex flex-wrap items-center gap-3">
                         {card.link && (
@@ -643,7 +712,7 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                             </Link>
                         )}
                         {undoOpen && (
-                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => act('undo')} disabled={busy !== null}>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => post('undo')} disabled={busy !== null}>
                                 {busy === 'undo' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Undo2 className="mr-1 h-3 w-3" />}
                                 {t('Undo')}
                             </Button>
@@ -652,6 +721,83 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                 )}
             </CardContent>
         </Card>
+    );
+}
+
+const MAX_CHOICE_BUTTONS = 8;
+
+/**
+ * The answer to one draft question: the choices as buttons (the rest in a
+ * short list), or a small box for a name, email or date. One click updates
+ * the draft on the server; no AI call.
+ */
+function ChoiceButtons({ field, question, disabled, onPick }: {
+    field: FormFieldState;
+    question: string;
+    disabled: boolean;
+    onPick: (value: string | string[]) => void;
+}) {
+    const { t } = useTranslation();
+    const [text, setText] = useState('');
+    const [picked, setPicked] = useState<string[]>([]);
+    const shown = field.options.slice(0, MAX_CHOICE_BUTTONS);
+    const rest = field.options.slice(MAX_CHOICE_BUTTONS);
+
+    return (
+        <div className="space-y-2">
+            <p className="text-sm">{question}</p>
+            {field.note && <p className="text-xs text-amber-600 dark:text-amber-500">{field.note}</p>}
+
+            {field.type === 'select' && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                    {shown.map(option => (
+                        <Button key={option.value} type="button" size="sm" variant="outline" className="h-7 px-2.5 text-xs" disabled={disabled} onClick={() => onPick(option.value)}>
+                            {option.label}
+                        </Button>
+                    ))}
+                    {rest.length > 0 && (
+                        <select className={`${fieldClass} h-7 w-auto`} value="" disabled={disabled} onChange={e => e.target.value && onPick(e.target.value)} aria-label={t('More choices')}>
+                            <option value="">{t('More…')}</option>
+                            {rest.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                    )}
+                </div>
+            )}
+
+            {field.type === 'multi' && (
+                <div className="space-y-2">
+                    <div className="flex flex-wrap gap-1.5">
+                        {field.options.slice(0, 20).map(option => {
+                            const on = picked.includes(option.value);
+                            return (
+                                <Button
+                                    key={option.value}
+                                    type="button"
+                                    size="sm"
+                                    variant={on ? 'default' : 'outline'}
+                                    className="h-7 px-2.5 text-xs"
+                                    aria-pressed={on}
+                                    disabled={disabled}
+                                    onClick={() => setPicked(prev => (on ? prev.filter(v => v !== option.value) : [...prev, option.value]))}
+                                >
+                                    {option.label}
+                                </Button>
+                            );
+                        })}
+                    </div>
+                    <Button type="button" size="sm" className="h-7 text-xs" disabled={disabled || picked.length === 0} onClick={() => onPick(picked)}>
+                        {t('Done')}
+                    </Button>
+                </div>
+            )}
+
+            {(field.type === 'text' || field.type === 'date') && (
+                <form className="flex gap-2" onSubmit={(e: FormEvent) => { e.preventDefault(); if (text.trim()) onPick(text.trim()); }}>
+                    <Input type={field.type === 'date' ? 'date' : 'text'} value={text} onChange={e => setText(e.target.value)} className="h-8 text-xs" autoFocus />
+                    <Button type="submit" size="sm" className="h-8" disabled={disabled || !text.trim()}>{t('OK')}</Button>
+                </form>
+            )}
+        </div>
     );
 }
 

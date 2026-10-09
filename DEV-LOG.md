@@ -563,6 +563,37 @@ Confirm disabled until picked; "New task" quick action opened the form with no A
 
 ---
 
+### RP-14 · 2026-10-09 · AI Assistant — ask in the chat, topic buttons
+
+Feedback on RP-13: a form for every incomplete request makes the assistant a slower copy
+of the normal screens, and quick actions should set the subject, not open forms.
+
+- **Three tiers per field** (`FormField`): must know (asked), default (priority → medium,
+  severity → major, status → planning, assignee → unassigned, project role → member; never
+  asked, shown on the card), optional (never asked). An AI-supplied enum the user did not say
+  falls back to the default.
+- **Drafts instead of forms:** a missing must-know value makes the card a single question
+  (`stage: question`) with the choices as buttons. A click (`POST tool-calls/{id}/update`) or
+  a short typed answer (`ReplyMatcher`, e.g. "mobile app, make it high", "assign it to me")
+  completes it with **no AI call**. Then a short confirm card (`stage: review`) with
+  Confirm / Edit / Cancel; the form only opens on Edit.
+- `ReplyMatcher` only answers plain short replies on the latest draft: questions, commands,
+  long messages or unexplained words go to the AI, which updates the same draft in place.
+- **Topic buttons** (`Topics`): Tasks, Bugs, Projects, Approvals, Finance, Team, Help, under
+  the message box, kept on `ai_conversations.topic` until removed. The model gets only that
+  topic's tools (+ shared look-ups) and a prompt line; a message clearly about another topic
+  gets all tools in the same call. Never adds tools beyond permissions.
+- Removed the quick-action buttons and `POST ai-assistant/forms`. With the AI down, a bare
+  message under a topic still starts that topic's draft.
+- Fixed while testing: "me" matched any option whose id equalled the user's id (project #1);
+  "me"/"unassigned" now apply to people fields only.
+
+Tests: `AiAssistantTest` 89/89. Browser (OpenRouter free model), Tasks topic: "login page
+for sundal, high priority" → confirm card with High + Unassigned (1 AI call); "assign it to
+me" → card updated, server reply, still 1 AI call for 2 messages.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)

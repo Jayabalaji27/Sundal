@@ -53,7 +53,7 @@ class AssignTaskTool extends AiTool implements HasForm
     {
         return [
             new FormField('task', __('Task'), 'task', required: true, narrowBy: 'project'),
-            new FormField('assignee', __('Assignee'), 'member', required: true),
+            new FormField('assignee', __('Assignee'), 'member', required: true, question: __('Who should it be assigned to?')),
             new FormField('due_date', __('Due date'), 'date'),
         ];
     }

@@ -75,16 +75,23 @@ class ToolRegistry
         return $this->all()[$name] ?? null;
     }
 
-    /** @return AiTool[] keyed by name */
-    public function forUser(User $user, bool $readOnly = false): array
+    /**
+     * @param  string|null  $topic  a Topics key: only that topic's tools (still permission-filtered)
+     * @return AiTool[] keyed by name
+     */
+    public function forUser(User $user, bool $readOnly = false, ?string $topic = null): array
     {
         if (!AiAccess::canUse($user)) {
             return [];
         }
 
+        $inTopic = Topics::valid($topic) ? Topics::toolNames($topic) : null;
+
         return array_filter(
             $this->all(),
-            fn (AiTool $tool) => $tool->allowedFor($user) && !($readOnly && $tool->isWrite())
+            fn (AiTool $tool) => $tool->allowedFor($user)
+                && !($readOnly && $tool->isWrite())
+                && ($inTopic === null || in_array($tool->name(), $inTopic, true))
         );
     }
 }

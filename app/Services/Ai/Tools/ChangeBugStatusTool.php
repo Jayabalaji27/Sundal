@@ -53,7 +53,7 @@ class ChangeBugStatusTool extends AiTool implements HasForm
     {
         return [
             new FormField('bug', __('Bug'), 'bug', required: true, narrowBy: 'project'),
-            new FormField('status', __('Status'), 'bug_status', required: true),
+            new FormField('status', __('Status'), 'bug_status', required: true, question: __('Which status should it move to?')),
         ];
     }
 

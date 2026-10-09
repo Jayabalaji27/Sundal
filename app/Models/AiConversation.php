@@ -11,7 +11,7 @@ class AiConversation extends Model
 {
     use BelongsToWorkspace;
 
-    protected $fillable = ['workspace_id', 'user_id', 'title', 'last_message_at'];
+    protected $fillable = ['workspace_id', 'user_id', 'title', 'topic', 'last_message_at'];
 
     protected $casts = [
         'last_message_at' => 'datetime',

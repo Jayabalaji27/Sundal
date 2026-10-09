@@ -53,8 +53,8 @@ class InviteUserTool extends AiTool implements HasForm
         $roles = $workspace ? InviteToWorkspace::rolesActorMayInvite($user, $workspace) : [];
 
         return [
-            new FormField('email', __('Email'), 'text', required: true),
-            new FormField('role', __('Role'), 'enum', required: true, options: FormField::labels($roles), mustChoose: true),
+            new FormField('email', __('Email'), 'text', required: true, question: __('Which email address should get the invitation?')),
+            new FormField('role', __('Role'), 'enum', required: true, options: FormField::labels($roles), question: __('Which role should they have?')),
         ];
     }
 

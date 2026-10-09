@@ -53,7 +53,7 @@ class ChangeTaskStageTool extends AiTool implements HasForm
     {
         return [
             new FormField('task', __('Task'), 'task', required: true, narrowBy: 'project'),
-            new FormField('stage', __('Stage'), 'task_stage', required: true),
+            new FormField('stage', __('Stage'), 'task_stage', required: true, question: __('Which stage should it move to?')),
         ];
     }
 

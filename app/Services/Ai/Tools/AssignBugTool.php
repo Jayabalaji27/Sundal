@@ -53,7 +53,7 @@ class AssignBugTool extends AiTool implements HasForm
     {
         return [
             new FormField('bug', __('Bug'), 'bug', required: true, narrowBy: 'project'),
-            new FormField('assignee', __('Assignee'), 'member', required: true),
+            new FormField('assignee', __('Assignee'), 'member', required: true, question: __('Who should it be assigned to?')),
             new FormField('due_date', __('Due date'), 'date'),
         ];
     }

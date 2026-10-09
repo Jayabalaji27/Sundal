@@ -9,8 +9,9 @@ use App\Models\AiUsage;
 use App\Services\Ai\AiAccess;
 use App\Services\Ai\AiAssistant;
 use App\Services\Ai\AiProviderException;
-use App\Services\Ai\Forms\HasForm;
 use App\Services\Ai\ToolRegistry;
+use App\Services\Ai\Topics;
+use Illuminate\Validation\Rule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -28,7 +29,7 @@ class AiAssistantController extends Controller
     // AiAssistant is method-injected so each request gets a fresh one (the
     // route caches the controller instance between calls in tests).
 
-    public function index(Request $request, AiAssistant $assistant): Response|RedirectResponse
+    public function index(Request $request, ToolRegistry $registry): Response|RedirectResponse
     {
         $user = $request->user();
         $isOwner = AiAccess::canManageSettings($user);
@@ -49,7 +50,7 @@ class AiAssistantController extends Controller
                 'usage' => null,
                 'providers' => null,
                 'retentionOptions' => [],
-                'quickActions' => [],
+                'topics' => [],
             ]);
         }
 
@@ -62,7 +63,7 @@ class AiAssistantController extends Controller
             'conversations' => AiConversation::ownedBy($user)
                 ->orderByDesc('last_message_at')->orderByDesc('id')
                 ->limit(100)
-                ->get(['id', 'title', 'last_message_at']),
+                ->get(['id', 'title', 'topic', 'last_message_at']),
             'settings' => $isOwner && $settings ? [
                 'provider' => $settings->provider,
                 'model' => $settings->model,
@@ -86,8 +87,8 @@ class AiAssistantController extends Controller
                 'models' => collect($p['models'])->map(fn ($m, $id) => ['id' => $id, 'label' => $m['label']])->values(),
             ]) : null,
             'retentionOptions' => config('ai_assistant.retention_options'),
-            // Form buttons that work with no AI call (also when the provider is down).
-            'quickActions' => $settings && AiAccess::canUse($user) ? $assistant->quickActions($user) : [],
+            // Topic buttons in the message box, only those with tools this user may use.
+            'topics' => $settings && AiAccess::canUse($user) ? Topics::forUser($user, $registry) : [],
         ]);
     }
 
@@ -96,7 +97,7 @@ class AiAssistantController extends Controller
         $this->authorizeConversation($request, $conversation);
 
         return response()->json([
-            'conversation' => $conversation->only(['id', 'title']),
+            'conversation' => $conversation->only(['id', 'title', 'topic']),
             'messages' => $this->messagesWithCards($conversation),
         ]);
     }
@@ -107,7 +108,7 @@ class AiAssistantController extends Controller
         $validated = $request->validate(['title' => 'required|string|max:120']);
         $conversation->update($validated);
 
-        return response()->json(['conversation' => $conversation->only(['id', 'title'])]);
+        return response()->json(['conversation' => $conversation->only(['id', 'title', 'topic'])]);
     }
 
     public function destroy(Request $request, AiConversation $conversation): JsonResponse
@@ -126,6 +127,8 @@ class AiAssistantController extends Controller
         $validated = $request->validate([
             'conversation_id' => 'nullable|integer',
             'content' => 'required|string|max:4000',
+            // Topic button: a key sets it, '' or null clears it, absent leaves it.
+            'topic' => ['nullable', 'string', Rule::in(['', ...Topics::keys()])],
         ]);
 
         $limiterKey = 'ai-assistant:' . $user->id;
@@ -138,6 +141,10 @@ class AiAssistantController extends Controller
             ? AiConversation::ownedBy($user)->findOrFail($validated['conversation_id'])
             : AiConversation::create(['user_id' => $user->id, 'workspace_id' => $user->current_workspace_id]);
 
+        if ($request->has('topic')) {
+            $conversation->update(['topic' => ($validated['topic'] ?? null) ?: null]);
+        }
+
         $firstNewId = (int) $conversation->messages()->max('id');
 
         // Queue mode: answer in the background; the page polls the conversation.
@@ -146,7 +153,7 @@ class AiAssistantController extends Controller
             \App\Jobs\ProcessAiMessage::dispatch($user->id, $conversation->id, $message->id);
 
             return response()->json([
-                'conversation' => $conversation->fresh()->only(['id', 'title']),
+                'conversation' => $conversation->fresh()->only(['id', 'title', 'topic']),
                 'messages' => $this->messagesWithCards($conversation, $firstNewId),
                 'pending' => true,
             ], 202);
@@ -162,42 +169,30 @@ class AiAssistantController extends Controller
         } catch (AiProviderException $e) {
             return response()->json([
                 'error' => $e->getMessage(),
-                'conversation' => $conversation->fresh()->only(['id', 'title']),
+                'conversation' => $conversation->fresh()->only(['id', 'title', 'topic']),
                 'messages' => $this->messagesWithCards($conversation, $firstNewId),
             ], 502);
         }
 
         return response()->json([
-            'conversation' => $conversation->fresh()->only(['id', 'title']),
+            'conversation' => $conversation->fresh()->only(['id', 'title', 'topic']),
             'messages' => $this->messagesWithCards($conversation, $firstNewId),
         ]);
     }
 
-    /** Quick-action button: open a form card with no AI call at all. */
-    public function startForm(Request $request, AiAssistant $assistant, ToolRegistry $registry): JsonResponse
+    /**
+     * A draft card's values changed: a clicked choice button, or the card's
+     * Edit form. Moves it to the next question or to confirmation; nothing runs.
+     */
+    public function updateCard(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
     {
-        $user = $request->user();
         $this->ensureCanUse($request);
-
         $validated = $request->validate([
-            'tool' => 'required|string|max:80',
-            'conversation_id' => 'nullable|integer',
+            'fields' => 'required|array',
+            'fields.*' => 'nullable',
         ]);
 
-        $tool = $registry->find($validated['tool']);
-        abort_unless($tool instanceof HasForm && $tool->allowedFor($user), 403);
-
-        $conversation = isset($validated['conversation_id'])
-            ? AiConversation::ownedBy($user)->findOrFail($validated['conversation_id'])
-            : AiConversation::create(['user_id' => $user->id, 'workspace_id' => $user->current_workspace_id, 'title' => $tool->formTitle()]);
-
-        $firstNewId = (int) $conversation->messages()->max('id');
-        $assistant->startForm($tool, $user, $conversation);
-
-        return response()->json([
-            'conversation' => $conversation->fresh()->only(['id', 'title']),
-            'messages' => $this->messagesWithCards($conversation, $firstNewId),
-        ]);
+        return $this->cardResponse($assistant->updateDraft($toolCall, $request->user(), $validated['fields']));
     }
 
     public function confirm(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse

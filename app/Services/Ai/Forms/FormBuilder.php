@@ -74,7 +74,7 @@ class FormBuilder
      *
      * @return array{ok: bool, form: array, args: array<string, mixed>}
      */
-    public function submit(AiTool&HasForm $tool, array $form, array $submitted, User $user): array
+    public function submit(AiTool&HasForm $tool, array $form, array $submitted, User $user, bool $partial = false): array
     {
         $fields = collect($tool->formFields($user))->keyBy('name');
         $args = $form['fixed'] ?? [];
@@ -90,7 +90,16 @@ class FormBuilder
             $value = array_key_exists($field->name, $submitted) ? $submitted[$field->name] : ($state['value'] ?? null);
             $state['value'] = $field->inputType() === 'multi' ? array_values(array_map('strval', (array) ($value ?? []))) : $value;
             $state['note'] = null;
+            if (array_key_exists($field->name, $submitted)) {
+                $state['defaulted'] = false;
+            }
             [$arg, $state['error']] = $this->toArgument($field, $value, $user);
+
+            // Partial update (a clicked choice, a typed answer): a still-missing
+            // value is not an error yet; it is asked next.
+            if ($partial && $this->isEmptyValue($value)) {
+                $state['error'] = null;
+            }
 
             if ($state['error'] !== null) {
                 $ok = false;
@@ -106,30 +115,47 @@ class FormBuilder
     /** True when every required field already has a value. */
     public function isComplete(array $form): bool
     {
-        foreach ($form['fields'] as $state) {
-            if ($state['required'] && ($state['value'] === null || $state['value'] === '' || $state['value'] === [])) {
-                return false;
-            }
-        }
-
-        return true;
+        return $this->missing($form) === [];
     }
 
-    /** "Project: Website Redesign; Priority: (to pick)" for the model's tool result. */
+    /** @return string[] names of the required fields still without a value, in card order */
+    public function missing(array $form): array
+    {
+        return collect($form['fields'])
+            ->filter(fn (array $state) => $state['required'] && $this->isEmptyValue($state['value']))
+            ->pluck('name')
+            ->values()
+            ->all();
+    }
+
+    private function isEmptyValue(mixed $value): bool
+    {
+        return $value === null || $value === '' || $value === [];
+    }
+
+    /**
+     * For the model's tool result and the card: ["Title: Login page"],
+     * ["Priority: Medium"] (defaults), ["Project"] (still missing).
+     *
+     * @return array{0: string[], 1: string[], 2: string[]}
+     */
     public function describe(array $form): array
     {
-        $filled = [];
-        $open = [];
+        $known = $defaults = $missing = [];
         foreach ($form['fields'] as $state) {
             $label = $this->labelOf($state);
             if ($label === null) {
-                $open[] = $state['label'];
+                if ($state['required']) {
+                    $missing[] = $state['label'];
+                }
+            } elseif ($state['defaulted'] ?? false) {
+                $defaults[] = "{$state['label']}: {$label}";
             } else {
-                $filled[] = "{$state['label']}: {$label}";
+                $known[] = "{$state['label']}: {$label}";
             }
         }
 
-        return [$filled, $open];
+        return [$known, $defaults, $missing];
     }
 
     // ── Building ─────────────────────────────────────────────────────────────
@@ -140,11 +166,16 @@ class FormBuilder
             'name' => $field->name,
             'label' => $field->label,
             'type' => $field->inputType(),
+            'kind' => $field->kind,
             'required' => $field->required,
             'value' => $field->inputType() === 'multi' ? [] : null,
             'options' => [],
             'note' => null,
             'error' => null,
+            // How the chat asks for it when it is missing.
+            'question' => $field->questionText(),
+            // True while the value is the field's default, not something the user said.
+            'defaulted' => false,
         ];
 
         $raw = $args[$field->name] ?? null;
@@ -164,12 +195,16 @@ class FormBuilder
     {
         $state['options'] = collect($field->options)->map(fn ($label, $value) => ['value' => (string) $value, 'label' => $label])->values()->all();
 
-        if ($raw !== null && array_key_exists($raw, $field->options)) {
-            if (!$field->mustChoose || $this->saidPhrase($said, str_replace('_', ' ', $raw)) || $this->saidPhrase($said, $field->options[$raw])) {
-                $state['value'] = $raw;
-            }
-        } elseif ($raw === null && !$field->mustChoose && $field->default !== null) {
+        // The model's value counts only when the user said it ("high", "on hold");
+        // an invented one falls back to the default, like saying nothing.
+        $saidIt = $raw !== null && array_key_exists($raw, $field->options)
+            && ($this->saidPhrase($said, str_replace('_', ' ', $raw)) || $this->saidPhrase($said, $field->options[$raw]));
+
+        if ($saidIt) {
+            $state['value'] = $raw;
+        } elseif ($field->default !== null && array_key_exists($field->default, $field->options)) {
             $state['value'] = $field->default;
+            $state['defaulted'] = true;
         }
 
         return $state;
@@ -209,6 +244,10 @@ class FormBuilder
             $match ? $state['value'] = (string) $match->getKey() : $state['note'] = $note;
             // Possible matches go to the top of the list (and are in it even past the first 200).
             $options = collect($this->options($field->kind, $matches))->concat($options)->unique('value')->values()->all();
+        } elseif ($field->default !== null) {
+            // Nothing said: use the default ("none" = unassigned).
+            $state['value'] = $field->default;
+            $state['defaulted'] = true;
         } elseif ($field->required && count($options) === 1 && $field->kind === 'project') {
             // Only one project to choose from: nothing to ask.
             $state['value'] = $options[0]['value'];
