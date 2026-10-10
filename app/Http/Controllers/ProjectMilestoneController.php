@@ -17,22 +17,8 @@ class ProjectMilestoneController extends Controller
             'status' => 'required|in:pending,in_progress,completed,overdue'
         ]);
 
-        $milestone = $project->milestones()->create([
-            ...$validated,
-            'progress' => 0,
-            'order' => $project->milestones()->max('order') + 1,
-            'created_by' => auth()->id()
-        ]);
-        
-        // Calculate initial progress from tasks
-        $milestone->updateProgressFromTasks();
-
-        // Fire event for Slack notification
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\MilestoneCreated($milestone));
-        }
-
-        $project->logActivity('milestone_created', "Milestone '{$milestone->title}' was created");
+        // Shared with the AI assistant.
+        app(\App\Actions\Projects\CreateMilestone::class)->handle(auth()->user(), $project, $validated);
 
         return back();
     }

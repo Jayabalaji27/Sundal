@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from '@/components/custom-toast';
 import { AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
 import { ImportTable, type ImportChanges, type ImportView } from '@/components/ai-import-card';
+import { PlanList, type PlanChanges, type PlanView } from '@/components/ai-plan-card';
 import { AttachMenu, DropZone, FileChip, FileSuggestions, SundalFilesDialog, useAttachments, type AttachmentChip } from '@/components/ai-attachments';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { notifySignedOut } from '@/lib/ai-mode';
@@ -55,7 +56,7 @@ interface ToolCard {
     view?: CardView | null;
 }
 
-type CardView = ImportView;
+type CardView = ImportView | PlanView;
 
 interface FormFieldState {
     name: string;
@@ -1427,10 +1428,10 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
     const known = knownValues(fields);
     const view = card.view ?? null;
     // An editable table (sheet import): changes go straight to the server, no AI call.
-    const editView = (changes: ImportChanges) => post('edit', { changes });
-    const confirmLabel = view?.type === 'import'
-        ? (view.kind === 'bugs' ? t('Create {{count}} bugs', { count: view.included }) : t('Create {{count}} tasks', { count: view.included }))
-        : t('Confirm');
+    const editView = (changes: ImportChanges | PlanChanges) => post('edit', { changes });
+    const confirmLabel = view?.type === 'import' && view.kind === 'bugs'
+        ? t('Create {{count}} bugs', { count: view.included })
+        : view ? t('Create {{count}} tasks', { count: view.included }) : t('Confirm');
 
     return (
         <Card className={pending ? 'border-violet-300 dark:border-violet-700' : ''}>
@@ -1444,6 +1445,8 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
 
                 {pending && view?.type === 'import' ? (
                     <ImportTable view={view} busy={busy !== null} onEdit={editView} />
+                ) : pending && view?.type === 'plan' ? (
+                    <PlanList view={view} busy={busy !== null} onEdit={editView} />
                 ) : pending && editing ? (
                     <>
                         <CardForm cardId={card.id} fields={fields} values={values} onChange={(name, value) => setValues(prev => ({ ...prev, [name]: value }))} />

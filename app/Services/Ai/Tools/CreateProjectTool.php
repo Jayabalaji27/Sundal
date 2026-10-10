@@ -26,7 +26,8 @@ class CreateProjectTool extends AiTool implements HasForm
 
     public function description(): string
     {
-        return 'Create a project, optionally with team members and clients. Shows the user a confirmation card; nothing is created until they confirm.';
+        return 'Create an empty project, optionally with team members and clients. Shows the user a confirmation card; nothing is created until they confirm. '
+            . 'To create a project with tasks from an attached document, use plan_tasks_from_document with new_project instead.';
     }
 
     public function permissions(): array

@@ -120,8 +120,12 @@ return [
         // Pages and characters read from a document.
         'max_pages' => 300,
         'max_chars' => 400000,
-        // Pages a document analysis (BRD → tasks) reads.
-        'max_analysis_pages' => 60,
+        // A document analysis (BRD → tasks) reads at most this much text (about
+        // 60 pages), in chunks of analysis_chunk_chars, one AI call per chunk.
+        'max_analysis_chars' => 180000,
+        'analysis_chunk_chars' => 24000,
+        'max_plan_tasks' => 300,
+        'max_plan_milestones' => 30,
         // Text per section handed to the model at once.
         'section_chars' => 6000,
         // Zip-based files (xlsx, docx): refuse ones that expand past this.

@@ -77,6 +77,7 @@ class ToolRegistry
         Tools\GetSheetRows::class,
         Tools\ImportBugsFromSheet::class,
         Tools\ImportTasksFromSheet::class,
+        Tools\PlanTasksFromDocument::class,
     ];
 
     /** @var AiTool[]|null */
