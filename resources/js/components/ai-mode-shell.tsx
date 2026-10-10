@@ -32,10 +32,15 @@ const PING_WAIT_MS = 2000;
  * chat stays underneath) when the user is idle, when Sundal is closed, when
  * the workspace changes, or on sign-out.
  */
-export function AiModeShell({ config, model, children }: {
+/** The round icon buttons at the top right of the AI mode bar (Settings, theme). */
+export const AI_MODE_ICON_BUTTON = 'h-8 w-8 rounded-full text-muted-foreground hover:text-foreground';
+
+export function AiModeShell({ config, model, actions, children }: {
     config: AiModeConfig;
     /** The connected model, shown next to the title. */
     model?: { provider: string; name: string } | null;
+    /** Extra icon buttons at the top right, before the theme switch (e.g. Settings). */
+    actions?: ReactNode;
     children: ReactNode;
 }) {
     const { t } = useTranslation();
@@ -190,10 +195,20 @@ export function AiModeShell({ config, model, children }: {
                         </span>
                     )}
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
-                    <ThemeToggle />
-                    <span className="hidden text-sm text-muted-foreground sm:inline">{auth?.user?.name}</span>
-                    <label className="flex cursor-pointer items-center gap-2 text-xs font-medium">
+                {/* Icon buttons, a divider, who is signed in, then the AI mode switch in its own pill. */}
+                <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                    <div className="flex items-center gap-0.5">
+                        {actions}
+                        <ThemeToggle />
+                    </div>
+                    <span className="hidden h-5 w-px bg-border sm:block" aria-hidden />
+                    <div className="hidden items-center gap-2 sm:flex" title={auth?.user?.name}>
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-[11px] font-semibold text-violet-700 dark:bg-violet-900/50 dark:text-violet-200" aria-hidden>
+                            {initials(auth?.user?.name)}
+                        </span>
+                        <span className="hidden max-w-[160px] truncate text-sm font-medium lg:inline">{auth?.user?.name}</span>
+                    </div>
+                    <label className="flex cursor-pointer items-center gap-2 rounded-full border bg-muted/40 py-1 pl-3 pr-1 text-xs font-medium">
                         {t('AI mode')}
                         <Switch checked={lock !== 'turned_off'} onCheckedChange={on => (on ? window.location.reload() : turnOff())} aria-label={t('AI mode')} />
                     </label>
@@ -262,10 +277,15 @@ function ThemeToggle() {
     const label = dark ? t('Switch to light theme') : t('Switch to dark theme');
 
     return (
-        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggle} aria-label={label} title={label}>
+        <Button variant="ghost" size="icon" className={AI_MODE_ICON_BUTTON} onClick={toggle} aria-label={label} title={label}>
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
     );
+}
+
+/** "Test Company Owner" → "TC". */
+function initials(name: string | null | undefined): string {
+    return String(name ?? '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?';
 }
 
 function formatSeconds(seconds: number): string {

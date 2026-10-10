@@ -4,7 +4,7 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import {
     ArrowLeft, ArrowUp, Bot, Bug, Check, CheckCheck, ChevronDown, Clock, Copy, ExternalLink, FolderKanban, HelpCircle, ListTodo, Loader2,
-    MessageSquare, PanelLeft, Pencil, Plus, Receipt, Search, Settings as SettingsIcon, Sparkles, Trash2, Undo2, Users, X,
+    MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Receipt, Settings as SettingsIcon, Sparkles, Trash2, Undo2, Users, X,
 } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/custom-toast';
-import { AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
+import { AI_MODE_ICON_BUTTON, AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
 
 declare const route: any;
 
@@ -135,18 +135,11 @@ const errorMessage = (error: any, fallback: string): string =>
 export default function AiAssistantPage(props: Props) {
     const { t } = useTranslation();
     const breadcrumbs = [{ title: t('Dashboard'), href: route('dashboard') }, { title: t('AI Assistant') }];
-    // Owners open Settings from the chat header; without a provider, Settings is all there is.
+    // Owners open Settings with the gear (AI mode bar, or above the chat on the
+    // Sundal page); without a provider, Settings is all there is.
     const [view, setView] = useState<'chat' | 'settings'>(props.configured ? 'chat' : 'settings');
-
-    const chat = (onOpenSettings?: () => void) => (
-        <Chat
-            conversations={props.conversations}
-            topics={props.topics}
-            model={props.model ?? null}
-            standalone={!!props.standalone}
-            onOpenSettings={onOpenSettings}
-        />
-    );
+    const canOpenSettings = props.isOwner && props.configured && props.access === 'allowed';
+    const standalone = !!(props.standalone && props.aiMode);
 
     let body;
     let framed = true;
@@ -169,14 +162,41 @@ export default function AiAssistantPage(props: Props) {
             </div>
         );
     } else {
-        body = chat(props.isOwner ? () => setView('settings') : undefined);
+        body = (
+            <Chat
+                conversations={props.conversations}
+                topics={props.topics}
+                model={props.model ?? null}
+                standalone={standalone}
+                onOpenSettings={canOpenSettings && !standalone ? () => setView('settings') : undefined}
+            />
+        );
         framed = false;
     }
 
     // AI mode tab: full screen, its own header and locks, no Sundal sidebar.
     // The chat fills the whole page; settings and notices keep a readable width.
-    if (props.standalone && props.aiMode) {
-        return <AiModeShell config={props.aiMode} model={props.model}>{framed ? <div className="mx-auto max-w-7xl p-4 sm:p-6">{body}</div> : body}</AiModeShell>;
+    if (standalone && props.aiMode) {
+        const settingsOpen = view === 'settings';
+        const settingsButton = canOpenSettings ? (
+            <Button
+                variant="ghost"
+                size="icon"
+                className={`${AI_MODE_ICON_BUTTON} ${settingsOpen ? 'bg-muted text-foreground' : ''}`}
+                onClick={() => setView(settingsOpen ? 'chat' : 'settings')}
+                aria-label={settingsOpen ? t('Back to the assistant') : t('Settings')}
+                title={settingsOpen ? t('Back to the assistant') : t('Settings')}
+                aria-pressed={settingsOpen}
+            >
+                <SettingsIcon className="h-4 w-4" />
+            </Button>
+        ) : null;
+
+        return (
+            <AiModeShell config={props.aiMode} model={props.model} actions={settingsButton}>
+                {framed ? <div className="mx-auto max-w-7xl p-4 sm:p-6">{body}</div> : body}
+            </AiModeShell>
+        );
     }
 
     return (
@@ -350,6 +370,12 @@ const TOPIC_ICONS: Record<string, typeof Bot> = {
 
 const MAX_LENGTH = 4000;
 
+/** Where the open / collapsed state of the chat list is remembered. */
+const LIST_KEY = 'sundal.aiAssistant.chatList';
+
+/** Phones and narrow windows: below Tailwind's md breakpoint. */
+const isSmallScreen = () => typeof window !== 'undefined' && window.innerWidth < 768;
+
 /** A card that moved to a newer message (a draft the AI updated) is shown only there. */
 function withFresh(prev: Message[], fresh: Message[]): Message[] {
     const moved = new Set(fresh.flatMap(m => m.cards.map(c => c.id)));
@@ -419,9 +445,26 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [search, setSearch] = useState('');
-    // Small screens: the conversation list slides over the chat.
-    const [listOpen, setListOpen] = useState(false);
+    // The conversation list: open, or collapsed to a narrow rail. Remembered in this
+    // browser; small screens always start collapsed (the open list covers the chat).
+    const [listOpen, setListOpen] = useState(() => {
+        if (isSmallScreen()) return false;
+        try {
+            return window.localStorage.getItem(LIST_KEY) !== 'closed';
+        } catch {
+            return true;
+        }
+    });
+    const toggleList = () => setListOpen(wasOpen => {
+        if (!isSmallScreen()) {
+            try {
+                window.localStorage.setItem(LIST_KEY, wasOpen ? 'closed' : 'open');
+            } catch {
+                // Not remembered; still toggled.
+            }
+        }
+        return !wasOpen;
+    });
     // The topic button stays on for the conversation until removed.
     const [topic, setTopic] = useState<string | null>(initial[0]?.topic ?? null);
     const bottomRef = useRef<HTMLDivElement>(null);
@@ -535,7 +578,8 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
 
     const open = (id: number | null) => {
         setActiveId(id);
-        setListOpen(false);
+        // On a phone the open list covers the chat: close it once a chat is picked.
+        if (isSmallScreen()) setListOpen(false);
     };
 
     const firstName = String(auth?.user?.name ?? '').split(' ')[0];
@@ -556,45 +600,43 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
 
     return (
         <div className={`relative flex overflow-hidden bg-background ${standalone ? 'h-full min-h-[480px]' : 'h-[calc(100dvh-11rem)] min-h-[560px] rounded-xl border'}`}>
-            {/* Conversation list: always on wide screens, a sliding panel on small ones. */}
-            {listOpen && <div className="absolute inset-0 z-20 bg-black/30 md:hidden" onClick={() => setListOpen(false)} aria-hidden />}
-            <aside className={`${listOpen ? 'absolute inset-y-0 left-0 z-30 flex shadow-xl' : 'hidden'} w-72 shrink-0 flex-col border-r bg-background md:static md:flex md:bg-muted/40 md:shadow-none`}>
-                <ConversationList
-                    conversations={conversations}
-                    activeId={activeId}
-                    search={search}
-                    onSearch={setSearch}
-                    onOpen={open}
-                    onDelete={remove}
-                />
-            </aside>
+            {/* Conversation list: open, or a narrow rail. On a phone the open list slides over the chat. */}
+            {listOpen ? (
+                <>
+                    <div className="absolute inset-0 z-20 bg-black/30 md:hidden" onClick={toggleList} aria-hidden />
+                    <aside id="ai-chat-list" className="absolute inset-y-0 left-0 z-30 flex w-72 shrink-0 flex-col border-r bg-background shadow-xl md:static md:z-auto md:bg-muted/40 md:shadow-none">
+                        <ConversationList conversations={conversations} activeId={activeId} onOpen={open} onDelete={remove} onCollapse={toggleList} />
+                    </aside>
+                </>
+            ) : (
+                <aside className="flex w-14 shrink-0 flex-col items-center gap-2 border-r bg-muted/40 py-3">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleList} aria-label={t('Show chats')} title={t('Show chats')} aria-expanded={false} aria-controls="ai-chat-list">
+                        <PanelLeftOpen className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full bg-background" onClick={() => open(null)} aria-label={t('New chat')} title={t('New chat')}>
+                        <Plus className="h-4 w-4" />
+                    </Button>
+                </aside>
+            )}
 
             <section className="flex min-w-0 flex-1 flex-col">
-                <header className="flex items-center gap-2 border-b px-3 py-2.5 sm:px-4">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => setListOpen(true)} aria-label={t('Conversations')}>
-                        <PanelLeft className="h-4 w-4" />
-                    </Button>
-                    {/* The model this chat runs on; in AI mode it is in the top bar, so the chat's title is shown here. */}
-                    {standalone ? (
-                        <h2 className="truncate text-sm font-semibold">{conversations.find(c => c.id === activeId)?.title || t('New chat')}</h2>
-                    ) : model && (
-                        <div className="flex min-w-0 items-center gap-2" title={`${model.provider} · ${model.name}`}>
-                            <Sparkles className="h-4 w-4 shrink-0 text-violet-500" />
-                            <span className="truncate text-sm font-semibold">{model.name}</span>
-                            <span className="hidden shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground sm:inline">{model.provider}</span>
-                        </div>
-                    )}
-                    <div className="ml-auto flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={() => open(null)} aria-label={t('New chat')} title={t('New chat')}>
-                            <Plus className="h-4 w-4" />
-                        </Button>
+                {/* The Sundal page has no AI mode bar: the model and Settings sit above the chat. */}
+                {!standalone && (model || onOpenSettings) && (
+                    <header className="flex items-center gap-2 border-b px-3 py-2.5 sm:px-4">
+                        {model && (
+                            <div className="flex min-w-0 items-center gap-2" title={`${model.provider} · ${model.name}`}>
+                                <Sparkles className="h-4 w-4 shrink-0 text-violet-500" />
+                                <span className="truncate text-sm font-semibold">{model.name}</span>
+                                <span className="hidden shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground sm:inline">{model.provider}</span>
+                            </div>
+                        )}
                         {onOpenSettings && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onOpenSettings} aria-label={t('Settings')} title={t('Settings')}>
+                            <Button variant="ghost" size="icon" className="ml-auto h-8 w-8" onClick={onOpenSettings} aria-label={t('Settings')} title={t('Settings')}>
                                 <SettingsIcon className="h-4 w-4" />
                             </Button>
                         )}
-                    </div>
-                </header>
+                    </header>
+                )}
 
                 {showWelcome ? (
                     <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 py-10 sm:justify-center">
@@ -671,48 +713,43 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
     );
 }
 
-/** Past conversations, newest first, grouped by day, with a search box. */
-function ConversationList({ conversations, activeId, search, onSearch, onOpen, onDelete }: {
+/** Past conversations, newest first, grouped by day. */
+function ConversationList({ conversations, activeId, onOpen, onDelete, onCollapse }: {
     conversations: Conversation[];
     activeId: number | null;
-    search: string;
-    onSearch: (value: string) => void;
     onOpen: (id: number | null) => void;
     onDelete: (conversation: Conversation) => void;
+    onCollapse: () => void;
 }) {
     const { t } = useTranslation();
-    const query = search.trim().toLowerCase();
-    const shown = query ? conversations.filter(c => (c.title ?? '').toLowerCase().includes(query)) : conversations;
-    const groups = shown.reduce<Record<string, Conversation[]>>((all, c) => {
+    const groups = conversations.reduce<Record<string, Conversation[]>>((all, c) => {
         (all[dayGroup(c.last_message_at)] ??= []).push(c);
         return all;
     }, {});
 
     return (
         <>
-            <div className="space-y-2 p-3">
-                <div className="flex items-center gap-2 px-1 pb-1">
-                    <AssistantMark />
-                    <span className="text-sm font-semibold">{t('AI Assistant')}</span>
+            <div className="flex items-center gap-2 px-4 pb-2 pt-3">
+                <AssistantMark />
+                <span className="truncate text-sm font-semibold">{t('AI Assistant')}</span>
+                <div className="ml-auto flex items-center gap-1">
                     <Button
                         variant="outline"
                         size="icon"
-                        className="ml-auto h-8 w-8 rounded-full bg-background"
+                        className="h-8 w-8 rounded-full bg-background"
                         onClick={() => onOpen(null)}
                         aria-label={t('New chat')}
                         title={t('New chat')}
                     >
                         <Plus className="h-4 w-4" />
                     </Button>
-                </div>
-                <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <Input value={search} onChange={e => onSearch(e.target.value)} placeholder={t('Search chats')} className="h-8 bg-background pl-8 text-xs" aria-label={t('Search chats')} />
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onCollapse} aria-label={t('Hide chats')} title={t('Hide chats')} aria-expanded>
+                        <PanelLeftClose className="h-4 w-4" />
+                    </Button>
                 </div>
             </div>
             <nav className="flex-1 overflow-y-auto px-2 pb-3" aria-label={t('Conversations')}>
                 {conversations.length === 0 && <p className="px-2 py-4 text-xs text-muted-foreground">{t('No conversations yet. Your chats appear here.')}</p>}
-                {conversations.length > 0 && shown.length === 0 && <p className="px-2 py-4 text-xs text-muted-foreground">{t('No chats match your search.')}</p>}
                 {['Today', 'Yesterday', 'Previous 7 days', 'Older'].filter(g => groups[g]).map(group => (
                     <div key={group}>
                         <p className="px-2 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t(group)}</p>
