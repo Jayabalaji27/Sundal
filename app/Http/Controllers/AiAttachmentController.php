@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AiAttachment;
 use App\Services\Ai\AiAccess;
 use App\Services\Ai\Attachments\AttachmentStore;
+use App\Services\Ai\Attachments\GoogleDriveFiles;
 use App\Services\Ai\Attachments\SundalFiles;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -54,6 +55,25 @@ class AiAttachmentController extends Controller
         abort_unless($media, 404);
 
         $attachment = $store->fromContents($media->file_name, $files->contents($media), $request->user(), 'sundal');
+
+        return response()->json(['attachment' => $attachment->toChip()], 201);
+    }
+
+    /** A file picked in the Google Drive picker; the browser's Google token is used once, never stored. */
+    public function fromDrive(Request $request, GoogleDriveFiles $drive, AttachmentStore $store): JsonResponse
+    {
+        $this->ensureCanUse($request);
+        abort_unless(GoogleDriveFiles::configured(), 404);
+        if ($limited = $this->throttle($request)) {
+            return $limited;
+        }
+        $validated = $request->validate([
+            'file_id' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{10,200}$/'],
+            'access_token' => 'required|string|max:4096',
+        ]);
+
+        $file = $drive->fetch($validated['file_id'], $validated['access_token']);
+        $attachment = $store->fromContents($file['name'], $file['contents'], $request->user(), 'google_drive');
 
         return response()->json(['attachment' => $attachment->toChip()], 201);
     }

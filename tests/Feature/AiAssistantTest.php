@@ -2221,6 +2221,74 @@ describe('document plans', function () {
     });
 });
 
+// ── Scanned PDFs and Google Drive (attachments phase 4) ───────────────────────
+
+describe('scanned PDFs and Google Drive', function () {
+    beforeEach(function () {
+        \Illuminate\Support\Facades\Storage::fake('local');
+    });
+
+    test('a scanned PDF waits for OCR, is read once by a PDF-capable model, then works like any document', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $scan = \Barryvdh\DomPDF\Facade\Pdf::loadHTML('<div></div><div style="page-break-after:always"></div><div></div>')->output();
+        $chip = aiUpload($this, $users['owner'], 'signed-terms.pdf', $scan)->assertCreated()->json('attachment');
+        expect($chip['status'])->toBe('needs_ocr');
+
+        $ocr = new FakeProvider([['text' => "--- Page 1 ---\n# Payment terms\nInvoices are paid within 30 days."]]);
+        app()->instance(\App\Services\Ai\Attachments\ScannedPdfReader::class, new \App\Services\Ai\Attachments\ScannedPdfReader(\App\Services\Ai\AiProviderFactory::fake($ocr), app(\App\Services\Ai\Attachments\FileReader::class)));
+
+        $read = app(\App\Services\Ai\Tools\ReadAttachment::class);
+        $first = $read->run(['attachment' => "#{$chip['id']}"], $users['owner']);
+        $again = $read->run(['attachment' => "#{$chip['id']}"], $users['owner']);
+
+        expect($first['text'])->toContain('Invoices are paid within 30 days.')
+            ->and($again['text'])->toBe($first['text'])
+            ->and($ocr->requests)->toHaveCount(1)
+            ->and($ocr->requests[0]->documents[0]['mime'])->toBe('application/pdf')
+            ->and(\App\Models\AiAttachment::withoutGlobalScope('workspace')->find($chip['id'])->status)->toBe('ready');
+    });
+
+    test('a provider that cannot read PDFs says so instead of guessing', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['provider' => 'azure_openai', 'azure_endpoint' => 'https://acme.openai.azure.com', 'azure_deployment' => 'gpt-4o']);
+        $scan = \Barryvdh\DomPDF\Facade\Pdf::loadHTML('<div></div>')->output();
+        $id = aiUpload($this, $users['owner'], 'scan.pdf', $scan)->json('attachment.id');
+
+        expect(fn () => app(\App\Services\Ai\Tools\ReadAttachment::class)->run(['attachment' => "#{$id}"], $users['owner']))
+            ->toThrow(\App\Services\Ai\Tools\ToolInputException::class, 'this AI provider cannot read PDFs');
+    });
+
+    test('Google Drive: a Google Sheet is exported as Excel and read; the token is used once and never stored', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.attachments.from-drive'), ['file_id' => 'abcdefghijkl', 'access_token' => 't'])->assertNotFound();
+
+        config(['ai_assistant.attachments.google_drive' => ['client_id' => 'cid.apps.googleusercontent.com', 'api_key' => 'key', 'app_id' => '123']]);
+        \Illuminate\Support\Facades\Http::fake([
+            'www.googleapis.com/drive/v3/files/sheet1234567/export*' => \Illuminate\Support\Facades\Http::response(aiBugSheet()),
+            'www.googleapis.com/drive/v3/files/sheet1234567*' => \Illuminate\Support\Facades\Http::response(['name' => 'QA bugs', 'mimeType' => 'application/vnd.google-apps.spreadsheet']),
+            'www.googleapis.com/drive/v3/files/missing12345*' => \Illuminate\Support\Facades\Http::response([], 404),
+        ]);
+
+        asAi($this, $users['owner'])->get(route('ai-assistant.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('googleDrive.clientId', 'cid.apps.googleusercontent.com'));
+
+        $chip = asAi($this, $users['owner'])->postJson(route('ai-assistant.attachments.from-drive'), ['file_id' => 'sheet1234567', 'access_token' => 'ya29.secret'])
+            ->assertCreated()->json('attachment');
+        expect($chip['name'])->toBe('QA bugs.xlsx')
+            ->and($chip['source'])->toBe('google_drive')
+            ->and($chip['summary'])->toBe('Bugs: 3 rows')
+            ->and(json_encode(\App\Models\AiAttachment::withoutGlobalScope('workspace')->find($chip['id'])->getAttributes()))->not->toContain('ya29.secret');
+        \Illuminate\Support\Facades\Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer ya29.secret'));
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.attachments.from-drive'), ['file_id' => 'missing12345', 'access_token' => 't'])
+            ->assertUnprocessable()->assertJsonPath('errors.file.0', 'Google Drive could not find that file, or you have no access to it.');
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.attachments.from-drive'), ['file_id' => '../../etc', 'access_token' => 't'])
+            ->assertJsonValidationErrors('file_id');
+    });
+});
+
 // ── AI mode (own tab, session rules) ──────────────────────────────────────────
 
 /** Open the AI mode tab with the current login. */

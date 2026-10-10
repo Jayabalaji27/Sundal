@@ -763,6 +763,37 @@ Sundal page.
 
 ---
 
+### RP-20 · 2026-10-11 · AI Assistant: attachments (+ button), four phases
+
+Decisions (recommended ones): computer + Sundal files first, Google Drive last; files are
+kept as long as their chat; they count toward plan storage; at most 500 rows per import.
+
+- **Phase 1, read files:** + menu (computer, drag and drop, paste, Sundal files), chips.
+  `ai_attachments` table; `FileReader` checks contents (not extensions), refuses macros and
+  zip bombs, never calculates formulas, reads PDF (`smalot/pdfparser`), Excel/CSV
+  (PhpSpreadsheet), Word (`phpoffice/phpword`) and text into sheets or sections. Files sit
+  on the private disk; the model gets `<attached_file>` descriptions as data and reads more
+  with `read_attachment` / `get_sheet_rows`. Unsent files pruned after 24 h.
+- **Phase 2, sheet → bugs/tasks:** `import_bugs_from_sheet`, `import_tasks_from_sheet`.
+  Sundal reads every row; columns matched by name; P1/Sev2/Low… cleaned; people matched
+  only when sure; duplicates unticked; unused columns kept in the description. Editable
+  table card (`tool-calls/{id}/edit`, no AI call); CREATE N over 10; undo.
+- **Phase 3, document → plan:** `plan_tasks_from_document` (`DocumentAnalyzer` reads in
+  chunks with the company model, JSON, merged, cached). Editable plan card; new project
+  (plan limit checked up front) or existing; milestones + tasks with acceptance criteria;
+  undo. `CreateMilestone` is now a shared action.
+- **Phase 4:** scanned PDFs read once by a PDF-capable model (Anthropic, OpenAI, Gemini,
+  OpenRouter) through Prism documents; Google Drive picker (Google Docs/Sheets exported as
+  .docx/.xlsx; the browser's drive.readonly token is used once, never stored). Drive needs
+  `AI_ASSISTANT_GOOGLE_CLIENT_ID` / `_API_KEY` / `_APP_ID` in `.env` (Drive API + Picker API on;
+  this site as an authorised origin of the OAuth web client).
+
+Tests: `AiAssistantTest` 157 (27 new). Real model (OpenRouter, nemotron free) in Edge: QA
+sheet → import card → confirm → undo; BRD → 7 tasks in 3 milestones (cancelled).
+Run Pest with `php -d memory_limit=2G vendor/bin/pest` (`artisan test` uses 128 MB).
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)

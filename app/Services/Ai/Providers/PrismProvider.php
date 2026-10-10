@@ -13,6 +13,7 @@ use Prism\Prism\Exceptions\PrismRateLimitedException;
 use Prism\Prism\Facades\Prism;
 use Prism\Prism\Text\Step;
 use Prism\Prism\Tool;
+use Prism\Prism\ValueObjects\Media\Document;
 use Prism\Prism\ValueObjects\Messages\AssistantMessage;
 use Prism\Prism\ValueObjects\Messages\UserMessage;
 use Throwable;
@@ -78,11 +79,17 @@ class PrismProvider implements AiProvider
 
     private function messages(AiRequest $request): array
     {
+        $last = array_key_last($request->messages);
+
         return array_map(
-            fn (array $message) => $message['role'] === 'assistant'
+            fn (array $message, int $i) => $message['role'] === 'assistant'
                 ? new AssistantMessage($message['content'])
-                : new UserMessage($message['content']),
-            $request->messages
+                : new UserMessage($message['content'], $i === $last ? array_map(
+                    fn (array $doc) => Document::fromRawContent($doc['content'], $doc['mime'], $doc['name']),
+                    $request->documents,
+                ) : []),
+            $request->messages,
+            array_keys($request->messages),
         );
     }
 

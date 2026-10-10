@@ -470,6 +470,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('attachments', [\App\Http\Controllers\AiAttachmentController::class, 'store'])->name('attachments.store');
             Route::get('attachments/sundal', [\App\Http\Controllers\AiAttachmentController::class, 'sundalFiles'])->name('attachments.sundal');
             Route::post('attachments/sundal', [\App\Http\Controllers\AiAttachmentController::class, 'fromSundal'])->name('attachments.from-sundal');
+            Route::post('attachments/drive', [\App\Http\Controllers\AiAttachmentController::class, 'fromDrive'])->name('attachments.from-drive');
             Route::delete('attachments/{attachment}', [\App\Http\Controllers\AiAttachmentController::class, 'destroy'])->name('attachments.destroy');
             Route::post('tool-calls/{toolCall}/confirm', [\App\Http\Controllers\AiAssistantController::class, 'confirm'])->name('tool-calls.confirm');
             Route::post('tool-calls/{toolCall}/cancel', [\App\Http\Controllers\AiAssistantController::class, 'cancel'])->name('tool-calls.cancel');

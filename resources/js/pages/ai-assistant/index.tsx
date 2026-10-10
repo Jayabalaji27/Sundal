@@ -22,7 +22,7 @@ import { toast } from '@/components/custom-toast';
 import { AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
 import { ImportTable, type ImportChanges, type ImportView } from '@/components/ai-import-card';
 import { PlanList, type PlanChanges, type PlanView } from '@/components/ai-plan-card';
-import { AttachMenu, DropZone, FileChip, FileSuggestions, SundalFilesDialog, useAttachments, type AttachmentChip } from '@/components/ai-attachments';
+import { AttachMenu, DropZone, FileChip, FileSuggestions, SundalFilesDialog, openDrivePicker, useAttachments, type AttachmentChip, type GoogleDriveConfig } from '@/components/ai-attachments';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { notifySignedOut } from '@/lib/ai-mode';
 
@@ -145,6 +145,8 @@ interface Props {
     topics: TopicOption[];
     /** The connected provider and model, for the pill in the chat header. */
     model?: ModelInfo | null;
+    /** The Google Drive picker, when the install has it set up. */
+    googleDrive?: GoogleDriveConfig | null;
     /** Set when the page is the AI mode tab (route ai-mode). */
     standalone?: boolean;
     aiMode?: AiModeConfig;
@@ -192,6 +194,7 @@ export default function AiAssistantPage(props: Props) {
                 hasMore={props.conversationsHasMore ?? false}
                 counts={props.conversationCounts ?? { favorites: 0, archived: 0 }}
                 topics={props.topics}
+                googleDrive={props.googleDrive ?? null}
                 model={props.model ?? null}
                 standalone={standalone}
                 onOpenSettings={canOpenSettings ? () => setView('settings') : undefined}
@@ -440,7 +443,8 @@ function AssistantMark({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
     );
 }
 
-function Chat({ conversations: initial, hasMore: initialHasMore, counts: initialCounts, topics, model, standalone, onOpenSettings }: {
+function Chat({ conversations: initial, hasMore: initialHasMore, counts: initialCounts, topics, googleDrive, model, standalone, onOpenSettings }: {
+    googleDrive: GoogleDriveConfig | null;
     conversations: Conversation[];
     hasMore: boolean;
     counts: ListCounts;
@@ -524,7 +528,9 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
     }, [activeId]);
 
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        // Scroll only the message list; scrollIntoView would also move the page around it.
+        const list = bottomRef.current?.parentElement?.parentElement;
+        list?.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
     }, [messages, sending]);
 
     const send = async (text: string) => {
@@ -706,6 +712,13 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
             large={showWelcome}
             attach={attach}
             onSundal={() => setSundalOpen(true)}
+            onDrive={googleDrive ? () => {
+                openDrivePicker(googleDrive, (fileId, name, token) => attach.addChip(
+                    `drive-${fileId}-${Date.now()}`,
+                    name,
+                    () => axios.post(route('ai-assistant.attachments.from-drive'), { file_id: fileId, access_token: token }),
+                )).catch(() => toast.error(t('Google Drive could not be opened. Try again.')));
+            } : undefined}
         />
     );
 

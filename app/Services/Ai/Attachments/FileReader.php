@@ -413,6 +413,17 @@ class FileReader
         return $this->textResult($raw);
     }
 
+    /** Text Sundal got another way (a scanned PDF read by the AI model), sectioned like any document. */
+    public function fromText(string $text, ?int $pages = null): array
+    {
+        $read = $this->textResult($text);
+        if ($pages !== null && $read['status'] === AiAttachment::READY) {
+            $read['structure']['pages'] = $pages;
+        }
+
+        return $read;
+    }
+
     /** Text with "#" headings (Word, Markdown) or none (plain text): split at headings, then by size. */
     private function textResult(string $text): array
     {

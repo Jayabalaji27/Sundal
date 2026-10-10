@@ -348,3 +348,63 @@ export function DropZone({ onFiles, children, className = '' }: { onFiles: (file
         </div>
     );
 }
+
+/** The install's Google Cloud project, for the Drive picker (null when not set up). */
+export interface GoogleDriveConfig {
+    clientId: string;
+    apiKey: string;
+    appId: string | null;
+}
+
+const loadScript = (src: string) => new Promise<void>((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(src));
+    document.head.appendChild(script);
+});
+
+const DRIVE_MIME_TYPES = [
+    'application/pdf', 'text/plain', 'text/markdown', 'text/csv',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.google-apps.document', 'application/vnd.google-apps.spreadsheet',
+].join(',');
+
+/**
+ * Google's own sign-in and file picker, loaded only when used. The user
+ * grants read access to Drive in a Google pop-up; the short-lived token is
+ * sent once with each picked file and never stored by Sundal.
+ */
+export async function openDrivePicker(config: GoogleDriveConfig, onPick: (fileId: string, name: string, token: string) => void): Promise<void> {
+    await Promise.all([loadScript('https://accounts.google.com/gsi/client'), loadScript('https://apis.google.com/js/api.js')]);
+    const w = window as any;
+    await new Promise<void>(resolve => w.gapi.load('picker', () => resolve()));
+
+    const tokenClient = w.google.accounts.oauth2.initTokenClient({
+        client_id: config.clientId,
+        scope: 'https://www.googleapis.com/auth/drive.readonly',
+        callback: (response: { access_token?: string; error?: string }) => {
+            if (!response.access_token) return;
+            const token = response.access_token;
+            const picker = w.google.picker;
+            const view = new picker.DocsView(picker.ViewId.DOCS).setMimeTypes(DRIVE_MIME_TYPES).setIncludeFolders(true);
+            const builder = new picker.PickerBuilder()
+                .addView(view)
+                .enableFeature(picker.Feature.MULTISELECT_ENABLED)
+                .setOAuthToken(token)
+                .setDeveloperKey(config.apiKey)
+                .setCallback((data: any) => {
+                    if (data[picker.Response.ACTION] !== picker.Action.PICKED) return;
+                    for (const doc of data[picker.Response.DOCUMENTS] ?? []) {
+                        onPick(doc[picker.Document.ID], doc[picker.Document.NAME], token);
+                    }
+                });
+            if (config.appId) builder.setAppId(config.appId);
+            builder.build().setVisible(true);
+        },
+    });
+    tokenClient.requestAccessToken({ prompt: '' });
+}
