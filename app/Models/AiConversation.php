@@ -31,6 +31,11 @@ class AiConversation extends Model
             AiUsage::withoutGlobalScope('workspace')
                 ->where('ai_conversation_id', $conversation->id)
                 ->update(['ai_conversation_id' => null]);
+            // Attached files go with the chat (each removes its stored file).
+            AiAttachment::withoutGlobalScope('workspace')
+                ->where('ai_conversation_id', $conversation->id)
+                ->get()
+                ->each->delete();
             $conversation->messages()->delete();
         });
     }

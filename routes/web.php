@@ -467,6 +467,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'show'])->name('conversations.show');
             Route::patch('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'update'])->name('conversations.update');
             Route::delete('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'destroy'])->name('conversations.destroy');
+            Route::post('attachments', [\App\Http\Controllers\AiAttachmentController::class, 'store'])->name('attachments.store');
+            Route::get('attachments/sundal', [\App\Http\Controllers\AiAttachmentController::class, 'sundalFiles'])->name('attachments.sundal');
+            Route::post('attachments/sundal', [\App\Http\Controllers\AiAttachmentController::class, 'fromSundal'])->name('attachments.from-sundal');
+            Route::delete('attachments/{attachment}', [\App\Http\Controllers\AiAttachmentController::class, 'destroy'])->name('attachments.destroy');
             Route::post('tool-calls/{toolCall}/confirm', [\App\Http\Controllers\AiAssistantController::class, 'confirm'])->name('tool-calls.confirm');
             Route::post('tool-calls/{toolCall}/cancel', [\App\Http\Controllers\AiAssistantController::class, 'cancel'])->name('tool-calls.cancel');
             Route::post('tool-calls/{toolCall}/undo', [\App\Http\Controllers\AiAssistantController::class, 'undo'])->name('tool-calls.undo');

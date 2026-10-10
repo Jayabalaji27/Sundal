@@ -72,6 +72,9 @@ class ToolRegistry
         Tools\SubmitTimesheetTool::class,
         Tools\StartTimerTool::class,
         Tools\StopTimerTool::class,
+        // Attached files (the + button)
+        Tools\ReadAttachment::class,
+        Tools\GetSheetRows::class,
     ];
 
     /** @var AiTool[]|null */

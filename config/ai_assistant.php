@@ -106,4 +106,33 @@ return [
     // the page polls for the answer. Needs a running queue worker, so it is
     // off by default (shared hosting often has none).
     'queue' => env('AI_ASSISTANT_QUEUE', false),
+
+    // Files given to the assistant (+ button). Sundal reads them itself; the
+    // model only gets summaries, sections and rows it asks for.
+    'attachments' => [
+        'disk' => env('AI_ASSISTANT_ATTACHMENT_DISK', 'local'),
+        'max_size_mb' => 10,
+        'max_per_message' => 5,
+        'extensions' => ['pdf', 'xlsx', 'xls', 'csv', 'docx', 'txt', 'md'],
+        // Rows kept per sheet (an import takes at most max_import_rows of them).
+        'max_sheet_rows' => 1000,
+        'max_import_rows' => 500,
+        // Pages and characters read from a document.
+        'max_pages' => 300,
+        'max_chars' => 400000,
+        // Pages a document analysis (BRD → tasks) reads.
+        'max_analysis_pages' => 60,
+        // Text per section handed to the model at once.
+        'section_chars' => 6000,
+        // Zip-based files (xlsx, docx): refuse ones that expand past this.
+        'max_unzipped_mb' => 100,
+        // Files uploaded but never sent are removed after this many hours.
+        'orphan_hours' => 24,
+        // Google Drive picker: the Google Cloud project's OAuth client id and API key.
+        'google_drive' => [
+            'client_id' => env('AI_ASSISTANT_GOOGLE_CLIENT_ID'),
+            'api_key' => env('AI_ASSISTANT_GOOGLE_API_KEY'),
+            'app_id' => env('AI_ASSISTANT_GOOGLE_APP_ID'),
+        ],
+    ],
 ];

@@ -2,6 +2,7 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Models\AiAttachment;
 use App\Models\BudgetCategory;
 use App\Models\Bug;
 use App\Models\BugStatus;
@@ -49,6 +50,32 @@ class RecordResolver
     public function bugs(User $user): Builder
     {
         return Bug::query()->whereIn('project_id', $this->projects($user)->select('id'));
+    }
+
+    /** Files the user gave the assistant in this workspace that were read (or wait for OCR). */
+    public function attachments(User $user): Builder
+    {
+        return AiAttachment::withoutGlobalScope('workspace')
+            ->ownedBy($user)
+            ->whereIn('status', [AiAttachment::READY, AiAttachment::NEEDS_OCR]);
+    }
+
+    /** By id ("#12") or file name; the newest wins when names repeat. */
+    public function attachment(User $user, string $ref): AiAttachment
+    {
+        if (trim($ref) === '') {
+            $latest = $this->attachments($user)->whereNotNull('ai_message_id')->latest('id')->first();
+
+            return $latest ?? throw new ToolInputException(__('No file is attached. Ask the user to attach it with the + button.'));
+        }
+
+        // The same file attached twice: the newest copy is meant.
+        $matches = $this->candidates($this->attachments($user)->latest('id'), $ref, 'original_name');
+        if ($matches->isNotEmpty() && $matches->pluck('original_name')->map(fn ($n) => mb_strtolower($n))->unique()->count() === 1) {
+            return $matches->first();
+        }
+
+        return $this->one($this->attachments($user)->latest('id'), $ref, 'original_name', __('attached file'));
     }
 
     public function project(User $user, string $ref): Project

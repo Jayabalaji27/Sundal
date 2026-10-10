@@ -333,6 +333,11 @@ class PlanLimitService
 
         $totalSize = \Spatie\MediaLibrary\MediaCollections\Models\Media::whereIn('user_id', $workspaceUserIds)->sum('size');
 
+        // Files given to the AI Assistant count too.
+        $totalSize += \App\Models\AiAttachment::withoutGlobalScope('workspace')
+            ->whereIn('workspace_id', $companyOwner->ownedWorkspaces()->pluck('id'))
+            ->sum('size');
+
         return (int) $totalSize;
     }
 

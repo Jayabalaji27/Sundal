@@ -20,6 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/custom-toast';
 import { AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
+import { AttachMenu, DropZone, FileChip, FileSuggestions, SundalFilesDialog, useAttachments, type AttachmentChip } from '@/components/ai-attachments';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { notifySignedOut } from '@/lib/ai-mode';
 
@@ -74,6 +75,8 @@ interface Message {
     content: string;
     created_at: string;
     cards: ToolCard[];
+    /** Files sent with this message. */
+    attachments?: AttachmentChip[];
     /** Shown in the chat only, never saved: the provider refused or failed. */
     error?: boolean;
 }
@@ -480,6 +483,9 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
     // The topic button stays on for the conversation until removed.
     const [topic, setTopic] = useState<string | null>(initial[0]?.topic ?? null);
     const bottomRef = useRef<HTMLDivElement>(null);
+    // Files in the message box (+ button, drag and drop, paste).
+    const attach = useAttachments();
+    const [sundalOpen, setSundalOpen] = useState(false);
     // Set when send() creates a conversation: its messages are already on screen
     // (including any error bubble), so don't reload and overwrite them.
     const createdHereRef = useRef<number | null>(null);
@@ -517,14 +523,19 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
 
     const send = async (text: string) => {
         const content = text.trim();
-        if (!content || sending) return;
+        const files = attach.ready;
+        if ((!content && files.length === 0) || sending || attach.uploading) return;
         setSending(true);
         setInput('');
-        const optimistic: Message = { id: -Date.now(), role: 'user', content, created_at: new Date().toISOString(), cards: [] };
+        const optimistic: Message = {
+            id: -Date.now(), role: 'user', content: content || t('Please look at the attached file.'), created_at: new Date().toISOString(), cards: [], attachments: files,
+        };
         setMessages(prev => [...prev, optimistic]);
 
         const apply = (data: any) => {
             if (!data?.conversation) return;
+            // The message was saved with its files: they leave the box.
+            attach.clear();
             setMessages(prev => withFresh(prev.filter(m => m.id !== optimistic.id), data.messages));
             if (activeId === null) createdHereRef.current = data.conversation.id;
             setActiveId(current => current ?? data.conversation.id);
@@ -535,7 +546,7 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
         };
 
         try {
-            const { data } = await axios.post(route('ai-assistant.send'), { conversation_id: activeId, content, topic: topic ?? '' });
+            const { data } = await axios.post(route('ai-assistant.send'), { conversation_id: activeId, content, topic: topic ?? '', attachment_ids: files.map(f => f.id) });
             apply(data);
             if (data.pending) {
                 await waitForReply(data.conversation.id, data.messages.at(-1)?.id ?? 0);
@@ -687,6 +698,8 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
             topic={topic}
             onTopic={setTopic}
             large={showWelcome}
+            attach={attach}
+            onSundal={() => setSundalOpen(true)}
         />
     );
 
@@ -706,6 +719,8 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
                 </aside>
             )}
 
+            <SundalFilesDialog open={sundalOpen} onOpenChange={setSundalOpen} onPick={file => attach.addFromSundal(file.id, file.name, file.size)} />
+            <DropZone onFiles={attach.add} className="flex min-w-0 flex-1 flex-col">
             <section className="flex min-w-0 flex-1 flex-col">
                 {/* The Sundal page has no AI mode bar: the model sits above the chat. */}
                 {!standalone && model && (
@@ -789,6 +804,7 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
                     </>
                 )}
             </section>
+            </DropZone>
         </div>
     );
 }
@@ -1163,7 +1179,10 @@ function ProfileMenu({ standalone, compact = false }: { standalone: boolean; com
 }
 
 /** The message box: grows with the text; topic picker and send button underneath. */
-function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, large }: {
+function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, large, attach, onSundal, onDrive }: {
+    attach: ReturnType<typeof useAttachments>;
+    onSundal: () => void;
+    onDrive?: () => void;
     value: string;
     onChange: (value: string) => void;
     onSend: () => void;
@@ -1198,6 +1217,12 @@ function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, la
             className="rounded-2xl border bg-card shadow-sm transition focus-within:border-violet-300 focus-within:ring-4 focus-within:ring-violet-500/10 dark:focus-within:border-violet-700"
             onSubmit={(e: FormEvent) => { e.preventDefault(); onSend(); }}
         >
+            {attach.files.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-3 pt-3" aria-label={t('Attached files')}>
+                    {attach.files.map(file => <FileChip key={file.key} file={file} onRemove={() => attach.remove(file.key)} />)}
+                </div>
+            )}
+            {!value.trim() && <div className="pt-2"><FileSuggestions files={attach.ready} onPick={text => { onChange(text); ref.current?.focus(); }} /></div>}
             <div className="flex gap-2.5 px-4 pt-3.5">
                 <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" aria-hidden />
                 <textarea
@@ -1205,6 +1230,7 @@ function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, la
                     value={value}
                     onChange={e => onChange(e.target.value)}
                     onKeyDown={onKeyDown}
+                    onPaste={e => { if (e.clipboardData.files.length) { e.preventDefault(); attach.add(e.clipboardData.files); } }}
                     placeholder={topic ? t(TOPIC_HINTS[topic]) : t('Ask a question or tell me what to do…')}
                     rows={large ? 3 : 1}
                     maxLength={MAX_LENGTH}
@@ -1213,6 +1239,7 @@ function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, la
                 />
             </div>
             <div className="flex items-center gap-2 px-3 pb-3 pt-2">
+                <AttachMenu onFiles={attach.add} onSundal={onSundal} onDrive={onDrive} disabled={attach.full || sending} />
                 {topics.length > 0 && (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1255,7 +1282,7 @@ function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, la
                 <span className={`ml-auto hidden text-[11px] tabular-nums sm:inline ${value.length > MAX_LENGTH * 0.9 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                     {value.length}/{MAX_LENGTH}
                 </span>
-                <Button type="submit" size="icon" className="ml-auto h-8 w-8 rounded-full sm:ml-0" disabled={sending || !value.trim()} aria-label={t('Send')}>
+                <Button type="submit" size="icon" className="ml-auto h-8 w-8 rounded-full sm:ml-0" disabled={sending || attach.uploading || (!value.trim() && attach.ready.length === 0)} aria-label={attach.uploading ? t('Wait for the files to be read') : t('Send')}>
                     {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
                 </Button>
             </div>
@@ -1295,6 +1322,11 @@ function ChatMessage({ message, userName, onCardChange }: {
                     <span className="font-semibold">{mine ? t('You') : t('AI Assistant')}</span>
                     <span className="text-muted-foreground">{time}</span>
                 </div>
+                {(message.attachments?.length ?? 0) > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {message.attachments!.map(file => <FileChip key={file.id} file={file} />)}
+                    </div>
+                )}
                 {message.content && (
                     <div className={`whitespace-pre-wrap break-words text-sm leading-6 ${
                         message.error

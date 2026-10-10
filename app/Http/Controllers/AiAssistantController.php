@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AiAttachment;
 use App\Models\AiConversation;
 use App\Models\AiMessage;
 use App\Models\AiToolCall;
@@ -190,7 +191,10 @@ class AiAssistantController extends Controller
 
         $validated = $request->validate([
             'conversation_id' => 'nullable|integer',
-            'content' => 'required|string|max:4000',
+            'content' => 'nullable|required_without:attachment_ids|string|max:4000',
+            // Files from the + button, uploaded first (ai-assistant.attachments.store).
+            'attachment_ids' => 'nullable|array|max:' . config('ai_assistant.attachments.max_per_message', 5),
+            'attachment_ids.*' => 'integer|distinct',
             // Topic button: a key sets it, '' or null clears it, absent leaves it.
             'topic' => ['nullable', 'string', Rule::in(['', ...Topics::keys()])],
         ]);
@@ -200,6 +204,13 @@ class AiAssistantController extends Controller
             return response()->json(['error' => __('Too many messages. Please wait a minute.')], 429);
         }
         RateLimiter::hit($limiterKey, 60);
+
+        // Only this user's own files that were not sent yet.
+        $attachmentIds = array_map('intval', $validated['attachment_ids'] ?? []);
+        if ($attachmentIds && AiAttachment::ownedBy($user)->whereKey($attachmentIds)->whereNull('ai_message_id')->count() !== count($attachmentIds)) {
+            return response()->json(['error' => __('A file is no longer available. Remove it and attach it again.')], 422);
+        }
+        $content = trim((string) ($validated['content'] ?? '')) ?: __('Please look at the attached file.');
 
         $conversation = isset($validated['conversation_id'])
             ? AiConversation::ownedBy($user)->findOrFail($validated['conversation_id'])
@@ -216,7 +227,7 @@ class AiAssistantController extends Controller
 
         // Queue mode: answer in the background; the page polls the conversation.
         if (config('ai_assistant.queue')) {
-            $message = $assistant->addUserMessage($conversation, trim($validated['content']));
+            $message = $assistant->addUserMessage($conversation, $content, $attachmentIds);
             \App\Jobs\ProcessAiMessage::dispatch($user->id, $conversation->id, $message->id);
 
             return response()->json([
@@ -232,7 +243,7 @@ class AiAssistantController extends Controller
         @set_time_limit((int) config('ai_assistant.sync_time_limit', 300));
 
         try {
-            $assistant->reply($conversation, $user, trim($validated['content']));
+            $assistant->reply($conversation, $user, $content, $attachmentIds);
         } catch (AiProviderException $e) {
             return response()->json([
                 'error' => $e->getMessage(),
@@ -341,6 +352,11 @@ class AiAssistantController extends Controller
     private function messagesWithCards(AiConversation $conversation, int $afterId = 0): array
     {
         $messages = $conversation->messages()->where('id', '>', $afterId)->get();
+        $files = AiAttachment::withoutGlobalScope('workspace')
+            ->whereIn('ai_message_id', $messages->pluck('id'))
+            ->orderBy('id')
+            ->get()
+            ->groupBy('ai_message_id');
         $cards = AiToolCall::where('ai_conversation_id', $conversation->id)
             ->whereIn('ai_message_id', $messages->pluck('id'))
             ->whereNotNull('summary')
@@ -348,10 +364,10 @@ class AiAssistantController extends Controller
             ->get()
             ->groupBy('ai_message_id');
 
-        return $messages->map(fn (AiMessage $m) => $this->messageJson(
-            $m,
-            ($cards[$m->id] ?? collect())->map(fn (AiToolCall $c) => $c->toCard())->values()->all(),
-        ))->all();
+        return $messages->map(fn (AiMessage $m) => [
+            ...$this->messageJson($m, ($cards[$m->id] ?? collect())->map(fn (AiToolCall $c) => $c->toCard())->values()->all()),
+            'attachments' => ($files[$m->id] ?? collect())->map(fn (AiAttachment $f) => $f->toChip())->values()->all(),
+        ])->all();
     }
 
     private function messageJson(AiMessage $message, array $cards): array

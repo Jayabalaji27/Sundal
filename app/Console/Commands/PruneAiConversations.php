@@ -42,7 +42,19 @@ class PruneAiConversations extends Command
             ->where('created_at', '<', now()->subMinutes(config('ai_assistant.confirmation_ttl_minutes', 30)))
             ->update(['status' => AiToolCall::EXPIRED]);
 
-        $this->info("Deleted {$deleted} conversations, expired {$expired} confirm cards.");
+        // Files attached in the message box but never sent.
+        $orphans = 0;
+        \App\Models\AiAttachment::withoutGlobalScope('workspace')
+            ->whereNull('ai_message_id')
+            ->where('created_at', '<', now()->subHours((int) config('ai_assistant.attachments.orphan_hours', 24)))
+            ->chunkById(200, function ($files) use (&$orphans) {
+                foreach ($files as $file) {
+                    $file->delete();
+                    $orphans++;
+                }
+            });
+
+        $this->info("Deleted {$deleted} conversations, expired {$expired} confirm cards, removed {$orphans} unsent files.");
 
         return self::SUCCESS;
     }
