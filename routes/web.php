@@ -437,6 +437,51 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('chat/conversations/{conversation}/messages', [ChatController::class, 'messages'])->middleware(['permission:chat_view', 'module.access'])->name('chat.messages');
         Route::post('chat/conversations/{conversation}/messages', [ChatController::class, 'sendMessage'])->middleware(['permission:chat_view', 'module.access'])->name('chat.send');
 
+        // AI Assistant (BYOA) — company owners and managers only (ai.assistant),
+        // and only with the AI add-on (module.access). Same ordering rule as the
+        // AI page above: the role check runs first so other roles get a clean 403.
+        // The page itself skips module.access: without the add-on, owners get an
+        // upgrade page there (managers are sent to the dashboard by the controller).
+        // Both entry points (this page and AI mode) use the current login and start the
+        // AI session (workspace lock + idle lock).
+        Route::get('ai-assistant', [\App\Http\Controllers\AiAssistantController::class, 'index'])
+            ->middleware('ai.assistant')
+            ->name('ai-assistant.index');
+        // AI mode: the same assistant in its own browser tab, opened with the header
+        // switch. Uses the current login (no password prompt).
+        Route::get('ai-mode', [\App\Http\Controllers\AiAssistantController::class, 'aiMode'])
+            ->middleware(['ai.assistant', 'module.access'])
+            ->name('ai-mode');
+        Route::middleware(['ai.assistant', 'module.access'])->prefix('ai-mode')->name('ai-mode.')->group(function () {
+            Route::post('heartbeat', [\App\Http\Controllers\AiModeController::class, 'heartbeat'])->name('heartbeat');
+            Route::get('status', [\App\Http\Controllers\AiModeController::class, 'status'])->name('status');
+            Route::post('keep-alive', [\App\Http\Controllers\AiModeController::class, 'keepAlive'])->name('keep-alive');
+            Route::post('unlock', [\App\Http\Controllers\AiModeController::class, 'unlock'])->name('unlock');
+        });
+
+        // ai.mode: every assistant request needs a live AI session (opened page, same
+        // workspace, not idle); requests from the AI mode tab also need Sundal open.
+        Route::middleware(['ai.assistant', 'module.access', 'ai.mode'])->prefix('ai-assistant')->name('ai-assistant.')->group(function () {
+            Route::post('messages', [\App\Http\Controllers\AiAssistantController::class, 'send'])->name('send');
+            Route::get('conversations', [\App\Http\Controllers\AiAssistantController::class, 'conversations'])->name('conversations.index');
+            Route::get('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'show'])->name('conversations.show');
+            Route::patch('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'update'])->name('conversations.update');
+            Route::delete('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'destroy'])->name('conversations.destroy');
+            Route::post('attachments', [\App\Http\Controllers\AiAttachmentController::class, 'store'])->name('attachments.store');
+            Route::get('attachments/sundal', [\App\Http\Controllers\AiAttachmentController::class, 'sundalFiles'])->name('attachments.sundal');
+            Route::post('attachments/sundal', [\App\Http\Controllers\AiAttachmentController::class, 'fromSundal'])->name('attachments.from-sundal');
+            Route::post('attachments/drive', [\App\Http\Controllers\AiAttachmentController::class, 'fromDrive'])->name('attachments.from-drive');
+            Route::delete('attachments/{attachment}', [\App\Http\Controllers\AiAttachmentController::class, 'destroy'])->name('attachments.destroy');
+            Route::post('tool-calls/{toolCall}/confirm', [\App\Http\Controllers\AiAssistantController::class, 'confirm'])->name('tool-calls.confirm');
+            Route::post('tool-calls/{toolCall}/cancel', [\App\Http\Controllers\AiAssistantController::class, 'cancel'])->name('tool-calls.cancel');
+            Route::post('tool-calls/{toolCall}/undo', [\App\Http\Controllers\AiAssistantController::class, 'undo'])->name('tool-calls.undo');
+            Route::post('tool-calls/{toolCall}/edit', [\App\Http\Controllers\AiAssistantController::class, 'editCard'])->name('tool-calls.edit');
+            Route::post('tool-calls/{toolCall}/update', [\App\Http\Controllers\AiAssistantController::class, 'updateCard'])->name('tool-calls.update');
+            Route::put('settings', [\App\Http\Controllers\AiAssistantSettingsController::class, 'update'])->name('settings.update');
+            Route::post('settings/test', [\App\Http\Controllers\AiAssistantSettingsController::class, 'test'])->name('settings.test');
+            Route::delete('settings', [\App\Http\Controllers\AiAssistantSettingsController::class, 'destroy'])->name('settings.destroy');
+        });
+
         // ── Backward-compat redirects (old → new) ─────────────────────────
         // Old standup/risk-radar/resource-conflicts links open inside the AI page
         // (their own pages still exist; these are additional entry points)

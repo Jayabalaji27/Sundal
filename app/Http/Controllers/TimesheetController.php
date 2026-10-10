@@ -572,39 +572,18 @@ class TimesheetController extends Controller
     {
         $this->authorizePermission('timesheet_submit');
 
-        // Only the person who logged the time submits it; owners/managers approve or
-        // reject it afterwards.
+        // Shared with the AI assistant. Only the person who logged the time submits
+        // it (draft or rejected, with entries); owners/managers approve or reject it.
         if ((int) $timesheet->user_id !== (int) auth()->id()) {
             abort(403, __('You can only submit your own timesheets.'));
         }
 
-        // A rejected timesheet is fixed up and sent back for approval.
-        if (!in_array($timesheet->status, ['draft', 'rejected'], true)) {
-            return back()->withErrors(['message' => 'Only draft or rejected timesheets can be submitted']);
-        }
-        
-        if (!$timesheet->entries()->exists()) {
-            return back()->withErrors(['message' => 'Cannot submit timesheet without entries']);
-        }
-
         try {
-            $timesheet->update([
-                'status' => 'submitted',
-                'submitted_at' => now()
-            ]);
-
-            // Create approval record for workspace owner only
-            $workspace = $timesheet->workspace;
-            
-            if ($workspace->owner) {
-                \App\Models\TimesheetApproval::create([
-                    'timesheet_id' => $timesheet->id,
-                    'approver_id' => $workspace->owner->id,
-                    'status' => 'pending'
-                ]);
-            }
+            app(\App\Actions\Timesheets\SubmitTimesheet::class)->handle(auth()->user(), $timesheet);
 
             return back()->with('success', __('Timesheet submitted successfully!'));
+        } catch (\App\Actions\ActionException $e) {
+            return back()->withErrors(['message' => $e->getMessage()]);
         } catch (\Exception $e) {
             return back()->withErrors(['message' => 'Failed to submit timesheet: ' . $e->getMessage()]);
         }

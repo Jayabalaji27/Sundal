@@ -6,6 +6,7 @@ import { ProfileMenu } from '@/components/profile-menu';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import NavigationTimer from '@/components/timesheets/NavigationTimer';
+import { AiModeToggle } from '@/components/ai-mode-toggle';
 import { NotificationDropdown } from '@/components/notification-dropdown';
 import { usePage, router } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
@@ -58,6 +59,7 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                         <span className="hidden md:inline">{t('Search...')}</span>
                         <kbd className="hidden md:inline-flex h-4 items-center rounded border bg-muted px-1 font-mono text-[9px]">⌘K</kbd>
                     </button>
+                    <AiModeToggle />
                     {auth?.user?.type !== 'superadmin' && <NavigationTimer />}
                     <WorkspaceSwitcher />
                     <LanguageSwitcher />

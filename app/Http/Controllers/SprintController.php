@@ -84,7 +84,12 @@ class SprintController extends Controller
     {
         abort_if($sprint->workspace_id !== $this->ws(), 404);
         $request->validate(['task_id' => 'required|exists:tasks,id']);
-        $sprint->tasks()->syncWithoutDetaching([$request->task_id]);
+        try {
+            // Shared with the AI assistant: same-project tasks only, records who added it.
+            app(\App\Actions\Sprints\AddTasksToSprint::class)->handle(auth()->user(), $sprint, [\App\Models\Task::findOrFail($request->task_id)]);
+        } catch (\App\Actions\ActionException $e) {
+            return back()->with('error', $e->getMessage());
+        }
         return back()->with('success', 'Task added to sprint.');
     }
 

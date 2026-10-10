@@ -207,50 +207,8 @@ class InvoiceController extends Controller
 
         $this->ensureTasksNotBilled($validated['items']);
 
-        $project = Project::findOrFail($validated['project_id']);
-
-        // Calculate totals
-        $subtotal = collect($validated['items'])->sum('amount');
-        $appliedTaxes = Tax::whereIn('id', $validated['selected_taxes'] ?? [])->get(['id', 'name', 'rate']);
-        $taxAmount = $appliedTaxes->sum(fn (Tax $tax) => ($subtotal * $tax->rate) / 100);
-        $totalAmount = $subtotal + $taxAmount;
-
-        $invoice = Invoice::create([
-            'project_id' => $validated['project_id'],
-            'workspace_id' => $project->workspace_id,
-            'client_id' => $validated['client_id'] ?? null,
-            'created_by' => $user->id,
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'invoice_date' => $validated['invoice_date'],
-            'due_date' => $validated['due_date'],
-            'tax_rate' => $appliedTaxes->map(fn (Tax $tax) => ['id' => $tax->id, 'name' => $tax->name, 'rate' => $tax->rate])->all(),
-            'notes' => $validated['notes'] ?? null,
-            'terms' => $validated['terms'] ?? null,
-            'subtotal' => $subtotal,
-            'tax_amount' => $taxAmount,
-            'total_amount' => $totalAmount,
-        ]);
-
-        // Fire event for email notification
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\InvoiceCreated($invoice));
-        }
-
-
-        // Create invoice items
-        foreach ($validated['items'] as $index => $item) {
-            $task = Task::find($item['task_id']);
-            InvoiceItem::create([
-                'invoice_id' => $invoice->id,
-                'type' => 'task',
-                'description' => $task ? $task->title : 'Task',
-                'rate' => $item['amount'],
-                'amount' => $item['amount'],
-                'task_id' => $item['task_id'],
-                'sort_order' => $index + 1,
-            ]);
-        }
+        // Shared with the AI assistant.
+        $invoice = app(\App\Actions\Invoices\CreateInvoice::class)->handle($user, $validated);
 
         return redirect()->route('invoices.show', $invoice)->with('success', __('Invoice created successfully!'));
     }
@@ -289,45 +247,12 @@ class InvoiceController extends Controller
 
         $this->ensureTasksNotBilled($validated['items'], $invoice->id);
 
-        $appliedTaxes = Tax::whereIn('id', $validated['selected_taxes'] ?? [])->get(['id', 'name', 'rate']);
-
-        $invoice->update([
-            'client_id' => $validated['client_id'] ?? null,
-            'title' => $validated['title'],
-            'description' => $validated['description'] ?? null,
-            'invoice_date' => $validated['invoice_date'],
-            'due_date' => $validated['due_date'],
-            'tax_rate' => $appliedTaxes->map(fn (Tax $tax) => ['id' => $tax->id, 'name' => $tax->name, 'rate' => $tax->rate])->all(),
-            'notes' => $validated['notes'] ?? null,
-            'terms' => $validated['terms'] ?? null,
+        // Shared with the AI assistant. Every field is sent, so every field changes.
+        app(\App\Actions\Invoices\UpdateInvoice::class)->handle(auth()->user(), $invoice, [
+            ...array_fill_keys(\App\Actions\Invoices\UpdateInvoice::FIELDS, null),
+            'selected_taxes' => [],
+            ...$validated,
         ]);
-
-        // Update items
-        $invoice->items()->delete();
-        foreach ($validated['items'] as $index => $item) {
-            $description = $item['description']
-                ?? (!empty($item['task_id']) ? Task::find($item['task_id'])?->title : null)
-                ?? 'Item';
-            InvoiceItem::create([
-                'invoice_id' => $invoice->id,
-                'type' => $item['type'],
-                'description' => $description,
-                'rate' => $item['amount'],
-                'amount' => $item['amount'],
-                'task_id' => $item['task_id'] ?? null,
-                'expense_id' => $item['expense_id'] ?? null,
-                'timesheet_entry_id' => $item['timesheet_entry_id'] ?? null,
-                'sort_order' => $index + 1,
-            ]);
-        }
-
-        // Recalculate totals after updating items
-        $invoice->calculateTotals();
-
-        // Fire event for email notification
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\InvoiceCreated($invoice));
-        }
 
         return redirect()->route('invoices.show', $invoice)->with('success', __('Invoice updated successfully!'));
     }
@@ -335,14 +260,7 @@ class InvoiceController extends Controller
     /** Stops a task from being billed twice (BUG-14). */
     private function ensureTasksNotBilled(array $items, ?int $exceptInvoiceId = null): void
     {
-        $billed = InvoiceItem::billedTaskIds(array_column($items, 'task_id'), $exceptInvoiceId);
-
-        $errors = [];
-        foreach ($items as $index => $item) {
-            if (!empty($item['task_id']) && in_array((int) $item['task_id'], $billed, true)) {
-                $errors["items.{$index}.task_id"] = __('This task is already on a sent or paid invoice.');
-            }
-        }
+        $errors = \App\Actions\Invoices\CreateInvoice::billedErrors($items, $exceptInvoiceId);
 
         if ($errors) {
             throw ValidationException::withMessages($errors);
@@ -432,7 +350,7 @@ class InvoiceController extends Controller
 
     public function destroy(Invoice $invoice)
     {
-        $invoice->delete();
+        app(\App\Actions\Invoices\DeleteInvoice::class)->handle(auth()->user(), $invoice);
         return back()->with('success', __('Invoice deleted successfully!'));
     }
 
@@ -447,34 +365,23 @@ class InvoiceController extends Controller
             'payment_details' => 'nullable|array',
         ]);
 
-        $oldStatus = $invoice->status;
-        $invoice->markAsPaid(
-            $validated['paid_amount'] ?? null,
+        // Shared with the AI assistant.
+        app(\App\Actions\Invoices\MarkInvoicePaid::class)->handle(
+            auth()->user(),
+            $invoice,
+            isset($validated['paid_amount']) ? (float) $validated['paid_amount'] : null,
             $validated['payment_method'] ?? null,
             $validated['payment_reference'] ?? null,
             $validated['payment_details'] ?? null
         );
-
-        // Fire event for Slack notification
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\InvoiceStatusUpdated($invoice, $oldStatus, 'paid'));
-        }
 
         return back()->with('success', __('Invoice marked as paid successfully!'));
     }
 
     public function send(Invoice $invoice)
     {
-        $oldStatus = $invoice->status;
-        $invoice->update([
-            'status' => 'sent',
-            'sent_at' => now()
-        ]);
-
-        // Fire event for Slack notification
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\InvoiceStatusUpdated($invoice, $oldStatus, 'sent'));
-        }
+        // Shared with the AI assistant: marks it sent and fires the status event.
+        app(\App\Actions\Invoices\SendInvoice::class)->handle(auth()->user(), $invoice);
 
         return back()->with('success', __('Invoice sent successfully!'));
     }

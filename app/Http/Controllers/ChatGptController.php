@@ -19,6 +19,13 @@ class ChatGptController extends Controller
             'max_length' => 'integer|min:1|max:500'
         ]);
 
+        // One key for both AI features: when the workspace has connected an AI
+        // Assistant provider (BYOA), the writing helper uses it too.
+        $byoa = \App\Services\Ai\AiAccess::settings($request->user());
+        if ($byoa) {
+            return $this->generateWithByoa($request, $byoa);
+        }
+
         try {
             // Scoped like AiProjectController - not whichever tenant's key is first.
             $apiKey = getSetting('chatgptKey');
@@ -134,5 +141,53 @@ class ChatGptController extends Controller
                 'error' => config('app.debug') ? $e->getMessage() : null
             ], 500);
         }
+    }
+
+    /**
+     * The writing helper on the workspace's BYOA provider: no tools, plain text,
+     * counted against the same monthly token cap as the AI Assistant.
+     */
+    private function generateWithByoa(Request $request, \App\Models\AiProviderSetting $settings): JsonResponse
+    {
+        if ($settings->monthly_token_cap && \App\Models\AiUsage::tokensThisMonth($settings->workspace_id) >= $settings->monthly_token_cap) {
+            return response()->json(['success' => false, 'message' => __('This workspace has reached its monthly AI token cap.')], 422);
+        }
+
+        $language = $request->input('language', 'en');
+        $instruction = $language !== 'en' ? "\n\nWrite the answer in the language with code \"{$language}\"." : '';
+        $results = min(5, max(1, (int) $request->input('num_results', 1)));
+        $provider = app(\App\Services\Ai\AiProviderFactory::class)->make($settings);
+
+        $texts = [];
+        $input = $output = 0;
+        try {
+            for ($i = 0; $i < $results; $i++) {
+                $result = $provider->run(new \App\Services\Ai\AiRequest(
+                    system: 'You write short texts for a project management app. Reply with the text only.',
+                    messages: [['role' => 'user', 'content' => $request->prompt . $instruction]],
+                    maxSteps: 1,
+                    maxTokens: (int) $request->input('max_length', 150),
+                ));
+                $texts[] = trim($result->text);
+                $input += $result->inputTokens;
+                $output += $result->outputTokens;
+            }
+        } catch (\App\Services\Ai\AiProviderException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        } finally {
+            if ($input || $output) {
+                \App\Models\AiUsage::create([
+                    'workspace_id' => $settings->workspace_id, 'user_id' => $request->user()->id,
+                    'provider' => $settings->provider, 'model' => $settings->model,
+                    'input_tokens' => $input, 'output_tokens' => $output,
+                ]);
+            }
+        }
+
+        $content = count($texts) > 1
+            ? collect($texts)->map(fn ($t, $i) => ($i + 1) . '. ' . $t)->implode("\r\n\r\n\r\n")
+            : ($texts[0] ?? '');
+
+        return response()->json(['success' => $content !== '', 'content' => $content]);
     }
 }

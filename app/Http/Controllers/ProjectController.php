@@ -147,42 +147,12 @@ class ProjectController extends Controller
             'member_ids.*' => 'exists:users,id'
         ]);
 
-        $clientIds = $validated['client_ids'] ?? [];
-        unset($validated['client_ids']);
-
-        $project = Project::create([
-            ...$validated,
-            'workspace_id' => auth()->user()->current_workspace_id,
-            'created_by' => auth()->id(),
-            'budget' => $validated['budget'] ?? 0,
-            'estimated_hours' => $validated['estimated_hours'] ?? 0
-        ]);
-
-        // Assign clients
-        foreach ($clientIds as $clientId) {
-            \App\Models\ProjectClient::create([
-                'project_id' => $project->id,
-                'user_id' => $clientId,
-                'assigned_by' => auth()->id()
-            ]);
-        }
-
-        // Assign members
-        if (!empty($validated['member_ids'])) {
-            foreach ($validated['member_ids'] as $userId) {
-                ProjectMember::create([
-                    'project_id' => $project->id,
-                    'user_id' => $userId,
-                    'role' => 'member',
-                    'assigned_by' => auth()->id()
-                ]);
-            }
-        }
-
-        $project->logActivity('created', "Project '{$project->title}' was created");
-        // Fire event for Slack notification
-        if (!config('app.is_demo', true)) {
-            event(new \App\Events\ProjectCreated($project));
+        // Shared with the AI assistant: creates the project, clients and members,
+        // logs it and fires the Slack event.
+        try {
+            $project = app(\App\Actions\Projects\CreateProject::class)->handle($user, $validated);
+        } catch (\App\Actions\ActionException $e) {
+            return back()->withErrors(['error' => $e->getMessage()])->withInput();
         }
 
         return redirect()->route('projects.show', $project)->with('success', __('Project created successfully.'));
@@ -817,21 +787,13 @@ class ProjectController extends Controller
             'member_ids.*' => 'exists:users,id'
         ]);
 
-        foreach ($validated['member_ids'] as $memberId) {
-            ProjectMember::updateOrCreate(
-                ['project_id' => $project->id, 'user_id' => $memberId],
-                ['role' => 'member', 'assigned_by' => auth()->id()]
-            );
-
-            // Fire event for email notification
-            $assignedUser = User::find($memberId);
-            if (!config('app.is_demo', true)) {
-                event(new \App\Events\ProjectMemberAssigned($project, $assignedUser, auth()->user(), 'member'));
-            }
+        // Shared with the AI assistant: role rules, assignment emails, activity log.
+        try {
+            app(\App\Actions\Projects\AssignProjectMembers::class)
+                ->handle(auth()->user(), $project, User::whereIn('id', $validated['member_ids'])->get(), 'member');
+        } catch (\App\Actions\ActionException $e) {
+            abort(403, $e->getMessage());
         }
-
-        $memberNames = User::whereIn('id', $validated['member_ids'])->pluck('name')->toArray();
-        $project->logActivity('members_assigned', "Members '" . implode(', ', $memberNames) . "' were assigned to project");
 
         return back();
     }

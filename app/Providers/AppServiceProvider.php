@@ -33,6 +33,10 @@ class AppServiceProvider extends ServiceProvider
         
         // Register the WorkspaceObserver
         Workspace::observe(WorkspaceObserver::class);
+
+        // One history log for every business module (who changed what, from
+        // a screen or the AI assistant).
+        \App\Services\History\HistoryRecorder::register();
         
 
 

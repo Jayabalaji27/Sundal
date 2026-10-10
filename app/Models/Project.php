@@ -13,7 +13,7 @@ use App\Models\Concerns\BelongsToWorkspace;
 
 class Project extends Model
 {
-    use SoftDeletes, BelongsToWorkspace;
+    use SoftDeletes, BelongsToWorkspace, \App\Models\Concerns\RecordsCreator;
 
     protected $fillable = [
         'workspace_id', 'portfolio_id', 'title', 'description', 'client_id', 'status', 'priority',
@@ -244,7 +244,7 @@ class Project extends Model
             'user_id' => $userId ?? auth()->id() ?? $this->created_by,
             'action' => $action,
             'description' => $description,
-            'metadata' => $metadata
+            'metadata' => array_merge($metadata, \App\Services\Ai\AiActionContext::metadata())
         ]);
     }
 

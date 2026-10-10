@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Bug extends Model
 {
-    use LogsActivity;
+    use LogsActivity, \App\Models\Concerns\RecordsCreator;
+    protected string $creatorColumn = 'reported_by';
+
     
     protected $fillable = [
         'project_id', 'bug_status_id', 'milestone_id', 'title', 'description',

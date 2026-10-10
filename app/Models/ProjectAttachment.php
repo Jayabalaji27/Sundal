@@ -8,7 +8,9 @@ use App\Models\Concerns\BelongsToWorkspace;
 
 class ProjectAttachment extends Model
 {
-    use BelongsToWorkspace;
+    use BelongsToWorkspace, \App\Models\Concerns\RecordsCreator;
+    protected string $creatorColumn = 'uploaded_by';
+
 
     protected $fillable = [
         'workspace_id', 'project_id', 'media_item_id', 'uploaded_by'

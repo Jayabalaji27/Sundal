@@ -457,10 +457,350 @@ failed before this change, so triage them separately.
 
 ---
 
+### RP-11 · 2026-10-08 · AI Assistant + BYOA, Phase 1 start (branch `feature/ai-assistant-byoa`)
+
+**Plan:** "Sundal AI Assistant & BYOA — Implementation Plan" (claude.ai doc). Scope: company
+owner + manager only, separate AI Assistant page, BYOA only (no Sundal-managed or local
+models), gated by the existing Pro Add-on (`module.access`). Tests: `tests/Feature/AiAssistantTest.php`.
+
+- **Provider layer** — `App\Services\Ai\AiProvider` interface. `PrismProvider`
+  (`prism-php/prism` v0.100.1, new dependency) for Anthropic, OpenAI, Gemini;
+  `AzureOpenAiProvider` over the existing `openai-php/client` (Prism has no Azure driver);
+  `FakeProvider` for tests. Config: `config/ai_assistant.php` (tested model list, caps, TTLs).
+- **Tables** — `ai_provider_settings` (encrypted key, last 4 shown), `ai_conversations`,
+  `ai_messages`, `ai_tool_calls` (audit, kept when a chat is deleted; prompt text removed),
+  `ai_usage` (monthly token cap).
+- **Access** — `AiAccess` + `ai.assistant` middleware: owner/manager only (others 403),
+  Pro Add-on via `module.access`, owner can switch managers off. Shared as `auth.aiAssistant`.
+- **Tools (8)** — read: list_projects, list_tasks, list_bugs, list_team_members; write:
+  create_task, assign_task, change_task_status, assign_bug. Writes only create a pending
+  confirm card; they run on Confirm, re-checking access, permission and every record.
+  `RecordResolver` scopes every lookup to the workspace + `Project::scopeVisibleTo` and asks
+  instead of guessing when a name matches several records.
+- **Action classes** (`app/Actions`) — `CreateTask`, `ChangeTaskStage` (now also used by
+  `TaskController::store` / `changeStage`), `AssignTask`, `AssignBug`. Acting user is passed in.
+- **Audit** — `LogsActivity` adds `via: ai_assistant` + `ai_tool_call_id` to project
+  activity metadata for confirmed AI actions (`AiActionContext`).
+- **Retention** — `ai:prune-conversations`, scheduled daily 02:30 (per-workspace retention
+  days; also expires stale confirm cards).
+- **Fix** — `TaskStageSeeder::createDefaultStagesForWorkspace` now sets `is_completed` on
+  Done; workspaces created after the 2026-10-02 migration counted Done tasks as open.
+
+Not in this step yet: streaming replies / queue worker (calls run in the request), undo,
+spatie activitylog for all modules, `RecordsCreator` trait, manager-workflow tools (Phase 2).
+
+Tests: `AiAssistantTest` 34/34 pass. Full suite 2026-10-08: 35 failures, all in the same 7
+files listed under RP-10 (pre-existing). Note: `php artisan test` needs
+`-d memory_limit=1G` locally, or Collision runs out of memory printing those failures.
+
+---
+
+### RP-12 · 2026-10-09 · AI Assistant — Phases 2 and 3 complete (branch `feature/ai-assistant-byoa`)
+
+Follows RP-11. All tools are limited by the user's own workspace permissions; owners get all 27.
+
+- **Providers** — OpenRouter added (Prism driver). An empty company key never falls back to a
+  server key from `.env`. "No credits left" shown as such.
+- **Phase 2 tools** — create bug, change bug status, list sprints, add tasks to a sprint,
+  list/decide timesheet approvals, list/decide expenses, budget status, project report.
+- **Phase 3 tools** — create project, add project members, list invoices, send invoice, list
+  contracts, invite user, revenue summary, Knowledge Base search, record history.
+- **Not offered on purpose** — creating sprints (route removed from the product), creating
+  contracts (form needs an uploaded file), and the plan's off-limits list (roles, billing,
+  keys, webhooks, removing users, deleting a workspace, hard deletes).
+- **Safety** — undo for 10 minutes (assign task/bug, task stage, bug status; refused if the
+  record changed again); typed confirmation for sending invoices and bulk actions over 10
+  records; bulk cards list every record.
+- **New shared Actions** (screens use them too) — CreateBug, ChangeBugStatus,
+  DecideTimesheetApproval, DecideExpense, AddTasksToSprint, CreateProject,
+  AssignProjectMembers, SendInvoice; InviteToWorkspace over WorkspaceService. Sprint add-task
+  now refuses tasks of another project or a completed sprint.
+- **History log** — `spatie/laravel-activitylog` 4.x (v5 needs PHP 8.4) with `workspace_id`;
+  `HistoryRecorder` logs 22 models with who, old/new values and source (screen /
+  ai_assistant / system). `RecordsCreator` fills created_by/reported_by/uploaded_by on 19
+  models. `LogsActivity` no longer credits changes with no signed-in user to user 1.
+  New columns: sprint_tasks.created_by, contracts_attachments.uploaded_by, contacts.created_by.
+- **Page** — upgrade page for owners without the Pro Add-on; 30-day usage chart and cap bar;
+  replies render bold, links and bullets; provider errors stay in the chat (`ai_messages.is_error`).
+- **Cap alert** — email to the owner once a month at 80% of the token cap (if mail is configured).
+- **Writing helper** — the floating ChatGPT button uses the workspace's BYOA provider when one
+  is connected (old `chatgptKey` still used otherwise) and counts toward the cap.
+- **Queue mode** — `AI_ASSISTANT_QUEUE=true` answers in `ProcessAiMessage` (runs as the sender)
+  and the page polls. Off by default: needs a running queue worker.
+- **Evaluation** — `tests/AiEval/prompts.json` (52 manager + 50 owner prompts) and
+  `php artisan ai:eval --user=<email>`: scores the tool picked first, gate 90%. Uses the
+  workspace's real provider (costs tokens); changes nothing.
+
+Tests: `AiAssistantTest` 62/62. Verified in the browser with OpenRouter: "create a project in
+the name of sundal" → card → Confirm → project created.
+
+---
+
+### RP-13 · 2026-10-09 · AI Assistant — deterministic form cards and fallbacks
+
+**Problem:** "create a to do task for a login page" created the task in a project the model
+picked (the tool schema marked `project` required, so the model filled it), with silent
+priority/assignee defaults. Asking in text would cost extra AI calls.
+
+**Fix:** one AI call, then the server decides with fixed rules (`app/Services/Ai/Forms/`):
+- 10 write tools implement `HasForm`; the model gets every parameter as optional and is told
+  to pass only what the user said.
+- `FormBuilder` keeps a value only if it resolves to exactly one visible record **and** the
+  user's own words name it (grounding check, no AI). Otherwise the card shows a list,
+  matches first. Project is pre-filled when there is only one; priority/severity/status and
+  assignee (with "Unassigned") are required picks.
+- Confirm sends the picks, the server validates them against the same scoped lists, re-runs
+  `prepare()` and executes. Errors stay on the card's fields; no AI call to fix them.
+- Fallbacks: quick-action buttons open any form with no AI (`POST ai-assistant/forms`);
+  `IntentMatcher` offers the form by keyword when the provider fails or the model shows no
+  card. Not on forms: bulk approvals and add-to-sprint (their cards already list every record).
+- Sync replies raise PHP's time limit (`AI_ASSISTANT_SYNC_TIME_LIMIT`, 300 s) so a slow
+  provider ends as a saved error with the form fallback, not a 30 s fatal.
+
+Tests: `AiAssistantTest` 76/76. Verified in the browser (OpenRouter free model): the card
+filled Title "Login page" and the only project, left Priority and Assignee to pick,
+Confirm disabled until picked; "New task" quick action opened the form with no AI call.
+
+---
+
+### RP-14 · 2026-10-09 · AI Assistant — ask in the chat, topic buttons
+
+Feedback on RP-13: a form for every incomplete request makes the assistant a slower copy
+of the normal screens, and quick actions should set the subject, not open forms.
+
+- **Three tiers per field** (`FormField`): must know (asked), default (priority → medium,
+  severity → major, status → planning, assignee → unassigned, project role → member; never
+  asked, shown on the card), optional (never asked). An AI-supplied enum the user did not say
+  falls back to the default.
+- **Drafts instead of forms:** a missing must-know value makes the card a single question
+  (`stage: question`) with the choices as buttons. A click (`POST tool-calls/{id}/update`) or
+  a short typed answer (`ReplyMatcher`, e.g. "mobile app, make it high", "assign it to me")
+  completes it with **no AI call**. Then a short confirm card (`stage: review`) with
+  Confirm / Edit / Cancel; the form only opens on Edit.
+- `ReplyMatcher` only answers plain short replies on the latest draft: questions, commands,
+  long messages or unexplained words go to the AI, which updates the same draft in place.
+- **Topic buttons** (`Topics`): Tasks, Bugs, Projects, Approvals, Finance, Team, Help, under
+  the message box, kept on `ai_conversations.topic` until removed. The model gets only that
+  topic's tools (+ shared look-ups) and a prompt line; a message clearly about another topic
+  gets all tools in the same call. Never adds tools beyond permissions.
+- Removed the quick-action buttons and `POST ai-assistant/forms`. With the AI down, a bare
+  message under a topic still starts that topic's draft.
+- Fixed while testing: "me" matched any option whose id equalled the user's id (project #1);
+  "me"/"unassigned" now apply to people fields only.
+
+Tests: `AiAssistantTest` 89/89. Browser (OpenRouter free model), Tasks topic: "login page
+for sundal, high priority" → confirm card with High + Unassigned (1 AI call); "assign it to
+me" → card updated, server reply, still 1 AI call for 2 messages.
+
+---
+
+### RP-15 · 2026-10-10 · AI mode: the assistant in its own tab
+
+Like Outlook's "New Outlook" switch: an **AI mode** switch in the header (owners and
+managers; owners without the add-on are sent to the upgrade page) opens the assistant
+full screen in a new tab at `/ai-mode`. On = that tab is open; off closes it. Phones open it
+in the same tab. The sidebar "AI Assistant" item now shows on phones only; owners reach the
+AI settings from the AI mode tab.
+
+- **Authentication:** same login and checks (auth, plan, `ai.assistant`, `module.access`),
+  plus Laravel's `password.confirm` with a 30-minute grace when opening AI mode.
+- **Workspace lock:** the tab is bound to the workspace it was opened for; after a switch in
+  Sundal its requests get 409 `workspace_changed` (nothing runs in the wrong workspace).
+- **Idle timeout:** owner picks 15 / 30 / 60 min (`ai_provider_settings.idle_timeout_minutes`,
+  default 30). Only the user's POST actions count, never polling. 2-minute warning with
+  "Stay signed in"; then the tab locks (chat kept) and asks for the password.
+- **Only while Sundal is open:** Sundal tabs check in (`POST ai-mode/heartbeat`, 30 s);
+  no check-in for 120 s → 423 `locked_app_closed`. The tabs also talk over BroadcastChannel,
+  so closing Sundal locks AI mode within ~7 s (5 s grace for reloads) and reopening it
+  unlocks automatically. A password does not lift this lock.
+- **Sign-out** in Sundal tells the AI tab; any 401/419 shows "You are signed out".
+- `App\Services\Ai\AiMode` holds the rules; `EnsureAiModeSession` (`ai.mode`) applies them
+  to requests carrying `X-AI-Mode`; the normal AI Assistant page is unaffected.
+
+Note: the heartbeat and the AI tab's polling keep the normal 120-minute Laravel session
+alive while both tabs are open; the AI mode idle lock is what ends an unattended session.
+
+Tests: `AiAssistantTest` 98/98. Browser (Edge, two tabs): switch → new tab → password →
+AI mode; Sundal switch shows on; closing Sundal locked AI mode; reopening unlocked it;
+switching off from Sundal closed the AI tab. The idle lock was tested on the server only.
+
+---
+
+### RP-16 · 2026-10-10 · AI Assistant security review and hardening
+
+Already sound: encrypted, never-returned BYOA keys; permission + workspace re-checked on
+every tool and on Confirm; fixed vendor endpoints (Azure host pattern, no SSRF); replies
+rendered as React elements (no HTML); confirmation for every write; rate-limited unlock.
+
+Fixed:
+1. **Session rules could be skipped** by calling the API without the `X-AI-Mode` header or
+   using `/ai-assistant`. Now both entry points need the password (30-min grace) and start
+   the AI session; every assistant request needs it (workspace lock + idle lock). Only
+   "Sundal must be open" stays specific to the AI mode tab.
+2. **External links in AI replies** (prompt-injection phishing): only Sundal-internal
+   relative links are clickable; others show as plain text.
+3. **Saved key sent to a new Azure endpoint**: changing the endpoint now requires the key.
+4. **Untyped card values**: `fields.*` must be a value or a short list of values (no nested
+   arrays, ≤ 4000 chars); a list where one value is expected is a card error, not a 500.
+5. **Rate limits**: card actions 60/min/user, connection tests 10/min/user.
+6. **Queued reply after a workspace switch**: does nothing and says so (was silent).
+
+Still to do outside the code: `APP_DEBUG=false` and `APP_ENV=production` in production;
+HTTPS so session cookies are secure; rotate the OpenRouter key that was pasted in chat.
+
+Tests: `AiAssistantTest` 104/104 (6 new). Browser two-tab AI mode flow re-checked.
+
+---
+
+### RP-17 · 2026-10-10 · No password for the AI Assistant; fallback card fix
+
+- **No password prompt** (decision): the AI Assistant page and the AI mode tab use the
+  current browser login. `password.confirm` removed from both routes and the
+  `password_grace_minutes` setting removed. The AI session still starts on opening, so the
+  workspace lock, idle timeout and (AI mode) Sundal-open rules stay. The idle pause now ends
+  with **Continue** (`POST ai-mode/unlock`, current login) instead of a password.
+- **Wrong fallback card:** "create a invoice in sundal project" offered a New project card
+  (keyword fallback matched "create … project"). `IntentMatcher` now offers nothing for
+  things without a create form (invoice, contract, expense, timesheet, milestone, sprint,
+  budget, payment, note, meeting, client, user), and "project" only counts when it is what
+  is created ("create a project …"), not where ("… in sundal project").
+
+Tests: `AiAssistantTest` 107/107. Browser: AI mode opens straight to `/ai-mode`.
+
+---
+
+### RP-18 · 2026-10-10 · AI Assistant module tools, phase 1: Finance and Time
+
+Goal: the assistant can do each module's everyday create/update/delete for company owners
+and managers (permissions decide per tool). Plan: per-action tools, never a generic CRUD
+tool; deletes only for everyday records; typed confirmation for money. Phase 1 = Finance +
+Time (17 tools, registry now 44). Phases 2–4 (projects/tasks/sprints/bugs, contracts and
+meetings, docs and team) follow.
+
+- **Shared Actions** (screens and assistant run the same rules): `Invoices/{CreateInvoice,
+  UpdateInvoice, DeleteInvoice, MarkInvoicePaid}`, `Expenses/{CreateExpense, UpdateExpense,
+  DeleteExpense}`, `Budgets/{CreateBudget, UpdateBudget}`, `Timesheets/{LogTime,
+  UpdateTimeEntry, DeleteTimeEntry, SubmitTimesheet}`, `Timer/{StartTimer, StopTimer}`.
+  `InvoiceController`, `ProjectExpenseController`, `ProjectBudgetController`,
+  `TimesheetEntryController`, `TimesheetController::submit` and `TimerController` now call
+  them (validation stays in the controllers). Side fixes: the invoice-created event fires
+  after the items exist; a budget update can no longer edit another budget's category by id.
+- **Finance tools:** `create_invoice` (draft billing unbilled tasks, one amount per task;
+  client = the project's only client; undo deletes the draft), `update_invoice` (title,
+  dates, notes; drafts; undo), `delete_invoice` (drafts; invoice number typed),
+  `mark_invoice_paid` (sent/overdue; number typed; undo), `list_expenses`,
+  `create_expense` / `update_expense` / `delete_expense` (not-yet-approved only; no future
+  dates; undo on create/update), `create_budget` (one per project, one "General" category),
+  `update_budget` (total, period, status; undo).
+- **Time tools (new Time topic):** `list_my_time`, `log_time`, `update_time_entry`,
+  `delete_time_entry` (own entries on unlocked timesheets only), `submit_timesheet` (the only
+  open one is picked without asking), `start_timer`, `stop_timer`.
+- **Forms:** new field kinds `number`, `unpaid_invoice`, `expense`, `budget_category`,
+  `time_entry`, `timesheet`, `billable_tasks` (several); date and text defaults; a list
+  narrowed by an earlier project field follows it (pick a project → that project's tasks).
+  `ReplyMatcher` reads a typed number ("750", "2.5 hours") when one is asked.
+- **Topics:** new "Time" button; Finance covers invoices, expenses and budgets. Under a
+  topic button, a draft still waiting in the chat keeps its tool. Tried and dropped:
+  narrowing the tools by keywords when no button is on. It broke real requests ("assign the
+  login bug fix to Ravi" named "bug" and lost the task tools), so without a button the
+  model still gets every tool (44). Revisit with prompt caching if token cost grows.
+- **Keyword fallback** offers the new cards ("create an invoice", "add an expense for…",
+  "log 3 hours…", "mark INV-104 as paid", "submit my timesheet", "start the timer"); a
+  message about a task or bug stays a task or bug.
+
+Tests: `AiAssistantTest` 130/130 (14 new, incl. the screens still working through the
+shared actions). QA role suites + `FunctionalTest` after the controller refactor: 148
+passed; the 2 project-health 403/404 failures in `FunctionalTest` also fail without these
+changes (pre-existing).
+
+### RP-19 · 2026-10-10 · AI Assistant: new chat interface
+
+Redesign of `ai-assistant/index.tsx` from three references (ChatGPT-style welcome screen,
+a chat app with a conversation sidebar, a prompt-card start page); only what fits Sundal.
+
+- **Welcome screen:** assistant orb, "Good morning, {name} — What can I do for you
+  today?", the message box in the middle, and four example cards with topic icons
+  (topic-specific examples when a topic is on).
+- **Conversation sidebar:** search, chats grouped Today / Yesterday / Previous 7 days /
+  Older, topic icon and time ago per chat, delete on hover. Slides over the chat on phones.
+- **Chat header:** chat title, connected model pill (new `model` prop: provider and model
+  names only), Settings (owners) and New chat. Owner settings moved from tabs to this
+  button, with "Back to the assistant".
+- **Messages:** avatar, name and time; assistant replies in cards with Copy; typing dots
+  while waiting; the confirm cards unchanged.
+- **Message box:** grows with the text, topic picker as a dropdown with the chosen topic
+  as a removable pill, character count, round send button; disclaimer underneath.
+- Left out on purpose: attachments, voice, likes, regenerate, folders (no backend for them).
+
+Checked in Edge: light, dark, 390px phone, owner settings. `AiAssistantTest` 130/130.
+
+### RP-20 · 2026-10-10 · AI Assistant sidebar: favorites, archive, waiting, profile
+
+Sidebar modelled on a chat-app reference (only what fits):
+
+- **New chat** full-width button; under it **Favorites** and **Archive**, each with a
+  count. A filter replaces the list ("Show all" to go back). (A "Waiting for you" filter
+  was added in place of the reference's "Folder", then removed on request.)
+- **Chat cards:** title, time ago, one-line preview of the latest message, a star for
+  favorites, an "N waiting" badge, and a menu (favorite, archive / move out, delete).
+  20 at a time with **Show more**. Day groups and the search box are gone.
+- **Bottom:** Settings (owner), **Help** (how it works + "Ask how to do something in
+  Sundal", which starts a chat on the Help topic), and the **profile button** (avatar,
+  name, role · workspace; menu: Profile, Open Sundal in AI mode, Sign out).
+- Collapsed rail keeps every action as icons.
+- AI mode bar: Settings and the user moved to the sidebar; the bar keeps the model, the
+  light/dark switch and the AI mode switch.
+
+Backend: migration `2026_10_10_000002` (`ai_conversations.is_favorite`, `archived_at`);
+`App\Services\Ai\ConversationList` (filters, preview, per-chat waiting count = pending
+cards not past the confirmation time, paging, counts); `GET ai-assistant/conversations`
+(`filter`, `page`); `PATCH ai-assistant/conversations/{id}` also takes `is_favorite` and
+`archived`; writing in an archived chat moves it out of the archive; every response uses
+one conversation row format. Favorites are not exempt from chat retention.
+
+Tests: `AiAssistantTest` 134/134 (4 new). Checked in Edge: light, dark, collapsed, phone,
+Sundal page.
+
+---
+
+### RP-20 · 2026-10-11 · AI Assistant: attachments (+ button), four phases
+
+Decisions (recommended ones): computer + Sundal files first, Google Drive last; files are
+kept as long as their chat; they count toward plan storage; at most 500 rows per import.
+
+- **Phase 1, read files:** + menu (computer, drag and drop, paste, Sundal files), chips.
+  `ai_attachments` table; `FileReader` checks contents (not extensions), refuses macros and
+  zip bombs, never calculates formulas, reads PDF (`smalot/pdfparser`), Excel/CSV
+  (PhpSpreadsheet), Word (`phpoffice/phpword`) and text into sheets or sections. Files sit
+  on the private disk; the model gets `<attached_file>` descriptions as data and reads more
+  with `read_attachment` / `get_sheet_rows`. Unsent files pruned after 24 h.
+- **Phase 2, sheet → bugs/tasks:** `import_bugs_from_sheet`, `import_tasks_from_sheet`.
+  Sundal reads every row; columns matched by name; P1/Sev2/Low… cleaned; people matched
+  only when sure; duplicates unticked; unused columns kept in the description. Editable
+  table card (`tool-calls/{id}/edit`, no AI call); CREATE N over 10; undo.
+- **Phase 3, document → plan:** `plan_tasks_from_document` (`DocumentAnalyzer` reads in
+  chunks with the company model, JSON, merged, cached). Editable plan card; new project
+  (plan limit checked up front) or existing; milestones + tasks with acceptance criteria;
+  undo. `CreateMilestone` is now a shared action.
+- **Phase 4:** scanned PDFs read once by a PDF-capable model (Anthropic, OpenAI, Gemini,
+  OpenRouter) through Prism documents; Google Drive picker (Google Docs/Sheets exported as
+  .docx/.xlsx; the browser's drive.readonly token is used once, never stored). Drive needs
+  `AI_ASSISTANT_GOOGLE_CLIENT_ID` / `_API_KEY` / `_APP_ID` in `.env` (Drive API + Picker API on;
+  this site as an authorised origin of the OAuth web client).
+
+Tests: `AiAssistantTest` 157 (27 new). Real model (OpenRouter, nemotron free) in Edge: QA
+sheet → import card → confirm → undo; BRD → 7 tasks in 3 milestones (cancelled).
+Run Pest with `php -d memory_limit=2G vendor/bin/pest` (`artisan test` uses 128 MB).
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)
 - [ ] Run `php artisan migrate` on production after deploy
+- [ ] AI Assistant: `npm run build` (new page) + `php artisan migrate` + scheduler running for `ai:prune-conversations`
+- [ ] AI Assistant: run `php artisan ai:eval` per role on each provider before release (plan gate: 90%)
+- [ ] AI Assistant: set `AI_ASSISTANT_QUEUE=true` once a queue worker runs in production
 - [ ] Test all 6 custom modules end-to-end
 - [ ] Configure OpenAI API key for Agents/Chatbot
 - [ ] Configure Google OAuth for Google Meet/Calendar

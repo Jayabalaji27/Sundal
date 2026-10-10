@@ -27,12 +27,19 @@ trait LogsActivity
             return;
         }
 
+        // No signed-in user (queue job, scheduled task, seeder): skip the feed
+        // entry rather than credit the change to user 1. Who did it is still
+        // recorded in the history log (App\Services\History\HistoryRecorder).
+        if (!auth()->id()) {
+            return;
+        }
+
         ProjectActivity::create([
             'project_id' => $this->getProjectId(),
-            'user_id' => auth()->id() ?? 1,
+            'user_id' => auth()->id(),
             'action' => $this->getActivityAction($action),
             'description' => $this->getActivityDescription($action),
-            'metadata' => array_merge($this->getActivityMetadata(), $metadata)
+            'metadata' => array_merge($this->getActivityMetadata(), \App\Services\Ai\AiActionContext::metadata(), $metadata)
         ]);
     }
 

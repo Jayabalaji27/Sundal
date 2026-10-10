@@ -11,7 +11,7 @@ use App\Models\Concerns\BelongsToWorkspace;
 
 class ProjectBudget extends Model
 {
-    use HasFactory, LogsActivity, BelongsToWorkspace;
+    use HasFactory, LogsActivity, BelongsToWorkspace, \App\Models\Concerns\RecordsCreator;
 
     protected $fillable = [
         'project_id',

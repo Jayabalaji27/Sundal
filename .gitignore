@@ -23,3 +23,6 @@ test.md
 
 # Pest test-run output
 /vendor/pestphp/pest/.temp/test-results
+
+# Laravel test fakes (Storage::fake)
+/storage/framework/testing

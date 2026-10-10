@@ -9,7 +9,7 @@ use App\Models\Concerns\BelongsToWorkspace;
 
 class Todo extends Model
 {
-    use BelongsToWorkspace;
+    use BelongsToWorkspace, \App\Models\Concerns\RecordsCreator;
 
     protected $fillable = [
         'workspace_id',

@@ -11,7 +11,7 @@ use App\Models\Concerns\BelongsToWorkspace;
 
 class Invoice extends Model
 {
-    use HasFactory, LogsActivity, BelongsToWorkspace;
+    use HasFactory, LogsActivity, BelongsToWorkspace, \App\Models\Concerns\RecordsCreator;
 
     protected $fillable = [
         'invoice_number',
