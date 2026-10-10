@@ -9,6 +9,7 @@ use App\Models\AiUsage;
 use App\Services\Ai\AiAccess;
 use App\Services\Ai\AiAssistant;
 use App\Services\Ai\AiProviderException;
+use App\Services\Ai\ConversationList;
 use App\Services\Ai\ToolRegistry;
 use App\Services\Ai\Topics;
 use Illuminate\Validation\Rule;
@@ -73,6 +74,8 @@ class AiAssistantController extends Controller
                 'isOwner' => true,
                 'configured' => false,
                 'conversations' => [],
+                'conversationsHasMore' => false,
+                'conversationCounts' => ['favorites' => 0, 'waiting' => 0, 'archived' => 0],
                 'settings' => null,
                 'usage' => null,
                 'providers' => null,
@@ -83,15 +86,16 @@ class AiAssistantController extends Controller
         }
 
         $settings = AiAccess::settings($user);
+        $list = app(ConversationList::class)->page($user);
 
         return Inertia::render('ai-assistant/index', [
             'access' => AiAccess::status($user),
             'isOwner' => $isOwner,
             'configured' => (bool) $settings,
-            'conversations' => AiConversation::ownedBy($user)
-                ->orderByDesc('last_message_at')->orderByDesc('id')
-                ->limit(100)
-                ->get(['id', 'title', 'topic', 'last_message_at']),
+            // The sidebar's first page; more come from ai-assistant.conversations.index.
+            'conversations' => $list['conversations'],
+            'conversationsHasMore' => $list['has_more'],
+            'conversationCounts' => $list['counts'],
             'settings' => $isOwner && $settings ? [
                 'provider' => $settings->provider,
                 'model' => $settings->model,
@@ -134,7 +138,7 @@ class AiAssistantController extends Controller
         $this->authorizeConversation($request, $conversation);
 
         return response()->json([
-            'conversation' => $conversation->only(['id', 'title', 'topic']),
+            'conversation' => ConversationList::row($conversation),
             'messages' => $this->messagesWithCards($conversation),
         ]);
     }
@@ -142,10 +146,33 @@ class AiAssistantController extends Controller
     public function update(Request $request, AiConversation $conversation): JsonResponse
     {
         $this->authorizeConversation($request, $conversation);
-        $validated = $request->validate(['title' => 'required|string|max:120']);
-        $conversation->update($validated);
+        $validated = $request->validate([
+            'title' => 'sometimes|required|string|max:120',
+            'is_favorite' => 'sometimes|boolean',
+            'archived' => 'sometimes|boolean',
+        ]);
 
-        return response()->json(['conversation' => $conversation->only(['id', 'title', 'topic'])]);
+        $changes = array_intersect_key($validated, array_flip(['title', 'is_favorite']));
+        if (array_key_exists('archived', $validated)) {
+            $changes['archived_at'] = $validated['archived'] ? ($conversation->archived_at ?? now()) : null;
+        }
+        $conversation->update($changes);
+
+        return response()->json([
+            'conversation' => ConversationList::row($conversation->fresh()),
+            'counts' => app(ConversationList::class)->counts($request->user()),
+        ]);
+    }
+
+    /** The sidebar list: a filter (all, favorites, waiting, archived) a page at a time. */
+    public function conversations(Request $request, ConversationList $list): JsonResponse
+    {
+        $validated = $request->validate([
+            'filter' => ['nullable', Rule::in(ConversationList::FILTERS)],
+            'page' => 'nullable|integer|min:1|max:500',
+        ]);
+
+        return response()->json($list->page($request->user(), $validated['filter'] ?? 'all', (int) ($validated['page'] ?? 1)));
     }
 
     public function destroy(Request $request, AiConversation $conversation): JsonResponse
@@ -181,6 +208,9 @@ class AiAssistantController extends Controller
         if ($request->has('topic')) {
             $conversation->update(['topic' => ($validated['topic'] ?? null) ?: null]);
         }
+        if ($conversation->archived_at) {
+            $conversation->update(['archived_at' => null]);
+        }
 
         $firstNewId = (int) $conversation->messages()->max('id');
 
@@ -190,7 +220,7 @@ class AiAssistantController extends Controller
             \App\Jobs\ProcessAiMessage::dispatch($user->id, $conversation->id, $message->id);
 
             return response()->json([
-                'conversation' => $conversation->fresh()->only(['id', 'title', 'topic']),
+                'conversation' => ConversationList::row($conversation->fresh()),
                 'messages' => $this->messagesWithCards($conversation, $firstNewId),
                 'pending' => true,
             ], 202);
@@ -206,13 +236,13 @@ class AiAssistantController extends Controller
         } catch (AiProviderException $e) {
             return response()->json([
                 'error' => $e->getMessage(),
-                'conversation' => $conversation->fresh()->only(['id', 'title', 'topic']),
+                'conversation' => ConversationList::row($conversation->fresh()),
                 'messages' => $this->messagesWithCards($conversation, $firstNewId),
             ], 502);
         }
 
         return response()->json([
-            'conversation' => $conversation->fresh()->only(['id', 'title', 'topic']),
+            'conversation' => ConversationList::row($conversation->fresh()),
             'messages' => $this->messagesWithCards($conversation, $firstNewId),
         ]);
     }

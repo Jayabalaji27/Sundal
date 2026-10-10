@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Head, usePage } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { Clock, Loader2, Lock, LogIn, Moon, Play, RefreshCw, Sparkles, Sun } from 'lucide-react';
@@ -32,19 +32,16 @@ const PING_WAIT_MS = 2000;
  * chat stays underneath) when the user is idle, when Sundal is closed, when
  * the workspace changes, or on sign-out.
  */
-/** The round icon buttons at the top right of the AI mode bar (Settings, theme). */
-export const AI_MODE_ICON_BUTTON = 'h-8 w-8 rounded-full text-muted-foreground hover:text-foreground';
+/** The round icon button at the top right of the AI mode bar (theme). */
+const AI_MODE_ICON_BUTTON = 'h-8 w-8 rounded-full text-muted-foreground hover:text-foreground';
 
-export function AiModeShell({ config, model, actions, children }: {
+export function AiModeShell({ config, model, children }: {
     config: AiModeConfig;
     /** The connected model, shown next to the title. */
     model?: { provider: string; name: string } | null;
-    /** Extra icon buttons at the top right, before the theme switch (e.g. Settings). */
-    actions?: ReactNode;
     children: ReactNode;
 }) {
     const { t } = useTranslation();
-    const { auth } = usePage().props as any;
     const [lock, setLock] = useState<LockReason | null>(null);
     const [secondsLeft, setSecondsLeft] = useState(config.idleSeconds);
     const lastAction = useRef(Date.now());
@@ -195,19 +192,9 @@ export function AiModeShell({ config, model, actions, children }: {
                         </span>
                     )}
                 </div>
-                {/* Icon buttons, a divider, who is signed in, then the AI mode switch in its own pill. */}
-                <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                    <div className="flex items-center gap-0.5">
-                        {actions}
-                        <ThemeToggle />
-                    </div>
-                    <span className="hidden h-5 w-px bg-border sm:block" aria-hidden />
-                    <div className="hidden items-center gap-2 sm:flex" title={auth?.user?.name}>
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-[11px] font-semibold text-violet-700 dark:bg-violet-900/50 dark:text-violet-200" aria-hidden>
-                            {initials(auth?.user?.name)}
-                        </span>
-                        <span className="hidden max-w-[160px] truncate text-sm font-medium lg:inline">{auth?.user?.name}</span>
-                    </div>
+                {/* Settings, Help and the user are in the sidebar; here: the theme, and the AI mode switch in its own pill. */}
+                <div className="flex shrink-0 items-center gap-2">
+                    <ThemeToggle />
                     <label className="flex cursor-pointer items-center gap-2 rounded-full border bg-muted/40 py-1 pl-3 pr-1 text-xs font-medium">
                         {t('AI mode')}
                         <Switch checked={lock !== 'turned_off'} onCheckedChange={on => (on ? window.location.reload() : turnOff())} aria-label={t('AI mode')} />
@@ -281,11 +268,6 @@ function ThemeToggle() {
             {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
     );
-}
-
-/** "Test Company Owner" → "TC". */
-function initials(name: string | null | undefined): string {
-    return String(name ?? '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('') || '?';
 }
 
 function formatSeconds(seconds: number): string {

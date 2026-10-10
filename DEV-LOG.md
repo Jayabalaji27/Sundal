@@ -734,6 +734,33 @@ a chat app with a conversation sidebar, a prompt-card start page); only what fit
 
 Checked in Edge: light, dark, 390px phone, owner settings. `AiAssistantTest` 130/130.
 
+### RP-20 · 2026-10-10 · AI Assistant sidebar: favorites, archive, waiting, profile
+
+Sidebar modelled on a chat-app reference (only what fits):
+
+- **New chat** full-width button; under it **Favorites**, **Waiting for you** (chats
+  with a confirm card still waiting, our replacement for the reference's "Folder") and
+  **Archive**, each with a count. A filter replaces the list ("Show all" to go back).
+- **Chat cards:** title, time ago, one-line preview of the latest message, a star for
+  favorites, an "N waiting" badge, and a menu (favorite, archive / move out, delete).
+  20 at a time with **Show more**. Day groups and the search box are gone.
+- **Bottom:** Settings (owner), **Help** (how it works + "Ask how to do something in
+  Sundal", which starts a chat on the Help topic), and the **profile button** (avatar,
+  name, role · workspace; menu: Profile, Open Sundal in AI mode, Sign out).
+- Collapsed rail keeps every action as icons (amber dot when something is waiting).
+- AI mode bar: Settings and the user moved to the sidebar; the bar keeps the model, the
+  light/dark switch and the AI mode switch.
+
+Backend: migration `2026_10_10_000002` (`ai_conversations.is_favorite`, `archived_at`);
+`App\Services\Ai\ConversationList` (filters, preview, waiting count = pending cards not
+past the confirmation time, paging, counts); `GET ai-assistant/conversations`
+(`filter`, `page`); `PATCH ai-assistant/conversations/{id}` also takes `is_favorite` and
+`archived`; writing in an archived chat moves it out of the archive; every response uses
+one conversation row format. Favorites are not exempt from chat retention.
+
+Tests: `AiAssistantTest` 134/134 (4 new). Checked in Edge: light, dark, collapsed, phone,
+Sundal page.
+
 ---
 
 ## Known Pending Items

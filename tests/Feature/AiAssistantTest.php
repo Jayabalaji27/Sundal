@@ -1312,6 +1312,93 @@ describe('deterministic forms', function () {
     ]);
 });
 
+// ── Sidebar: favorites, archive, waiting, paging ──────────────────────────────
+
+function aiChat(Workspace $workspace, User $user, string $title, array $attrs = []): AiConversation
+{
+    $chat = AiConversation::withoutGlobalScope('workspace')->create(array_merge([
+        'workspace_id' => $workspace->id, 'user_id' => $user->id, 'title' => $title, 'last_message_at' => now(),
+    ], $attrs));
+    $chat->messages()->create(['role' => 'assistant', 'content' => "Reply in **{$title}**, see [the task](/tasks/1)."]);
+
+    return $chat;
+}
+
+describe('sidebar', function () {
+    test('the list shows previews and filters favorites, waiting and archived chats, with counts', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $plain = aiChat($workspace, $users['owner'], 'Plain');
+        $starred = aiChat($workspace, $users['owner'], 'Starred', ['is_favorite' => true]);
+        $archived = aiChat($workspace, $users['owner'], 'Put away', ['archived_at' => now()]);
+        $waiting = aiChat($workspace, $users['owner'], 'Needs OK');
+        AiToolCall::withoutGlobalScope('workspace')->create(['workspace_id' => $workspace->id, 'user_id' => $users['owner']->id,
+            'ai_conversation_id' => $waiting->id, 'tool' => 'create_task', 'status' => 'pending', 'summary' => 'New task']);
+        aiChat($workspace, $users['manager'], 'Not mine');
+
+        $list = fn (string $filter) => collect(asAi($this, $users['owner'])
+            ->getJson(route('ai-assistant.conversations.index', ['filter' => $filter]))->assertOk()->json('conversations'))->pluck('title')->all();
+
+        expect($list('all'))->toEqualCanonicalizing(['Plain', 'Starred', 'Needs OK'])
+            ->and($list('favorites'))->toBe(['Starred'])
+            ->and($list('waiting'))->toBe(['Needs OK'])
+            ->and($list('archived'))->toBe(['Put away']);
+
+        $row = collect(asAi($this, $users['owner'])->getJson(route('ai-assistant.conversations.index'))->json('conversations'))->firstWhere('title', 'Needs OK');
+        expect($row['preview'])->toBe('Reply in Needs OK, see the task.')->and($row['waiting'])->toBe(1);
+
+        asAi($this, $users['owner'])->getJson(route('ai-assistant.conversations.index'))
+            ->assertJsonPath('counts', ['favorites' => 1, 'waiting' => 1, 'archived' => 1]);
+        asAi($this, $users['owner'])->get(route('ai-assistant.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('conversationCounts', ['favorites' => 1, 'waiting' => 1, 'archived' => 1])->has('conversations', 3));
+    });
+
+    test('a card past its confirmation time no longer counts as waiting', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $chat = aiChat($workspace, $users['owner'], 'Old card');
+        $card = AiToolCall::withoutGlobalScope('workspace')->create(['workspace_id' => $workspace->id, 'user_id' => $users['owner']->id,
+            'ai_conversation_id' => $chat->id, 'tool' => 'create_task', 'status' => 'pending', 'summary' => 'New task']);
+        $card->forceFill(['created_at' => now()->subHour()])->save();
+
+        asAi($this, $users['owner'])->getJson(route('ai-assistant.conversations.index'))->assertJsonPath('counts.waiting', 0);
+    });
+
+    test('star and archive a chat; writing in an archived chat brings it back', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $chat = aiChat($workspace, $users['owner'], 'Weekly report');
+
+        asAi($this, $users['owner'])->patchJson(route('ai-assistant.conversations.update', $chat), ['is_favorite' => true])
+            ->assertJsonPath('conversation.is_favorite', true)->assertJsonPath('counts.favorites', 1);
+        asAi($this, $users['owner'])->patchJson(route('ai-assistant.conversations.update', $chat), ['archived' => true])
+            ->assertJsonPath('conversation.archived', true)->assertJsonPath('counts.archived', 1);
+        expect($chat->fresh()->title)->toBe('Weekly report');
+
+        fakeAi([['text' => 'Here it is.']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat->id, 'content' => 'again please'])
+            ->assertOk()->assertJsonPath('conversation.archived', false);
+        expect($chat->fresh()->archived_at)->toBeNull();
+
+        // Someone else's chat cannot be starred.
+        asAi($this, $users['manager'])->patchJson(route('ai-assistant.conversations.update', $chat), ['is_favorite' => false])->assertNotFound();
+    });
+
+    test('the list comes 20 at a time', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        foreach (range(1, 21) as $i) {
+            aiChat($workspace, $users['owner'], "Chat {$i}", ['last_message_at' => now()->subMinutes($i)]);
+        }
+
+        asAi($this, $users['owner'])->get(route('ai-assistant.index'))
+            ->assertInertia(fn (Assert $page) => $page->has('conversations', 20)->where('conversationsHasMore', true));
+        asAi($this, $users['owner'])->getJson(route('ai-assistant.conversations.index', ['page' => 2]))
+            ->assertJsonPath('has_more', false)->assertJsonPath('conversations.0.title', 'Chat 21');
+        asAi($this, $users['owner'])->getJson(route('ai-assistant.conversations.index', ['filter' => 'nonsense']))->assertJsonValidationErrors('filter');
+    });
+});
+
 // ── Module tools, phase 1: finance and time ───────────────────────────────────
 
 describe('finance and time tools', function () {

@@ -463,6 +463,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // workspace, not idle); requests from the AI mode tab also need Sundal open.
         Route::middleware(['ai.assistant', 'module.access', 'ai.mode'])->prefix('ai-assistant')->name('ai-assistant.')->group(function () {
             Route::post('messages', [\App\Http\Controllers\AiAssistantController::class, 'send'])->name('send');
+            Route::get('conversations', [\App\Http\Controllers\AiAssistantController::class, 'conversations'])->name('conversations.index');
             Route::get('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'show'])->name('conversations.show');
             Route::patch('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'update'])->name('conversations.update');
             Route::delete('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'destroy'])->name('conversations.destroy');

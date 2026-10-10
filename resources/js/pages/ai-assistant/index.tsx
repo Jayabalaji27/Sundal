@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import {
-    ArrowLeft, ArrowUp, Bot, Bug, Check, CheckCheck, ChevronDown, Clock, Copy, ExternalLink, FolderKanban, HelpCircle, ListTodo, Loader2,
-    MessageSquare, PanelLeftClose, PanelLeftOpen, Pencil, Plus, Receipt, Settings as SettingsIcon, Sparkles, Trash2, Undo2, Users, X,
+    Archive, ArchiveRestore, ArrowLeft, ArrowUp, Bot, Bug, Check, CheckCheck, ChevronDown, ChevronsUpDown, Clock, Copy, CornerDownLeft, ExternalLink,
+    FolderKanban, HelpCircle, Hourglass, ListTodo, Loader2, LogOut, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus,
+    Receipt, Settings as SettingsIcon, Sparkles, Star, Trash2, Undo2, UserRound, Users, X,
 } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +19,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/custom-toast';
-import { AI_MODE_ICON_BUTTON, AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
+import { AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { notifySignedOut } from '@/lib/ai-mode';
 
 declare const route: any;
 
@@ -80,7 +83,17 @@ interface Conversation {
     title: string | null;
     topic?: string | null;
     last_message_at?: string | null;
+    is_favorite?: boolean;
+    archived?: boolean;
+    /** The latest message, one line. */
+    preview?: string;
+    /** Confirm cards still waiting for the user in this chat. */
+    waiting?: number;
 }
+
+type ListFilter = 'all' | 'favorites' | 'waiting' | 'archived';
+
+type ListCounts = Record<Exclude<ListFilter, 'all'>, number>;
 
 interface ProviderOption {
     label: string;
@@ -113,6 +126,8 @@ interface Props {
     isOwner: boolean;
     configured: boolean;
     conversations: Conversation[];
+    conversationsHasMore?: boolean;
+    conversationCounts?: ListCounts;
     settings: Settings | null;
     usage: { tokens_this_month: number; daily: { date: string; tokens: number }[] } | null;
     providers: Record<string, ProviderOption> | null;
@@ -165,10 +180,12 @@ export default function AiAssistantPage(props: Props) {
         body = (
             <Chat
                 conversations={props.conversations}
+                hasMore={props.conversationsHasMore ?? false}
+                counts={props.conversationCounts ?? { favorites: 0, waiting: 0, archived: 0 }}
                 topics={props.topics}
                 model={props.model ?? null}
                 standalone={standalone}
-                onOpenSettings={canOpenSettings && !standalone ? () => setView('settings') : undefined}
+                onOpenSettings={canOpenSettings ? () => setView('settings') : undefined}
             />
         );
         framed = false;
@@ -177,23 +194,8 @@ export default function AiAssistantPage(props: Props) {
     // AI mode tab: full screen, its own header and locks, no Sundal sidebar.
     // The chat fills the whole page; settings and notices keep a readable width.
     if (standalone && props.aiMode) {
-        const settingsOpen = view === 'settings';
-        const settingsButton = canOpenSettings ? (
-            <Button
-                variant="ghost"
-                size="icon"
-                className={`${AI_MODE_ICON_BUTTON} ${settingsOpen ? 'bg-muted text-foreground' : ''}`}
-                onClick={() => setView(settingsOpen ? 'chat' : 'settings')}
-                aria-label={settingsOpen ? t('Back to the assistant') : t('Settings')}
-                title={settingsOpen ? t('Back to the assistant') : t('Settings')}
-                aria-pressed={settingsOpen}
-            >
-                <SettingsIcon className="h-4 w-4" />
-            </Button>
-        ) : null;
-
         return (
-            <AiModeShell config={props.aiMode} model={props.model} actions={settingsButton}>
+            <AiModeShell config={props.aiMode} model={props.model}>
                 {framed ? <div className="mx-auto max-w-7xl p-4 sm:p-6">{body}</div> : body}
             </AiModeShell>
         );
@@ -429,8 +431,10 @@ function AssistantMark({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
     );
 }
 
-function Chat({ conversations: initial, topics, model, standalone, onOpenSettings }: {
+function Chat({ conversations: initial, hasMore: initialHasMore, counts: initialCounts, topics, model, standalone, onOpenSettings }: {
     conversations: Conversation[];
+    hasMore: boolean;
+    counts: ListCounts;
     topics: TopicOption[];
     model: ModelInfo | null;
     standalone: boolean;
@@ -440,6 +444,14 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
     const { t } = useTranslation();
     const { auth } = usePage().props as any;
     const [conversations, setConversations] = useState<Conversation[]>(initial);
+    // The sidebar list: which filter, how many pages are loaded, and the filter counts.
+    const [filter, setFilter] = useState<ListFilter>('all');
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(initialHasMore);
+    const [counts, setCounts] = useState<ListCounts>(initialCounts);
+    const [loadingList, setLoadingList] = useState(false);
+    // "Ask how to do something": the Help topic for the new chat about to open.
+    const nextTopicRef = useRef<string | null>(null);
     const [activeId, setActiveId] = useState<number | null>(initial[0]?.id ?? null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
@@ -475,7 +487,8 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
     useEffect(() => {
         if (activeId === null) {
             setMessages([]);
-            setTopic(null);
+            setTopic(nextTopicRef.current);
+            nextTopicRef.current = null;
             return;
         }
         setTopic(conversations.find(c => c.id === activeId)?.topic ?? null);
@@ -515,10 +528,10 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
             setMessages(prev => withFresh(prev.filter(m => m.id !== optimistic.id), data.messages));
             if (activeId === null) createdHereRef.current = data.conversation.id;
             setActiveId(current => current ?? data.conversation.id);
-            setConversations(prev => [
-                { ...data.conversation, last_message_at: new Date().toISOString() },
-                ...prev.filter(c => c.id !== data.conversation.id),
-            ]);
+            const row: Conversation = { ...data.conversation, last_message_at: data.conversation.last_message_at ?? new Date().toISOString() };
+            setConversations(prev => (filter === 'all' || prev.some(c => c.id === row.id)
+                ? [row, ...prev.filter(c => c.id !== row.id)]
+                : prev));
         };
 
         try {
@@ -541,6 +554,7 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
             }
         } finally {
             setSending(false);
+            refreshCounts();
         }
     };
 
@@ -563,6 +577,55 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
             const updated = prev.map(m => ({ ...m, cards: m.cards.map(c => (c.id === card.id ? card : c)) }));
             return note && !updated.some(m => m.id === note.id) ? [...updated, note] : updated;
         });
+        // A confirmed or cancelled card changes "Waiting for you".
+        if (card.status !== 'pending') refreshCounts();
+    };
+
+    /** Load a page of the list for a filter (page 1 replaces the list). */
+    const loadList = async (nextFilter: ListFilter, nextPage = 1) => {
+        setLoadingList(true);
+        try {
+            const { data } = await axios.get(route('ai-assistant.conversations.index'), { params: { filter: nextFilter, page: nextPage } });
+            setConversations(prev => (nextPage === 1 ? data.conversations : [...prev, ...data.conversations.filter((c: Conversation) => !prev.some(p => p.id === c.id))]));
+            setHasMore(data.has_more);
+            setCounts(data.counts);
+            setPage(nextPage);
+        } catch (error) {
+            toast.error(errorMessage(error, t('Could not load your chats.')));
+        } finally {
+            setLoadingList(false);
+        }
+    };
+
+    const chooseFilter = (next: ListFilter) => {
+        setFilter(next);
+        loadList(next);
+    };
+
+    /** The numbers next to Favorites, Waiting for you and Archive. */
+    const refreshCounts = () => {
+        axios.get(route('ai-assistant.conversations.index'), { params: { filter, page: 1 } })
+            .then(({ data }) => setCounts(data.counts))
+            .catch(() => undefined);
+    };
+
+    /** Star or archive: update the row, and drop it from a list it no longer belongs to. */
+    const change = async (conversation: Conversation, values: { is_favorite?: boolean; archived?: boolean }) => {
+        try {
+            const { data } = await axios.patch(route('ai-assistant.conversations.update', conversation.id), values);
+            const row: Conversation = data.conversation;
+            const belongs = filter === 'all' ? !row.archived
+                : filter === 'favorites' ? !!row.is_favorite && !row.archived
+                : filter === 'archived' ? !!row.archived
+                : !row.archived;
+            setConversations(prev => (belongs ? prev.map(c => (c.id === row.id ? row : c)) : prev.filter(c => c.id !== row.id)));
+            setCounts(data.counts);
+            if (values.archived !== undefined) {
+                toast.success(values.archived ? t('Chat archived') : t('Chat moved out of the archive'));
+            }
+        } catch (error) {
+            toast.error(errorMessage(error, t('Could not update the chat.')));
+        }
     };
 
     const remove = async (conversation: Conversation) => {
@@ -571,8 +634,19 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
             await axios.delete(route('ai-assistant.conversations.destroy', conversation.id));
             setConversations(prev => prev.filter(c => c.id !== conversation.id));
             if (activeId === conversation.id) setActiveId(null);
+            refreshCounts();
         } catch (error) {
             toast.error(errorMessage(error, t('Could not delete the conversation.')));
+        }
+    };
+
+    /** Help: a new chat with the Help topic on. */
+    const askHelp = () => {
+        if (activeId === null) {
+            setTopic('help');
+        } else {
+            nextTopicRef.current = 'help';
+            open(null);
         }
     };
 
@@ -580,6 +654,26 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
         setActiveId(id);
         // On a phone the open list covers the chat: close it once a chat is picked.
         if (isSmallScreen()) setListOpen(false);
+    };
+
+    const sidebarProps: SidebarProps = {
+        conversations,
+        activeId,
+        filter,
+        counts,
+        hasMore,
+        loadingList,
+        standalone,
+        helpTopic: topics.some(o => o.key === 'help'),
+        onFilter: chooseFilter,
+        onOpen: open,
+        onMore: () => loadList(filter, page + 1),
+        onFavorite: c => change(c, { is_favorite: !c.is_favorite }),
+        onArchive: c => change(c, { archived: !c.archived }),
+        onDelete: remove,
+        onCollapse: toggleList,
+        onAskHelp: askHelp,
+        onOpenSettings,
     };
 
     const firstName = String(auth?.user?.name ?? '').split(' ')[0];
@@ -600,41 +694,29 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
 
     return (
         <div className={`relative flex overflow-hidden bg-background ${standalone ? 'h-full min-h-[480px]' : 'h-[calc(100dvh-11rem)] min-h-[560px] rounded-xl border'}`}>
-            {/* Conversation list: open, or a narrow rail. On a phone the open list slides over the chat. */}
+            {/* Sidebar: open, or a narrow rail of icons. On a phone the open sidebar slides over the chat. */}
             {listOpen ? (
                 <>
                     <div className="absolute inset-0 z-20 bg-black/30 md:hidden" onClick={toggleList} aria-hidden />
                     <aside id="ai-chat-list" className="absolute inset-y-0 left-0 z-30 flex w-72 shrink-0 flex-col border-r bg-background shadow-xl md:static md:z-auto md:bg-muted/40 md:shadow-none">
-                        <ConversationList conversations={conversations} activeId={activeId} onOpen={open} onDelete={remove} onCollapse={toggleList} />
+                        <ChatSidebar {...sidebarProps} />
                     </aside>
                 </>
             ) : (
-                <aside className="flex w-14 shrink-0 flex-col items-center gap-2 border-r bg-muted/40 py-3">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleList} aria-label={t('Show chats')} title={t('Show chats')} aria-expanded={false} aria-controls="ai-chat-list">
-                        <PanelLeftOpen className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="icon" className="h-8 w-8 rounded-full bg-background" onClick={() => open(null)} aria-label={t('New chat')} title={t('New chat')}>
-                        <Plus className="h-4 w-4" />
-                    </Button>
+                <aside className="flex w-14 shrink-0 flex-col items-center gap-1.5 border-r bg-muted/40 py-3">
+                    <ChatSidebarRail {...sidebarProps} />
                 </aside>
             )}
 
             <section className="flex min-w-0 flex-1 flex-col">
-                {/* The Sundal page has no AI mode bar: the model and Settings sit above the chat. */}
-                {!standalone && (model || onOpenSettings) && (
+                {/* The Sundal page has no AI mode bar: the model sits above the chat. */}
+                {!standalone && model && (
                     <header className="flex items-center gap-2 border-b px-3 py-2.5 sm:px-4">
-                        {model && (
-                            <div className="flex min-w-0 items-center gap-2" title={`${model.provider} · ${model.name}`}>
-                                <Sparkles className="h-4 w-4 shrink-0 text-violet-500" />
-                                <span className="truncate text-sm font-semibold">{model.name}</span>
-                                <span className="hidden shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground sm:inline">{model.provider}</span>
-                            </div>
-                        )}
-                        {onOpenSettings && (
-                            <Button variant="ghost" size="icon" className="ml-auto h-8 w-8" onClick={onOpenSettings} aria-label={t('Settings')} title={t('Settings')}>
-                                <SettingsIcon className="h-4 w-4" />
-                            </Button>
-                        )}
+                        <div className="flex min-w-0 items-center gap-2" title={`${model.provider} · ${model.name}`}>
+                            <Sparkles className="h-4 w-4 shrink-0 text-violet-500" />
+                            <span className="truncate text-sm font-semibold">{model.name}</span>
+                            <span className="hidden shrink-0 rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground sm:inline">{model.provider}</span>
+                        </div>
                     </header>
                 )}
 
@@ -713,83 +795,378 @@ function Chat({ conversations: initial, topics, model, standalone, onOpenSetting
     );
 }
 
-/** Past conversations, newest first, grouped by day. */
-function ConversationList({ conversations, activeId, onOpen, onDelete, onCollapse }: {
+/** The sidebar's filters, after the New chat button. */
+const LIST_FILTERS: { key: Exclude<ListFilter, 'all'>; label: string; hint: string; icon: typeof Bot }[] = [
+    { key: 'favorites', label: 'Favorites', hint: 'Chats you starred', icon: Star },
+    { key: 'waiting', label: 'Waiting for you', hint: 'Chats with a card waiting for you to confirm', icon: Hourglass },
+    { key: 'archived', label: 'Archive', hint: 'Chats you put away', icon: Archive },
+];
+
+const ROLE_LABELS: Record<string, string> = { owner: 'Company owner', manager: 'Manager' };
+
+interface SidebarProps {
     conversations: Conversation[];
     activeId: number | null;
+    filter: ListFilter;
+    counts: ListCounts;
+    hasMore: boolean;
+    loadingList: boolean;
+    standalone: boolean;
+    helpTopic: boolean;
+    onFilter: (filter: ListFilter) => void;
     onOpen: (id: number | null) => void;
+    onMore: () => void;
+    onFavorite: (conversation: Conversation) => void;
+    onArchive: (conversation: Conversation) => void;
     onDelete: (conversation: Conversation) => void;
     onCollapse: () => void;
-}) {
+    onAskHelp: () => void;
+    onOpenSettings?: () => void;
+}
+
+/** The open sidebar: New chat, the filters, the chats, then Settings, Help and the user. */
+function ChatSidebar(props: SidebarProps) {
     const { t } = useTranslation();
-    const groups = conversations.reduce<Record<string, Conversation[]>>((all, c) => {
-        (all[dayGroup(c.last_message_at)] ??= []).push(c);
-        return all;
-    }, {});
+    const { conversations, activeId, filter, counts, hasMore, loadingList } = props;
+    const current = LIST_FILTERS.find(f => f.key === filter);
 
     return (
         <>
-            <div className="flex items-center gap-2 px-4 pb-2 pt-3">
+            <div className="flex items-center gap-2 px-4 pb-1 pt-3">
                 <AssistantMark />
                 <span className="truncate text-sm font-semibold">{t('AI Assistant')}</span>
-                <div className="ml-auto flex items-center gap-1">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 rounded-full bg-background"
-                        onClick={() => onOpen(null)}
-                        aria-label={t('New chat')}
-                        title={t('New chat')}
-                    >
-                        <Plus className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onCollapse} aria-label={t('Hide chats')} title={t('Hide chats')} aria-expanded>
-                        <PanelLeftClose className="h-4 w-4" />
-                    </Button>
-                </div>
+                <Button variant="ghost" size="icon" className="ml-auto h-8 w-8" onClick={props.onCollapse} aria-label={t('Hide chats')} title={t('Hide chats')} aria-expanded>
+                    <PanelLeftClose className="h-4 w-4" />
+                </Button>
             </div>
-            <nav className="flex-1 overflow-y-auto px-2 pb-3" aria-label={t('Conversations')}>
-                {conversations.length === 0 && <p className="px-2 py-4 text-xs text-muted-foreground">{t('No conversations yet. Your chats appear here.')}</p>}
-                {['Today', 'Yesterday', 'Previous 7 days', 'Older'].filter(g => groups[g]).map(group => (
-                    <div key={group}>
-                        <p className="px-2 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t(group)}</p>
-                        <ul className="space-y-0.5">
-                            {groups[group].map(c => {
-                                const Icon = (c.topic && TOPIC_ICONS[c.topic]) || MessageSquare;
-                                const on = c.id === activeId;
-                                return (
-                                    <li key={c.id}>
-                                        <div
-                                            role="button"
-                                            tabIndex={0}
-                                            onClick={() => onOpen(c.id)}
-                                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(c.id); } }}
-                                            aria-current={on ? 'true' : undefined}
-                                            className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring ${
-                                                on ? 'bg-background font-medium shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'
-                                            }`}
-                                        >
-                                            <Icon className={`h-4 w-4 shrink-0 ${on ? 'text-violet-600' : ''}`} />
-                                            <span className="min-w-0 flex-1 truncate">{c.title || t('New conversation')}</span>
-                                            <span className="text-[11px] text-muted-foreground group-hover:hidden">{t(timeAgo(c.last_message_at))}</span>
-                                            <button
-                                                type="button"
-                                                className="hidden rounded p-0.5 hover:bg-muted group-hover:block"
-                                                onClick={e => { e.stopPropagation(); onDelete(c); }}
-                                                aria-label={t('Delete')}
-                                                title={t('Delete')}
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </button>
-                                        </div>
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    </div>
-                ))}
-            </nav>
+
+            <div className="space-y-1 px-3 pb-2 pt-2">
+                <Button className="h-9 w-full justify-start gap-2 rounded-lg" onClick={() => props.onOpen(null)}>
+                    <Plus className="h-4 w-4" />
+                    {t('New chat')}
+                </Button>
+                <nav className="space-y-0.5 pt-2" aria-label={t('Chat filters')}>
+                    {LIST_FILTERS.map(item => {
+                        const on = filter === item.key;
+                        const count = counts[item.key];
+                        return (
+                            <button
+                                key={item.key}
+                                type="button"
+                                onClick={() => props.onFilter(on ? 'all' : item.key)}
+                                aria-pressed={on}
+                                title={t(item.hint)}
+                                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
+                                    on ? 'bg-background font-medium text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'
+                                }`}
+                            >
+                                <item.icon className={`h-4 w-4 ${on ? 'text-violet-600' : ''}`} />
+                                <span className="flex-1 text-left">{t(item.label)}</span>
+                                {count > 0 && (
+                                    <span className={`min-w-5 rounded-full px-1.5 text-center text-[11px] tabular-nums ${
+                                        item.key === 'waiting' ? 'bg-amber-100 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' : 'text-muted-foreground'
+                                    }`}>
+                                        {count}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </nav>
+            </div>
+
+            <div className="flex items-center justify-between px-4 pb-1 pt-2">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{current ? t(current.label) : t('Recent chats')}</p>
+                {current && (
+                    <button type="button" className="text-[11px] text-violet-600 hover:underline" onClick={() => props.onFilter('all')}>
+                        {t('Show all')}
+                    </button>
+                )}
+            </div>
+            <div className="flex-1 overflow-y-auto px-3 pb-3" aria-label={t('Conversations')} role="list">
+                {!loadingList && conversations.length === 0 && (
+                    <p className="px-1 py-4 text-xs text-muted-foreground">
+                        {filter === 'all' ? t('No conversations yet. Your chats appear here.') : t('Nothing here yet.')}
+                    </p>
+                )}
+                <div className="space-y-1.5">
+                    {conversations.map(c => (
+                        <ConversationItem
+                            key={c.id}
+                            conversation={c}
+                            active={c.id === activeId}
+                            onOpen={() => props.onOpen(c.id)}
+                            onFavorite={() => props.onFavorite(c)}
+                            onArchive={() => props.onArchive(c)}
+                            onDelete={() => props.onDelete(c)}
+                        />
+                    ))}
+                </div>
+                {loadingList && <Loader2 className="mx-auto mt-3 h-4 w-4 animate-spin text-muted-foreground" />}
+                {hasMore && !loadingList && (
+                    <Button variant="outline" size="sm" className="mt-2 h-8 w-full gap-1 rounded-lg bg-background text-xs" onClick={props.onMore}>
+                        {t('Show more')}
+                        <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                )}
+            </div>
+
+            <div className="space-y-0.5 border-t px-3 py-2">
+                {props.onOpenSettings && (
+                    <SidebarLink icon={SettingsIcon} label={t('Settings')} onClick={props.onOpenSettings} />
+                )}
+                <HelpDialog helpTopic={props.helpTopic} onAskHelp={props.onAskHelp}>
+                    <SidebarLink icon={HelpCircle} label={t('Help')} />
+                </HelpDialog>
+            </div>
+            <div className="border-t p-2">
+                <ProfileMenu standalone={props.standalone} />
+            </div>
         </>
+    );
+}
+
+/** The collapsed sidebar: icons only, same actions. */
+function ChatSidebarRail(props: SidebarProps) {
+    const { t } = useTranslation();
+
+    return (
+        <>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={props.onCollapse} aria-label={t('Show chats')} title={t('Show chats')} aria-expanded={false}>
+                <PanelLeftOpen className="h-4 w-4" />
+            </Button>
+            <Button size="icon" className="h-8 w-8 rounded-lg" onClick={() => props.onOpen(null)} aria-label={t('New chat')} title={t('New chat')}>
+                <Plus className="h-4 w-4" />
+            </Button>
+            <div className="my-1 h-px w-6 bg-border" aria-hidden />
+            {LIST_FILTERS.map(item => (
+                <Button
+                    key={item.key}
+                    variant="ghost"
+                    size="icon"
+                    className={`relative h-8 w-8 ${props.filter === item.key ? 'bg-background text-violet-600 shadow-sm ring-1 ring-border' : 'text-muted-foreground'}`}
+                    onClick={() => { props.onFilter(item.key); props.onCollapse(); }}
+                    aria-label={t(item.label)}
+                    title={`${t(item.label)}${props.counts[item.key] ? ` (${props.counts[item.key]})` : ''}`}
+                >
+                    <item.icon className="h-4 w-4" />
+                    {item.key === 'waiting' && props.counts.waiting > 0 && (
+                        <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-500" aria-hidden />
+                    )}
+                </Button>
+            ))}
+            <div className="mt-auto flex flex-col items-center gap-1">
+                {props.onOpenSettings && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={props.onOpenSettings} aria-label={t('Settings')} title={t('Settings')}>
+                        <SettingsIcon className="h-4 w-4" />
+                    </Button>
+                )}
+                <HelpDialog helpTopic={props.helpTopic} onAskHelp={props.onAskHelp}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" aria-label={t('Help')} title={t('Help')}>
+                        <HelpCircle className="h-4 w-4" />
+                    </Button>
+                </HelpDialog>
+                <ProfileMenu standalone={props.standalone} compact />
+            </div>
+        </>
+    );
+}
+
+function SidebarLink({ icon: Icon, label, onClick, ...rest }: { icon: typeof Bot; label: string; onClick?: () => void } & Record<string, unknown>) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            {...rest}
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground"
+        >
+            <Icon className="h-4 w-4" />
+            {label}
+        </button>
+    );
+}
+
+/** One chat in the list: title and time, a one-line preview, and a menu. */
+function ConversationItem({ conversation: c, active, onOpen, onFavorite, onArchive, onDelete }: {
+    conversation: Conversation;
+    active: boolean;
+    onOpen: () => void;
+    onFavorite: () => void;
+    onArchive: () => void;
+    onDelete: () => void;
+}) {
+    const { t } = useTranslation();
+    const Icon = (c.topic && TOPIC_ICONS[c.topic]) || MessageSquare;
+
+    return (
+        <div
+            role="listitem"
+            className={`group relative rounded-lg border px-2.5 py-2 transition-colors ${
+                active
+                    ? 'border-violet-300 bg-violet-50 dark:border-violet-800 dark:bg-violet-950/30'
+                    : 'border-border/70 bg-background hover:border-border hover:shadow-sm'
+            }`}
+        >
+            <button
+                type="button"
+                onClick={onOpen}
+                aria-current={active ? 'true' : undefined}
+                className="block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+                <span className="flex items-center gap-2">
+                    <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-violet-600' : 'text-muted-foreground'}`} />
+                    <span className={`min-w-0 flex-1 truncate text-sm ${active ? 'font-medium' : ''}`}>{c.title || t('New conversation')}</span>
+                    {c.is_favorite && <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" aria-label={t('Favorite')} />}
+                    <span className="shrink-0 pr-5 text-[11px] text-muted-foreground">{t(timeAgo(c.last_message_at))}</span>
+                </span>
+                <span className="mt-0.5 flex items-center gap-1.5 pl-6">
+                    {(c.waiting ?? 0) > 0 && (
+                        <span className="shrink-0 rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                            {t('{{count}} waiting', { count: c.waiting })}
+                        </span>
+                    )}
+                    <span className="truncate text-xs text-muted-foreground">{c.preview || ' '}</span>
+                </span>
+            </button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        type="button"
+                        className="absolute right-1.5 top-1.5 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                        aria-label={t('Chat options')}
+                        title={t('Chat options')}
+                    >
+                        <MoreHorizontal className="h-3.5 w-3.5" />
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onSelect={onFavorite}>
+                        <Star className="mr-2 h-4 w-4" />
+                        {c.is_favorite ? t('Remove from favorites') : t('Add to favorites')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={onArchive}>
+                        {c.archived ? <ArchiveRestore className="mr-2 h-4 w-4" /> : <Archive className="mr-2 h-4 w-4" />}
+                        {c.archived ? t('Move out of archive') : t('Archive')}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={onDelete} className="text-destructive focus:text-destructive">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        {t('Delete')}
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
+    );
+}
+
+/** How the assistant works, and a way to ask a how-to question. */
+function HelpDialog({ helpTopic, onAskHelp, children }: { helpTopic: boolean; onAskHelp: () => void; children: ReactNode }) {
+    const { t } = useTranslation();
+    const [open, setOpen] = useState(false);
+    const tips = [
+        { icon: MessageSquare, text: 'Ask in plain words: "What is overdue?", "Assign the login bug to Ravi", "Log 3 hours on Mobile App".' },
+        { icon: Check, text: 'Nothing changes until you confirm the card the assistant shows. If something is missing, it asks you with buttons.' },
+        { icon: Undo2, text: 'Most changes can be undone for 10 minutes from the card.' },
+        { icon: ListTodo, text: 'Pick a topic under the message box to keep a chat about tasks, time, finance and so on.' },
+        { icon: Star, text: 'Star chats you come back to, archive the ones you are done with. Waiting for you lists chats with a card still to confirm.' },
+        { icon: CornerDownLeft, text: 'Enter sends; Shift + Enter starts a new line.' },
+    ];
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>{children}</DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{t('How the AI Assistant works')}</DialogTitle>
+                    <DialogDescription>{t('It works inside Sundal with your role\'s permissions, and only does what you confirm.')}</DialogDescription>
+                </DialogHeader>
+                <ul className="space-y-3 text-sm">
+                    {tips.map(tip => (
+                        <li key={tip.text} className="flex gap-3">
+                            <tip.icon className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+                            <span>{t(tip.text)}</span>
+                        </li>
+                    ))}
+                </ul>
+                {helpTopic && (
+                    <DialogFooter>
+                        <Button onClick={() => { setOpen(false); onAskHelp(); }}>
+                            <HelpCircle className="mr-2 h-4 w-4" />
+                            {t('Ask how to do something in Sundal')}
+                        </Button>
+                    </DialogFooter>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** The signed-in user at the bottom of the sidebar, with Profile and Sign out. */
+function ProfileMenu({ standalone, compact = false }: { standalone: boolean; compact?: boolean }) {
+    const { t } = useTranslation();
+    const { auth } = usePage().props as any;
+    const user = auth?.user ?? {};
+    const role = ROLE_LABELS[user.workspace_role] ?? '';
+    const workspace = user.current_workspace?.name ?? '';
+    const initials = String(user.name ?? '').split(' ').filter(Boolean).slice(0, 2).map((w: string) => w[0]?.toUpperCase()).join('') || '?';
+
+    // AI mode is its own tab: Sundal pages open in a new tab instead of replacing it.
+    const visit = (url: string) => (standalone ? window.open(url, '_blank', 'noopener') : router.visit(url));
+    const signOut = () => {
+        notifySignedOut();
+        router.post(route('logout'));
+    };
+
+    const avatar = (
+        <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-violet-100 text-[11px] font-semibold text-violet-700 dark:bg-violet-900/50 dark:text-violet-200">
+            {initials}
+            {user.avatar && !String(user.avatar).endsWith('/images/avatar/avatar.png') && (
+                <img src={user.avatar} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            )}
+        </span>
+    );
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                {compact ? (
+                    <button type="button" className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={t('Your account')} title={user.name}>
+                        {avatar}
+                    </button>
+                ) : (
+                    <button type="button" className="flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={t('Your account')}>
+                        {avatar}
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{user.name}</span>
+                            <span className="block truncate text-[11px] text-muted-foreground">{[t(role), workspace].filter(Boolean).join(' · ')}</span>
+                        </span>
+                        <ChevronsUpDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
+                )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-60">
+                <DropdownMenuLabel className="font-normal">
+                    <span className="block truncate text-sm font-medium">{user.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{user.email}</span>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => visit(route('profile'))}>
+                    <UserRound className="mr-2 h-4 w-4" />
+                    {t('Profile')}
+                </DropdownMenuItem>
+                {standalone && (
+                    <DropdownMenuItem onSelect={() => visit(route('dashboard'))}>
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        {t('Open Sundal')}
+                    </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={signOut}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    {t('Sign out')}
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }
 
