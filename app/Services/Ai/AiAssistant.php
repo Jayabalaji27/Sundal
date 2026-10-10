@@ -450,6 +450,7 @@ class AiAssistant
             'details' => $prepared->details,
             'items' => $prepared->items,
             'confirm_phrase' => $prepared->confirmPhrase,
+            'view' => $prepared->view,
         ];
     }
 
@@ -480,6 +481,11 @@ class AiAssistant
             $isForm = isset($call->payload['form']) && $tool instanceof HasForm;
             if ($isForm && !$this->applyForm($call, $tool, $user, $fields ?? [])) {
                 return $call;
+            }
+
+            // An editable card that still needs a choice (no project, no rows) stays open.
+            if (!empty($call->payload['view']['problem'])) {
+                throw ValidationException::withMessages(['card' => $call->payload['view']['problem']]);
             }
 
             // Risky actions need the phrase typed, not just a click.
@@ -522,6 +528,35 @@ class AiAssistant
      * Reverse a confirmed action within AiToolCall::UNDO_MINUTES, through the
      * same tool and Action classes, with the same checks as a confirm.
      */
+    /**
+     * A change made on an editable card (the import table: project, columns,
+     * rows): the tool folds it into its arguments and prepares the card
+     * again. No AI call; nothing runs until Confirm.
+     */
+    public function editCard(AiToolCall $call, User $user, array $changes): AiToolCall
+    {
+        return DB::transaction(function () use ($call, $user, $changes) {
+            $call = AiToolCall::whereKey($call->id)->lockForUpdate()->firstOrFail();
+            $this->guardPending($call, $user);
+
+            $tool = $this->registry->find($call->tool);
+            if (!$tool instanceof Tools\EditableCard || !$tool->allowedFor($user)) {
+                throw new AuthorizationException(__('You are no longer allowed to do this.'));
+            }
+
+            $args = $tool->edit($call->input ?? [], $changes, $user);
+            try {
+                $prepared = $tool->prepare($args, $user);
+            } catch (ToolInputException|ActionException $e) {
+                throw ValidationException::withMessages(['card' => $e->getMessage()]);
+            }
+
+            $call->update(['input' => $args, 'summary' => $prepared->summary, 'payload' => $this->preparedPayload($prepared)]);
+
+            return $call;
+        });
+    }
+
     public function undo(AiToolCall $call, User $user): AiToolCall
     {
         return DB::transaction(function () use ($call, $user) {

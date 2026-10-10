@@ -18,6 +18,11 @@ class IntentMatcher
         $isBug = (bool) preg_match('/\b(bug|bugs|defect|issue)\b/', $t);
         $isTask = (bool) preg_match('/\b(task|tasks|to-?do|to do|story|stories|ticket)\b/', $t);
 
+        // About an attached file: one form card would be wrong ("create bugs from this sheet").
+        if (preg_match('/\b(sheet|spreadsheet|excel|xlsx|csv|file|attached|attachment|document|pdf|brd|rows)\b/', $t)) {
+            return null;
+        }
+
         if (preg_match('/\binvite\b/', $t)) {
             preg_match('/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/', $t, $email);
 

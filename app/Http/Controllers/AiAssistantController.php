@@ -273,6 +273,33 @@ class AiAssistantController extends Controller
         return $this->cardResponse($assistant->updateDraft($toolCall, $request->user(), $validated['fields']));
     }
 
+    /** A change on an editable card (the import table or the document plan). No AI call. */
+    public function editCard(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
+    {
+        $this->ensureCanUse($request);
+        if ($limited = $this->throttleCards($request)) {
+            return $limited;
+        }
+        $validated = $request->validate([
+            'changes' => 'required|array',
+            'changes.project' => 'sometimes|nullable|integer|min:1',
+            'changes.new_project' => 'sometimes|nullable|string|max:120',
+            'changes.sheet' => 'sometimes|string|max:120',
+            'changes.mapping' => 'sometimes|array|max:20',
+            'changes.mapping.*' => 'nullable|string|max:120',
+            'changes.rows' => 'sometimes|array|max:500',
+            'changes.rows.*.n' => 'required|integer|min:1',
+            'changes.rows.*.include' => 'sometimes|boolean',
+            'changes.rows.*.title' => 'sometimes|string|max:255',
+            'changes.rows.*.assignee' => 'sometimes|nullable|string|max:20',
+            'changes.rows.*.severity' => 'sometimes|string|max:20',
+            'changes.rows.*.priority' => 'sometimes|string|max:20',
+            'changes.all' => 'sometimes|boolean',
+        ]);
+
+        return $this->cardResponse($assistant->editCard($toolCall, $request->user(), $validated['changes']));
+    }
+
     public function confirm(Request $request, AiToolCall $toolCall, AiAssistant $assistant): JsonResponse
     {
         $this->ensureCanUse($request);

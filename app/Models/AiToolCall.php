@@ -81,6 +81,7 @@ class AiToolCall extends Model
             'details' => $this->payload['details'] ?? [],
             'items' => $this->payload['items'] ?? [],
             'confirm_phrase' => $this->payload['confirm_phrase'] ?? null,
+            'view' => $this->payload['view'] ?? null,
             // Drafts: "question" while a must-know value is missing (answered with
             // buttons or a short reply), then "review" (confirm, or Edit to change).
             'stage' => $this->payload['stage'] ?? 'review',

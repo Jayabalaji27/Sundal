@@ -20,6 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/custom-toast';
 import { AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
+import { ImportTable, type ImportChanges, type ImportView } from '@/components/ai-import-card';
 import { AttachMenu, DropZone, FileChip, FileSuggestions, SundalFilesDialog, useAttachments, type AttachmentChip } from '@/components/ai-attachments';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { notifySignedOut } from '@/lib/ai-mode';
@@ -50,7 +51,11 @@ interface ToolCard {
     /** The draft's values: shown as choice buttons, a summary, or the Edit form. */
     fields: FormFieldState[];
     form_error: string | null;
+    /** A richer card: the import table (sheet rows → bugs or tasks). */
+    view?: CardView | null;
 }
+
+type CardView = ImportView;
 
 interface FormFieldState {
     name: string;
@@ -1364,7 +1369,7 @@ function knownValues(fields: FormFieldState[]): string {
 
 function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: ToolCard, note: Message | null) => void }) {
     const { t } = useTranslation();
-    const [busy, setBusy] = useState<'confirm' | 'cancel' | 'undo' | 'update' | null>(null);
+    const [busy, setBusy] = useState<'confirm' | 'cancel' | 'undo' | 'update' | 'edit' | null>(null);
     const [phrase, setPhrase] = useState('');
     const [editing, setEditing] = useState(false);
     // Hide the Undo button once its 10 minutes are over, without a reload.
@@ -1389,7 +1394,7 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
 
     const phraseOk = !card.confirm_phrase || phrase.trim().toLowerCase() === card.confirm_phrase.toLowerCase();
 
-    const post = async (action: 'confirm' | 'cancel' | 'undo' | 'update', body: object = {}) => {
+    const post = async (action: 'confirm' | 'cancel' | 'undo' | 'update' | 'edit', body: object = {}) => {
         setBusy(action);
         try {
             const { data } = await axios.post(route(`ai-assistant.tool-calls.${action}`, card.id), body);
@@ -1420,6 +1425,12 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
     };
 
     const known = knownValues(fields);
+    const view = card.view ?? null;
+    // An editable table (sheet import): changes go straight to the server, no AI call.
+    const editView = (changes: ImportChanges) => post('edit', { changes });
+    const confirmLabel = view?.type === 'import'
+        ? (view.kind === 'bugs' ? t('Create {{count}} bugs', { count: view.included }) : t('Create {{count}} tasks', { count: view.included }))
+        : t('Confirm');
 
     return (
         <Card className={pending ? 'border-violet-300 dark:border-violet-700' : ''}>
@@ -1431,7 +1442,9 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                     </Badge>
                 </div>
 
-                {pending && editing ? (
+                {pending && view?.type === 'import' ? (
+                    <ImportTable view={view} busy={busy !== null} onEdit={editView} />
+                ) : pending && editing ? (
                     <>
                         <CardForm cardId={card.id} fields={fields} values={values} onChange={(name, value) => setValues(prev => ({ ...prev, [name]: value }))} />
                         <div className="flex gap-2">
@@ -1484,9 +1497,9 @@ function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: Tool
                 {pending && !editing && (
                     <div className="flex flex-wrap gap-2">
                         {!asking && (
-                            <Button size="sm" onClick={() => post('confirm', card.confirm_phrase ? { phrase } : {})} disabled={busy !== null || !phraseOk || !!card.form_error}>
+                            <Button size="sm" onClick={() => post('confirm', card.confirm_phrase ? { phrase } : {})} disabled={busy !== null || !phraseOk || !!card.form_error || !!view?.problem}>
                                 {busy === 'confirm' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
-                                {t('Confirm')}
+                                {confirmLabel}
                             </Button>
                         )}
                         {fields.length > 0 && (

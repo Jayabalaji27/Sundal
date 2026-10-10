@@ -299,7 +299,7 @@ describe('chat', function () {
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
 
         expect(toolNames($fake))->toBe(collect(app(\App\Services\Ai\ToolRegistry::class)->all())->keys()->sort()->values()->all())
-            ->and(toolNames($fake))->toHaveCount(46);
+            ->and(toolNames($fake))->toHaveCount(48);
     });
 
     test('a manager gets the manager workflow tools their role allows', function () {
@@ -1904,6 +1904,158 @@ describe('attachments', function () {
             'size' => 1024 * 1024 * 1024, 'disk' => 'local', 'path' => 'x/big.pdf', 'kind' => 'document', 'status' => 'ready',
         ]);
         aiUpload($this, $users['owner'], 'c.txt', 'one more')->assertUnprocessable()->assertJsonPath('errors.file.0', fn ($m) => str_contains($m, 'Storage limit exceeded'));
+    });
+});
+
+// ── Sheet → bugs / tasks (attachments phase 2) ────────────────────────────────
+
+/** Upload the QA sheet and have the model call an import tool; returns the card. */
+function aiImportCard($test, User $user, array $args, ?string $contents = null, string $tool = 'import_bugs_from_sheet'): array
+{
+    $id = aiUpload($test, $user, 'QA bugs.xlsx', $contents ?? aiBugSheet())->json('attachment.id');
+    fakeAi([['tool' => $tool, 'args' => ['attachment' => "#{$id}", ...$args]], ['text' => 'Please check the table.']]);
+
+    return asAi($test, $user)->postJson(route('ai-assistant.send'), ['content' => 'create these as bugs', 'attachment_ids' => [$id]])
+        ->assertOk()->json('messages.1.cards.0');
+}
+
+function aiEditCard($test, User $user, int $cardId, array $changes)
+{
+    return asAi($test, $user)->postJson(route('ai-assistant.tool-calls.edit', $cardId), ['changes' => $changes]);
+}
+
+describe('sheet imports', function () {
+    beforeEach(function () {
+        \Illuminate\Support\Facades\Storage::fake('local');
+    });
+
+    test('a QA bug sheet becomes a table of bugs: columns matched by name, values cleaned, people matched only when sure', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner']);
+        $ravi = User::factory()->create(['name' => 'Ravi Kumar', 'email' => 'ravi@acme.test']);
+        WorkspaceMember::create(['workspace_id' => $workspace->id, 'user_id' => $ravi->id, 'role' => 'member', 'status' => 'active']);
+
+        $card = aiImportCard($this, $users['manager'], ['project' => 'Website Redesign']);
+        $view = $card['view'];
+        $rows = collect($view['rows'])->keyBy('n');
+        $columns = collect($view['fields'])->pluck('column', 'name');
+
+        expect($view['type'])->toBe('import')
+            ->and($card['summary'])->toBe('Create 3 bugs in Website Redesign from QA bugs.xlsx')
+            ->and($columns['title'])->toBe('Summary')
+            ->and($columns['steps_to_reproduce'])->toBe('Steps')
+            ->and($columns['assignee'])->toBe('Assigned To')
+            ->and($rows[2]['severity'])->toBe('blocker')
+            ->and($rows[2]['priority'])->toBe('critical')
+            ->and($rows[2]['assignee'])->toBe((string) $ravi->id)
+            ->and($rows[4]['severity'])->toBe('minor')
+            ->and($rows[4]['assignee'])->toBeNull()
+            ->and($rows[4]['problems'])->toContain('"nobody@nowhere.test" is not in this workspace; left unassigned')
+            ->and($view['problem'])->toBeNull()
+            ->and($card['confirm_phrase'])->toBeNull();
+
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done')->assertJsonPath('card.can_undo', true);
+
+        $bug = Bug::where('title', 'Login button does nothing')->first();
+        expect(Bug::count())->toBe(3)
+            ->and($bug->reported_by)->toBe($users['manager']->id)
+            ->and($bug->assigned_to)->toBe($ravi->id)
+            ->and($bug->severity)->toBe('blocker')
+            ->and($bug->steps_to_reproduce)->toBe('Open login, click Sign in')
+            // The ID column has no field: kept under the description.
+            ->and($bug->description)->toContain('From QA bugs.xlsx, sheet Bugs, row 2')->toContain('ID: 1');
+
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect(Bug::count())->toBe(0);
+    });
+
+    test('the card is edited in place with no AI call: project, columns, rows, assignees', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner']);
+        $mobile = aiProject($workspace, $users['owner'], 'Mobile App');
+
+        // No project said and there are two: the card asks for it and cannot be confirmed yet.
+        $card = aiImportCard($this, $users['owner'], []);
+        expect($card['view']['problem'])->toBe('Choose the project.')
+            ->and($card['view']['project'])->toBeNull();
+        aiConfirm($this, $users['owner'], $card['id'])->assertUnprocessable();
+        expect(AiToolCall::withoutGlobalScope('workspace')->find($card['id'])->status)->toBe('pending');
+
+        $card = aiEditCard($this, $users['owner'], $card['id'], ['project' => $mobile->id])->assertOk()->json('card');
+        expect($card['view']['project']['label'])->toBe('Mobile App')->and($card['view']['problem'])->toBeNull();
+
+        // Titles from another column; the footer row left out; Footer assigned to the owner.
+        $card = aiEditCard($this, $users['owner'], $card['id'], [
+            'mapping' => ['title' => 'Steps'],
+            'rows' => [['n' => 3, 'include' => false], ['n' => 2, 'assignee' => (string) $users['owner']->id]],
+        ])->json('card');
+        $rows = collect($card['view']['rows'])->keyBy('n');
+        expect($rows[2]['title'])->toBe('Open login, click Sign in')
+            ->and($rows[3]['include'])->toBeFalse()->and($rows[3]['problems'])->toContain('No title')
+            ->and($rows[2]['assignee'])->toBe((string) $users['owner']->id)
+            ->and($card['view']['included'])->toBe(1);
+
+        aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect(Bug::pluck('title')->all())->toBe(['Open login, click Sign in'])
+            ->and(Bug::first()->project_id)->toBe($mobile->id)
+            ->and(Bug::first()->assigned_to)->toBe($users['owner']->id);
+    });
+
+    test('rows already in the project are unticked; more than 10 rows need CREATE N typed; at most 500 rows', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        config(['ai_assistant.attachments.max_import_rows' => 12]);
+        $project = aiProject($workspace, $users['owner']);
+        app(\App\Actions\Bugs\CreateBug::class)->handle($users['owner'], ['project_id' => $project->id, 'title' => 'Bug 3', 'priority' => 'low', 'severity' => 'minor']);
+
+        $rows = array_merge([['Title', 'Priority']], array_map(fn ($i) => ["Bug {$i}", 'High'], range(1, 14)), [['Bug 5', 'Low']]);
+        $card = aiImportCard($this, $users['owner'], ['project' => 'Website Redesign'], aiXlsx($rows));
+        $byTitle = collect($card['view']['rows'])->groupBy('title');
+
+        expect(count($card['view']['rows']))->toBe(12)
+            ->and($card['details']['Rows'])->toContain('only the first 12 rows are imported')
+            ->and($byTitle['Bug 3'][0]['include'])->toBeFalse()
+            ->and($byTitle['Bug 3'][0]['problems'])->toContain('Already in Website Redesign')
+            ->and($card['view']['included'])->toBe(11)
+            ->and($card['confirm_phrase'])->toBe('CREATE 11');
+
+        aiConfirm($this, $users['owner'], $card['id'], 'yes')->assertUnprocessable();
+        aiConfirm($this, $users['owner'], $card['id'], 'CREATE 11')->assertJsonPath('card.status', 'done');
+        expect(Bug::where('project_id', $project->id)->count())->toBe(12);
+    });
+
+    test('a task sheet becomes tasks, with story, criteria, owner and due columns matched', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner']);
+        $sheet = aiXlsx([['Story', 'Acceptance criteria', 'Owner', 'Due'], ['Reset password', 'User gets an email link', $users['owner']->name, '2026-11-30']], 'Stories');
+
+        $card = aiImportCard($this, $users['owner'], ['project' => 'Website Redesign'], $sheet, 'import_tasks_from_sheet');
+        expect(collect($card['view']['fields'])->pluck('column', 'name')->only(['title', 'description', 'assignee', 'due_date'])->all())
+            ->toBe(['title' => 'Story', 'description' => 'Acceptance criteria', 'assignee' => 'Owner', 'due_date' => 'Due'])
+            ->and($card['view']['severities'])->toBe([]);
+        aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.status', 'done');
+
+        $task = Task::where('title', 'Reset password')->first();
+        expect($task->description)->toBe('User gets an email link')
+            ->and($task->assigned_to)->toBe($users['owner']->id)
+            ->and($task->end_date->format('Y-m-d'))->toBe('2026-11-30')
+            ->and($task->created_by)->toBe($users['owner']->id);
+    });
+
+    test('a document is not a sheet, and the keyword fallback never offers a one-bug form for a file request', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner']);
+        $doc = aiUpload($this, $users['owner'], 'brd.txt', 'Login must work.')->json('attachment.id');
+
+        $fake = fakeAi([['tool' => 'import_bugs_from_sheet', 'args' => ['attachment' => "#{$doc}"]], ['text' => 'That is not a sheet.']]);
+        $reply = asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'create bugs from this sheet', 'attachment_ids' => [$doc]])->json('messages.1');
+        expect($fake->toolResults[0]['result'])->toContain('is not a spreadsheet')
+            ->and($reply['cards'])->toBe([])
+            ->and(app(\App\Services\Ai\Forms\IntentMatcher::class)->match('create bugs from the attached excel'))->toBeNull();
     });
 });
 

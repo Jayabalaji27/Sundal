@@ -20,8 +20,8 @@ class Topics
     public const SHARED = ['list_projects', 'list_team_members', 'get_record_history', 'read_attachment', 'get_sheet_rows'];
 
     public const TOOLS = [
-        'tasks' => ['list_tasks', 'create_task', 'assign_task', 'change_task_status', 'list_sprints', 'add_tasks_to_sprint'],
-        'bugs' => ['list_bugs', 'create_bug', 'assign_bug', 'change_bug_status'],
+        'tasks' => ['list_tasks', 'create_task', 'assign_task', 'change_task_status', 'list_sprints', 'add_tasks_to_sprint', 'import_tasks_from_sheet'],
+        'bugs' => ['list_bugs', 'create_bug', 'assign_bug', 'change_bug_status', 'import_bugs_from_sheet'],
         'projects' => ['create_project', 'add_project_members', 'get_project_report', 'get_budget_status', 'list_tasks', 'list_bugs'],
         'time' => ['list_my_time', 'log_time', 'update_time_entry', 'delete_time_entry', 'submit_timesheet', 'start_timer', 'stop_timer', 'list_tasks'],
         'approvals' => ['list_timesheet_approvals', 'decide_timesheets', 'list_expense_approvals', 'decide_expenses'],

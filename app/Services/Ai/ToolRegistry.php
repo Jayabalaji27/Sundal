@@ -75,6 +75,8 @@ class ToolRegistry
         // Attached files (the + button)
         Tools\ReadAttachment::class,
         Tools\GetSheetRows::class,
+        Tools\ImportBugsFromSheet::class,
+        Tools\ImportTasksFromSheet::class,
     ];
 
     /** @var AiTool[]|null */
