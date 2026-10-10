@@ -75,7 +75,7 @@ class AiAssistantController extends Controller
                 'configured' => false,
                 'conversations' => [],
                 'conversationsHasMore' => false,
-                'conversationCounts' => ['favorites' => 0, 'waiting' => 0, 'archived' => 0],
+                'conversationCounts' => ['favorites' => 0, 'archived' => 0],
                 'settings' => null,
                 'usage' => null,
                 'providers' => null,
@@ -164,7 +164,7 @@ class AiAssistantController extends Controller
         ]);
     }
 
-    /** The sidebar list: a filter (all, favorites, waiting, archived) a page at a time. */
+    /** The sidebar list: a filter (all, favorites, archived) a page at a time. */
     public function conversations(Request $request, ConversationList $list): JsonResponse
     {
         $validated = $request->validate([

@@ -1325,7 +1325,7 @@ function aiChat(Workspace $workspace, User $user, string $title, array $attrs = 
 }
 
 describe('sidebar', function () {
-    test('the list shows previews and filters favorites, waiting and archived chats, with counts', function () {
+    test('the list shows previews and waiting cards, and filters favorites and archived chats, with counts', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
         $plain = aiChat($workspace, $users['owner'], 'Plain');
@@ -1341,16 +1341,16 @@ describe('sidebar', function () {
 
         expect($list('all'))->toEqualCanonicalizing(['Plain', 'Starred', 'Needs OK'])
             ->and($list('favorites'))->toBe(['Starred'])
-            ->and($list('waiting'))->toBe(['Needs OK'])
             ->and($list('archived'))->toBe(['Put away']);
 
         $row = collect(asAi($this, $users['owner'])->getJson(route('ai-assistant.conversations.index'))->json('conversations'))->firstWhere('title', 'Needs OK');
         expect($row['preview'])->toBe('Reply in Needs OK, see the task.')->and($row['waiting'])->toBe(1);
 
         asAi($this, $users['owner'])->getJson(route('ai-assistant.conversations.index'))
-            ->assertJsonPath('counts', ['favorites' => 1, 'waiting' => 1, 'archived' => 1]);
+            ->assertJsonPath('counts', ['favorites' => 1, 'archived' => 1]);
         asAi($this, $users['owner'])->get(route('ai-assistant.index'))
-            ->assertInertia(fn (Assert $page) => $page->where('conversationCounts', ['favorites' => 1, 'waiting' => 1, 'archived' => 1])->has('conversations', 3));
+            ->assertInertia(fn (Assert $page) => $page->where('conversationCounts', ['favorites' => 1, 'archived' => 1])->has('conversations', 3));
+        asAi($this, $users['owner'])->getJson(route('ai-assistant.conversations.index', ['filter' => 'waiting']))->assertJsonValidationErrors('filter');
     });
 
     test('a card past its confirmation time no longer counts as waiting', function () {
@@ -1361,7 +1361,8 @@ describe('sidebar', function () {
             'ai_conversation_id' => $chat->id, 'tool' => 'create_task', 'status' => 'pending', 'summary' => 'New task']);
         $card->forceFill(['created_at' => now()->subHour()])->save();
 
-        asAi($this, $users['owner'])->getJson(route('ai-assistant.conversations.index'))->assertJsonPath('counts.waiting', 0);
+        $row = collect(asAi($this, $users['owner'])->getJson(route('ai-assistant.conversations.index'))->json('conversations'))->firstWhere('title', 'Old card');
+        expect($row['waiting'])->toBe(0);
     });
 
     test('star and archive a chat; writing in an archived chat brings it back', function () {

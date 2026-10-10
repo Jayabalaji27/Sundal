@@ -4,7 +4,7 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import {
     Archive, ArchiveRestore, ArrowLeft, ArrowUp, Bot, Bug, Check, CheckCheck, ChevronDown, ChevronsUpDown, Clock, Copy, CornerDownLeft, ExternalLink,
-    FolderKanban, HelpCircle, Hourglass, ListTodo, Loader2, LogOut, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus,
+    FolderKanban, HelpCircle, ListTodo, Loader2, LogOut, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus,
     Receipt, Settings as SettingsIcon, Sparkles, Star, Trash2, Undo2, UserRound, Users, X,
 } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
@@ -91,7 +91,7 @@ interface Conversation {
     waiting?: number;
 }
 
-type ListFilter = 'all' | 'favorites' | 'waiting' | 'archived';
+type ListFilter = 'all' | 'favorites' | 'archived';
 
 type ListCounts = Record<Exclude<ListFilter, 'all'>, number>;
 
@@ -181,7 +181,7 @@ export default function AiAssistantPage(props: Props) {
             <Chat
                 conversations={props.conversations}
                 hasMore={props.conversationsHasMore ?? false}
-                counts={props.conversationCounts ?? { favorites: 0, waiting: 0, archived: 0 }}
+                counts={props.conversationCounts ?? { favorites: 0, archived: 0 }}
                 topics={props.topics}
                 model={props.model ?? null}
                 standalone={standalone}
@@ -577,8 +577,6 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
             const updated = prev.map(m => ({ ...m, cards: m.cards.map(c => (c.id === card.id ? card : c)) }));
             return note && !updated.some(m => m.id === note.id) ? [...updated, note] : updated;
         });
-        // A confirmed or cancelled card changes "Waiting for you".
-        if (card.status !== 'pending') refreshCounts();
     };
 
     /** Load a page of the list for a filter (page 1 replaces the list). */
@@ -602,7 +600,7 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
         loadList(next);
     };
 
-    /** The numbers next to Favorites, Waiting for you and Archive. */
+    /** The numbers next to Favorites and Archive. */
     const refreshCounts = () => {
         axios.get(route('ai-assistant.conversations.index'), { params: { filter, page: 1 } })
             .then(({ data }) => setCounts(data.counts))
@@ -798,7 +796,6 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
 /** The sidebar's filters, after the New chat button. */
 const LIST_FILTERS: { key: Exclude<ListFilter, 'all'>; label: string; hint: string; icon: typeof Bot }[] = [
     { key: 'favorites', label: 'Favorites', hint: 'Chats you starred', icon: Star },
-    { key: 'waiting', label: 'Waiting for you', hint: 'Chats with a card waiting for you to confirm', icon: Hourglass },
     { key: 'archived', label: 'Archive', hint: 'Chats you put away', icon: Archive },
 ];
 
@@ -863,9 +860,7 @@ function ChatSidebar(props: SidebarProps) {
                                 <item.icon className={`h-4 w-4 ${on ? 'text-violet-600' : ''}`} />
                                 <span className="flex-1 text-left">{t(item.label)}</span>
                                 {count > 0 && (
-                                    <span className={`min-w-5 rounded-full px-1.5 text-center text-[11px] tabular-nums ${
-                                        item.key === 'waiting' ? 'bg-amber-100 font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' : 'text-muted-foreground'
-                                    }`}>
+                                    <span className="min-w-5 rounded-full px-1.5 text-center text-[11px] tabular-nums text-muted-foreground">
                                         {count}
                                     </span>
                                 )}
@@ -950,9 +945,6 @@ function ChatSidebarRail(props: SidebarProps) {
                     title={`${t(item.label)}${props.counts[item.key] ? ` (${props.counts[item.key]})` : ''}`}
                 >
                     <item.icon className="h-4 w-4" />
-                    {item.key === 'waiting' && props.counts.waiting > 0 && (
-                        <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-500" aria-hidden />
-                    )}
                 </Button>
             ))}
             <div className="mt-auto flex flex-col items-center gap-1">
@@ -1068,7 +1060,7 @@ function HelpDialog({ helpTopic, onAskHelp, children }: { helpTopic: boolean; on
         { icon: Check, text: 'Nothing changes until you confirm the card the assistant shows. If something is missing, it asks you with buttons.' },
         { icon: Undo2, text: 'Most changes can be undone for 10 minutes from the card.' },
         { icon: ListTodo, text: 'Pick a topic under the message box to keep a chat about tasks, time, finance and so on.' },
-        { icon: Star, text: 'Star chats you come back to, archive the ones you are done with. Waiting for you lists chats with a card still to confirm.' },
+        { icon: Star, text: 'Star chats you come back to, and archive the ones you are done with.' },
         { icon: CornerDownLeft, text: 'Enter sends; Shift + Enter starts a new line.' },
     ];
 

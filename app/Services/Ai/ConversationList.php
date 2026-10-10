@@ -13,12 +13,12 @@ use Illuminate\Support\Str;
  * The AI Assistant sidebar: the user's own chats, newest first, a page at a
  * time, with a one-line preview and how many confirm cards wait in each.
  *
- * Filters: all (not archived), favorites (starred, not archived), waiting
- * (a confirm card still waits for the user), archived.
+ * Filters: all (not archived), favorites (starred, not archived), archived.
+ * Each chat still says how many of its confirm cards wait for the user.
  */
 class ConversationList
 {
-    public const FILTERS = ['all', 'favorites', 'waiting', 'archived'];
+    public const FILTERS = ['all', 'favorites', 'archived'];
 
     public const PER_PAGE = 20;
 
@@ -46,12 +46,11 @@ class ConversationList
         ];
     }
 
-    /** @return array{favorites: int, waiting: int, archived: int} */
+    /** @return array{favorites: int, archived: int} */
     public function counts(User $user): array
     {
         return [
             'favorites' => $this->filtered($user, 'favorites')->count(),
-            'waiting' => $this->filtered($user, 'waiting')->count(),
             'archived' => $this->filtered($user, 'archived')->count(),
         ];
     }
@@ -83,7 +82,6 @@ class ConversationList
         return match ($filter) {
             'archived' => $query->whereNotNull('archived_at'),
             'favorites' => $query->whereNull('archived_at')->where('is_favorite', true),
-            'waiting' => $query->whereNull('archived_at')->whereHas('toolCalls', fn ($q) => $this->waitingCards($q, $user)),
             default => $query->whereNull('archived_at'),
         };
     }
