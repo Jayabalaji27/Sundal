@@ -178,15 +178,17 @@ export function FileChip({ file, onRemove }: { file: PendingFile | AttachmentChi
     );
 }
 
-/** The + button: from the computer, from Sundal, and (when set up) Google Drive. */
+/** The + button: from the computer, from Sundal, and Google Drive (or how to set it up). */
 export function AttachMenu({ onFiles, onSundal, onDrive, disabled }: {
     onFiles: (files: FileList) => void;
     onSundal: () => void;
+    /** Opens the Drive picker; absent while Drive is not set up on this server. */
     onDrive?: () => void;
     disabled: boolean;
 }) {
     const { t } = useTranslation();
     const input = useRef<HTMLInputElement>(null);
+    const [driveHelp, setDriveHelp] = useState(false);
 
     return (
         <>
@@ -214,18 +216,36 @@ export function AttachMenu({ onFiles, onSundal, onDrive, disabled }: {
                         <FolderOpen className="mr-2 h-4 w-4" />
                         {t('From Sundal files')}
                     </DropdownMenuItem>
-                    {onDrive && (
-                        <DropdownMenuItem onSelect={onDrive}>
-                            <HardDrive className="mr-2 h-4 w-4" />
-                            {t('From Google Drive')}
-                        </DropdownMenuItem>
-                    )}
+                    <DropdownMenuItem onSelect={onDrive ?? (() => setDriveHelp(true))}>
+                        <HardDrive className={`mr-2 h-4 w-4 ${onDrive ? '' : 'text-muted-foreground'}`} />
+                        <span className="flex flex-col">
+                            <span className={onDrive ? '' : 'text-muted-foreground'}>{t('From Google Drive')}</span>
+                            {!onDrive && <span className="text-[11px] text-muted-foreground">{t('Not set up yet')}</span>}
+                        </span>
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <p className="px-2 py-1.5 text-[11px] leading-4 text-muted-foreground">
                         {t('PDF, Excel, CSV, Word or text, up to {{mb}} MB. Sundal reads the file and sends only the parts the assistant needs to your company\'s AI provider.', { mb: MAX_MB })}
                     </p>
                 </DropdownMenuContent>
             </DropdownMenu>
+            <Dialog open={driveHelp} onOpenChange={setDriveHelp}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{t('Google Drive is not set up yet')}</DialogTitle>
+                        <DialogDescription>
+                            {t('Whoever hosts Sundal connects it to Google once; then everyone can attach files from their own Drive. Until then, download the file and use Upload from your computer.')}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <ol className="list-decimal space-y-1.5 pl-5 text-sm">
+                        <li>{t('In Google Cloud Console, create a project and turn on the Google Drive API and the Google Picker API.')}</li>
+                        <li>{t('Create an OAuth client ID of type Web application, with this site\'s address as an authorised JavaScript origin.')}</li>
+                        <li>{t('Create an API key, limited to the Google Picker API.')}</li>
+                        <li>{t('Add them to the server\'s .env file:')} <code className="block whitespace-pre rounded bg-muted p-2 text-xs">{'AI_ASSISTANT_GOOGLE_CLIENT_ID=…\nAI_ASSISTANT_GOOGLE_API_KEY=…\nAI_ASSISTANT_GOOGLE_APP_ID=… (project number)'}</code></li>
+                    </ol>
+                    <p className="text-xs text-muted-foreground">{t('Sundal asks Google for read-only access, only when someone picks a file, and never stores the access.')}</p>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

@@ -739,8 +739,8 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
             )}
 
             <SundalFilesDialog open={sundalOpen} onOpenChange={setSundalOpen} onPick={file => attach.addFromSundal(file.id, file.name, file.size)} />
-            <DropZone onFiles={attach.add} className="flex min-w-0 flex-1 flex-col">
-            <section className="flex min-w-0 flex-1 flex-col">
+            <DropZone onFiles={attach.add} className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col">
                 {/* The Sundal page has no AI mode bar: the model sits above the chat. */}
                 {!standalone && model && (
                     <header className="flex items-center gap-2 border-b px-3 py-2.5 sm:px-4">
