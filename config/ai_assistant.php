@@ -98,6 +98,27 @@ return [
         'heartbeat_tolerance_seconds' => 120,
     ],
 
+    /*
+    | Voice: the floating mic on every Sundal page. OpenAI and Gemini workspaces
+    | transcribe on the server with the company's own key; other providers use
+    | the browser's speech recognition (Chrome, Edge).
+    */
+    'voice' => [
+        // OpenAI's speech-to-text model. Gemini transcribes with the workspace's own model.
+        'transcribe_models' => [
+            'openai' => env('AI_ASSISTANT_TRANSCRIBE_MODEL', 'gpt-4o-mini-transcribe'),
+        ],
+        // One recording: the browser stops at max_seconds; the server refuses bigger files.
+        'max_seconds' => 60,
+        'max_audio_kb' => 4096,
+        'transcriptions_per_minute' => 30,
+        // A spoken turn sends less, so free and small models answer faster: fewer
+        // earlier messages, and only the tools of the topics the words mention
+        // (all tools when they mention none).
+        'history_messages' => 6,
+        'tools_by_topic' => true,
+    ],
+
     // PHP time limit for a reply answered during the web request (not queued).
     // Must be above request_timeout so a slow provider ends as a normal error.
     'sync_time_limit' => env('AI_ASSISTANT_SYNC_TIME_LIMIT', 300),
@@ -113,7 +134,7 @@ return [
         'disk' => env('AI_ASSISTANT_ATTACHMENT_DISK', 'local'),
         'max_size_mb' => 10,
         'max_per_message' => 5,
-        'extensions' => ['pdf', 'xlsx', 'xls', 'csv', 'docx', 'txt', 'md'],
+        'extensions' => ['pdf', 'xlsx', 'xls', 'csv', 'docx', 'txt', 'md', 'png', 'jpg', 'jpeg', 'webp', 'gif'],
         // Rows kept per sheet (an import takes at most max_import_rows of them).
         'max_sheet_rows' => 1000,
         'max_import_rows' => 500,
@@ -138,5 +159,26 @@ return [
             'api_key' => env('AI_ASSISTANT_GOOGLE_API_KEY'),
             'app_id' => env('AI_ASSISTANT_GOOGLE_APP_ID'),
         ],
+    ],
+
+    // Attached images are read (text + a short description) by a vision model
+    // on OpenRouter when the message is sent. Unlike everything else here this
+    // uses Sundal's own server key, not the company's, so every provider
+    // (Azure included) can take images. Usage is still logged per workspace
+    // and counts toward its monthly token cap. No key: images are refused.
+    'ocr' => [
+        'api_key' => env('AI_ASSISTANT_OCR_KEY'),
+        // Tried in order; the next one is used when a model fails or is rate
+        // limited (free models often are). Comma-separated in .env. Free vision
+        // models checked on 2026-10-11; a paid one (e.g. google/gemini-2.5-flash)
+        // is faster and more reliable if the account has credits.
+        // Not openrouter/free: it can route to a non-vision (safety) model.
+        'models' => array_values(array_filter(array_map('trim', explode(',', (string) env('AI_ASSISTANT_OCR_MODELS',
+            'dots-studio/dots-3-note-preview:free,google/gemma-4-26b-a4b-it:free,google/gemma-4-31b-it:free,nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'))))),
+        'max_tokens' => 4000,
+        // Seconds spent on one image over all models, and on all the images of
+        // one message, so a reply still fits sync_time_limit and the queue job.
+        'image_seconds' => 75,
+        'message_seconds' => 120,
     ],
 ];

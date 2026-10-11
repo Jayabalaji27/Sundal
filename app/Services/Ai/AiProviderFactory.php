@@ -39,4 +39,14 @@ class AiProviderFactory
             default => throw new AiProviderException(__('This AI provider is not supported.')),
         };
     }
+
+    /** A vision model that reads attached images: OpenRouter on Sundal's own key (config ai_assistant.ocr). */
+    public function ocr(string $model, ?int $timeout = null): AiProvider
+    {
+        if ($this->fake) {
+            return $this->fake;
+        }
+
+        return new PrismProvider(Provider::OpenRouter, $model, (string) config('ai_assistant.ocr.api_key'), timeout: $timeout);
+    }
 }

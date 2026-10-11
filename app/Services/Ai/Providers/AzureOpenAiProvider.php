@@ -3,13 +3,12 @@
 namespace App\Services\Ai\Providers;
 
 use App\Services\Ai\AiProvider;
-use App\Services\Ai\AiProviderException;
 use App\Services\Ai\AiRequest;
 use App\Services\Ai\AiResult;
+use App\Services\Ai\ProviderErrors;
 use App\Services\Ai\ToolSpec;
 use OpenAI;
 use OpenAI\Contracts\ClientContract;
-use OpenAI\Exceptions\ErrorException;
 use Throwable;
 
 /**
@@ -48,7 +47,12 @@ class AzureOpenAiProvider implements AiProvider
                     'max_tokens' => $request->maxTokens,
                 ]));
             } catch (Throwable $e) {
-                throw new AiProviderException($this->friendlyError($e), 0, $e);
+                throw ProviderErrors::wrap($e, 'azure_openai', $this->deployment, [
+                    'key' => __('Azure OpenAI rejected the API key. Ask your company owner to check the AI settings.'),
+                    'model' => __('Azure OpenAI could not find that deployment. Ask your company owner to check the AI settings.'),
+                    'rate_limited' => __('Your Azure OpenAI deployment is out of quota or rate limited.'),
+                    'unreachable' => __('Azure OpenAI could not be reached. Please try again.'),
+                ]);
             }
 
             $inputTokens += $response->usage?->promptTokens ?? 0;
@@ -90,17 +94,5 @@ class AzureOpenAiProvider implements AiProvider
             ->withHttpHeader('api-key', $this->apiKey)
             ->withQueryParam('api-version', (string) config('ai_assistant.providers.azure_openai.api_version'))
             ->make();
-    }
-
-    private function friendlyError(Throwable $e): string
-    {
-        $status = $e instanceof ErrorException ? $e->getStatusCode() : null;
-
-        return match (true) {
-            $status === 401, $status === 403 => __('Azure OpenAI rejected the API key. Ask your company owner to check the AI settings.'),
-            $status === 404 => __('Azure OpenAI could not find that deployment. Ask your company owner to check the AI settings.'),
-            $status === 429 => __('Your Azure OpenAI deployment is out of quota or rate limited.'),
-            default => __('Azure OpenAI could not be reached. Please try again.'),
-        };
     }
 }

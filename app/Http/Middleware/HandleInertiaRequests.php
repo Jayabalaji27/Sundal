@@ -151,6 +151,10 @@ class HandleInertiaRequests extends Middleware
                 'aiAssistant' => fn() => \App\Services\Ai\AiAccess::role($request->user())
                     ? \App\Services\Ai\AiAccess::status($request->user())
                     : null,
+                // The voice panel: 'server' (company key transcribes), 'browser', or null.
+                'aiVoice' => fn() => \App\Services\Ai\AiAccess::canUse($request->user())
+                    ? \App\Services\Ai\AiAccess::voiceMode(\App\Services\Ai\AiAccess::settings($request->user()))
+                    : null,
             ],
             'workspaceSettings' => fn() => $this->getWorkspaceSettings($request),
             'unreadNotificationsCount' => fn() => $this->getUnreadNotificationsCount($request),

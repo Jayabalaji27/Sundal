@@ -4,6 +4,7 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { Sparkles } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { isSundalPath } from '@/components/ai-confirm-card';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AI_ALIVE_TIMEOUT_MS, AI_MODE_WINDOW, type AiModeMessage, openAiModeTab, openChannel } from '@/lib/ai-mode';
 
@@ -52,6 +53,10 @@ export function AiModeToggle() {
                     break;
                 case 'ai-closed':
                     setOpen(false);
+                    break;
+                case 'navigate':
+                    // Voice mode in the AI tab opened a page: show it here. Sundal paths only.
+                    if (isSundalPath(event.data.url)) router.visit(event.data.url);
                     break;
                 case 'ping':
                     channel?.postMessage({ type: 'app-alive' } satisfies AiModeMessage);

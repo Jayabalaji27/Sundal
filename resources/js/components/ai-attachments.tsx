@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, File as FileIcon, FileSpreadsheet, FileText, FolderOpen, HardDrive, Loader2, Monitor, Paperclip, Plus, Search, X } from 'lucide-react';
+import { AlertCircle, File as FileIcon, FileImage, FileSpreadsheet, FileText, FolderOpen, HardDrive, Loader2, Monitor, Paperclip, Plus, Search, ShieldAlert, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -17,7 +17,7 @@ export interface AttachmentChip {
     name: string;
     extension: string;
     size: number;
-    kind: 'spreadsheet' | 'document' | 'text';
+    kind: 'spreadsheet' | 'document' | 'text' | 'image';
     status: 'ready' | 'failed' | 'needs_ocr';
     source: 'upload' | 'sundal' | 'google_drive';
     summary: string;
@@ -35,7 +35,8 @@ export interface PendingFile {
     error?: string;
 }
 
-export const ACCEPTED_EXTENSIONS = ['pdf', 'xlsx', 'xls', 'csv', 'docx', 'txt', 'md'];
+export const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+export const ACCEPTED_EXTENSIONS = ['pdf', 'xlsx', 'xls', 'csv', 'docx', 'txt', 'md', ...IMAGE_EXTENSIONS];
 export const MAX_FILES = 5;
 export const MAX_MB = 10;
 
@@ -49,6 +50,7 @@ export function fileIconFor(name: string): typeof FileIcon {
     const extension = name.split('.').pop()?.toLowerCase() ?? '';
     if (['xlsx', 'xls', 'csv'].includes(extension)) return FileSpreadsheet;
     if (['pdf', 'docx', 'txt', 'md'].includes(extension)) return FileText;
+    if (IMAGE_EXTENSIONS.includes(extension)) return FileImage;
     return FileIcon;
 }
 
@@ -90,7 +92,7 @@ export function useAttachments() {
             const extension = file.name.split('.').pop()?.toLowerCase() ?? '';
             // Checked again on the server; this only saves a pointless upload.
             const problem = !ACCEPTED_EXTENSIONS.includes(extension)
-                ? t('Only PDF, Excel (.xlsx, .xls, .csv), Word (.docx) and text (.txt, .md) files can be attached.')
+                ? t('Only PDF, Excel (.xlsx, .xls, .csv), Word (.docx), text (.txt, .md) and image (.png, .jpg, .webp, .gif) files can be attached.')
                 : file.size > MAX_MB * 1024 * 1024 ? t('Files can be at most {{mb}} MB.', { mb: MAX_MB }) : null;
 
             setFiles(prev => [...prev, { key, name: file.name, size: file.size, state: problem ? 'failed' : 'uploading', progress: 0, error: problem ?? undefined }]);
@@ -225,7 +227,7 @@ export function AttachMenu({ onFiles, onSundal, onDrive, disabled }: {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <p className="px-2 py-1.5 text-[11px] leading-4 text-muted-foreground">
-                        {t('PDF, Excel, CSV, Word or text, up to {{mb}} MB. Sundal reads the file and sends only the parts the assistant needs to your company\'s AI provider.', { mb: MAX_MB })}
+                        {t('PDF, Excel, CSV, Word, text or images, up to {{mb}} MB. Sundal reads the file and sends only the parts the assistant needs to your company\'s AI provider. Images are read by an external AI service (OpenRouter); do not attach ID cards or other personal documents.', { mb: MAX_MB })}
                     </p>
                 </DropdownMenuContent>
             </DropdownMenu>
@@ -293,7 +295,7 @@ export function SundalFilesDialog({ open, onOpenChange, onPick }: {
                 </div>
                 <div className="max-h-80 space-y-1 overflow-y-auto">
                     {files === null && <Loader2 className="mx-auto my-6 h-5 w-5 animate-spin text-muted-foreground" />}
-                    {files?.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">{t('No PDF, Excel, Word or text files found.')}</p>}
+                    {files?.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">{t('No PDF, Excel, Word, text or image files found.')}</p>}
                     {files?.map(file => {
                         const Icon = fileIconFor(file.name);
                         return (
@@ -317,14 +319,31 @@ export function SundalFilesDialog({ open, onOpenChange, onPick }: {
     );
 }
 
+const isImage = (name: string) => IMAGE_EXTENSIONS.includes(name.split('.').pop()?.toLowerCase() ?? '');
+
+/** Shown while an image is in the message box: images leave Sundal for an external AI service. */
+export function ImageNotice({ files }: { files: PendingFile[] }) {
+    const { t } = useTranslation();
+    if (!files.some(f => f.state !== 'failed' && isImage(f.name))) return null;
+
+    return (
+        <p role="note" className="flex items-start gap-1.5 px-4 pt-2 text-[11px] leading-4 text-amber-700 dark:text-amber-400">
+            <ShieldAlert className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+            {t('Images are sent to an external AI service (OpenRouter) to be read. Do not attach ID cards, bank details or other personal documents.')}
+        </p>
+    );
+}
+
 /** Starter requests for what was attached. They fill the box; nothing is sent until the user does. */
 export function FileSuggestions({ files, onPick }: { files: AttachmentChip[]; onPick: (text: string) => void }) {
     const { t } = useTranslation();
     if (files.length === 0) return null;
     const sheet = files.some(f => f.kind === 'spreadsheet');
-    const document = files.some(f => f.kind !== 'spreadsheet');
+    const image = files.some(f => f.kind === 'image');
+    const document = files.some(f => f.kind !== 'spreadsheet' && f.kind !== 'image');
     const suggestions = [
         ...(sheet ? ['Create bugs from this sheet', 'Create tasks from this sheet'] : []),
+        ...(image ? ['What does this image show?', 'Create a bug from this screenshot'] : []),
         ...(document ? ['Turn this document into tasks', 'Summarise this document', 'List the open questions in this document'] : []),
     ];
 
@@ -361,7 +380,7 @@ export function DropZone({ onFiles, children, className = '' }: { onFiles: (file
                     <div className="text-center">
                         <Paperclip className="mx-auto h-6 w-6 text-violet-600" />
                         <p className="mt-2 text-sm font-medium">{t('Drop files to attach them')}</p>
-                        <p className="text-xs text-muted-foreground">{t('PDF, Excel, CSV, Word or text, up to {{mb}} MB', { mb: MAX_MB })}</p>
+                        <p className="text-xs text-muted-foreground">{t('PDF, Excel, CSV, Word, text or images, up to {{mb}} MB', { mb: MAX_MB })}</p>
                     </div>
                 </div>
             )}
@@ -391,6 +410,7 @@ const DRIVE_MIME_TYPES = [
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.google-apps.document', 'application/vnd.google-apps.spreadsheet',
+    'image/png', 'image/jpeg', 'image/webp', 'image/gif',
 ].join(',');
 
 /**

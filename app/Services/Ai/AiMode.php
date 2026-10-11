@@ -40,17 +40,27 @@ class AiMode
     }
 
     /** Opening the assistant (page or AI mode tab): remember its workspace and start the idle clock. */
-    public static function start(Request $request, User $user): void
+    public static function start(Request $request, User $user, ?string $key = null): void
     {
         $request->session()->put(self::SESSION_KEY, [
             'workspace_id' => (int) $user->current_workspace_id,
             'last_activity' => now()->getTimestamp(),
             'started_at' => now()->getTimestamp(),
             // Names this AI mode session in the cache, for the Sundal-open check.
-            'key' => Str::random(32),
+            'key' => $key ?? Str::random(32),
         ]);
         // AI mode is opened from Sundal, so Sundal is open right now.
         self::heartbeat($request);
+    }
+
+    /**
+     * The voice panel's mic, pressed on a Sundal page: like opening the
+     * assistant page (current workspace, idle clock restarted), but an AI
+     * mode tab that is already open keeps its Sundal-open check.
+     */
+    public static function resume(Request $request, User $user): void
+    {
+        self::start($request, $user, $request->session()->get(self::SESSION_KEY . '.key'));
     }
 
     /** A user action in AI mode: restart the idle clock. */

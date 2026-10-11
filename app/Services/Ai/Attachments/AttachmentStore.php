@@ -56,7 +56,10 @@ class AttachmentStore
         $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
 
         if (!in_array($extension, self::extensions(), true)) {
-            $this->refuse(__('Only PDF, Excel (.xlsx, .xls, .csv), Word (.docx) and text (.txt, .md) files can be attached.'));
+            $this->refuse(__('Only PDF, Excel (.xlsx, .xls, .csv), Word (.docx), text (.txt, .md) and image (.png, .jpg, .webp, .gif) files can be attached.'));
+        }
+        if (in_array($extension, AiAttachment::IMAGE_EXTENSIONS, true) && !ImageReader::enabled()) {
+            $this->refuse(__('Image attachments are not set up on this server.'));
         }
         if ($size > self::maxBytes()) {
             $this->refuse(__('Files can be at most :mb MB.', ['mb' => config('ai_assistant.attachments.max_size_mb', 10)]));

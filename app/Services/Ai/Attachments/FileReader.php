@@ -49,6 +49,7 @@ class FileReader
                 'xlsx', 'xls', 'csv' => $this->spreadsheet($path, $extension),
                 'pdf' => $this->pdf($path),
                 'docx' => $this->word($path),
+                'png', 'jpg', 'jpeg', 'webp', 'gif' => $this->image($path),
                 default => $this->plainText($path),
             };
         } catch (Throwable $e) {
@@ -63,6 +64,7 @@ class FileReader
         return match (strtolower($extension)) {
             'xlsx', 'xls', 'csv' => AiAttachment::SPREADSHEET,
             'pdf', 'docx' => AiAttachment::DOCUMENT,
+            'png', 'jpg', 'jpeg', 'webp', 'gif' => AiAttachment::IMAGE,
             default => AiAttachment::TEXT,
         };
     }
@@ -80,6 +82,10 @@ class FileReader
             'docx' => $this->inspectZip($path, 'word/document.xml', __('This is not a Word (.docx) file.')),
             'xls' => $this->inspectXls($path, $head),
             'csv', 'txt', 'md' => str_contains($head, "\0") ? __('This is not a text file.') : null,
+            'png' => str_starts_with($head, "\x89PNG\r\n\x1A\n") ? null : __('This is not an image file.'),
+            'jpg', 'jpeg' => str_starts_with($head, "\xFF\xD8\xFF") ? null : __('This is not an image file.'),
+            'gif' => str_starts_with($head, 'GIF87a') || str_starts_with($head, 'GIF89a') ? null : __('This is not an image file.'),
+            'webp' => str_starts_with($head, 'RIFF') && substr($head, 8, 4) === 'WEBP' ? null : __('This is not an image file.'),
             default => __('This file type is not supported.'),
         };
     }
@@ -413,7 +419,26 @@ class FileReader
         return $this->textResult($raw);
     }
 
-    /** Text Sundal got another way (a scanned PDF read by the AI model), sectioned like any document. */
+    // ── Images ───────────────────────────────────────────────────────────────
+
+    /** Only checked here; the text is read by a vision model when the message is sent (ImageReader). */
+    private function image(string $path): array
+    {
+        $size = @getimagesize($path);
+        if ($size === false || $size[0] < 1 || $size[1] < 1) {
+            return $this->failed(AiAttachment::IMAGE, __('This is not an image file.'));
+        }
+
+        return [
+            'kind' => AiAttachment::IMAGE,
+            'status' => AiAttachment::NEEDS_OCR,
+            'error' => null,
+            'text' => null,
+            'structure' => ['width' => $size[0], 'height' => $size[1], 'sections' => [], 'tokens' => 1500],
+        ];
+    }
+
+    /** Text Sundal got another way (a scanned PDF or an image read by the AI model), sectioned like any document. */
     public function fromText(string $text, ?int $pages = null): array
     {
         $read = $this->textResult($text);

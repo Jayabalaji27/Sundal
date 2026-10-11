@@ -248,6 +248,76 @@ describe('settings', function () {
             ->toThrow(\App\Services\Ai\AiProviderException::class, 'No API key is saved for this AI provider.');
     });
 
+    test('a used-up OpenRouter free model says what its limits are', function () {
+        $limited = \Prism\Prism\Exceptions\PrismRateLimitedException::make();
+
+        expect(\App\Services\Ai\ProviderErrors::wrap($limited, 'openrouter', 'nvidia/nemotron-3.5-lightning:free')->getMessage())->toContain('50 a day')
+            ->and(\App\Services\Ai\ProviderErrors::wrap($limited, 'openrouter', 'openai/gpt-4o')->getMessage())->toContain('try again in a minute');
+    });
+
+    test('vendor errors become a message the owner can act on', function (string $provider, int $status, array $body, string $message) {
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response($body, $status)]);
+        $driver = new \App\Services\Ai\Providers\PrismProvider(\Prism\Prism\Enums\Provider::from($provider), 'some-model', 'test-key-12345678');
+
+        expect(fn () => $driver->run(new \App\Services\Ai\AiRequest('system', [['role' => 'user', 'content' => 'hi']])))
+            ->toThrow(\App\Services\Ai\AiProviderException::class, $message);
+    })->with([
+        'openrouter bad key' => ['openrouter', 401, ['error' => ['code' => 401, 'message' => 'No auth credentials found']], 'rejected the API key'],
+        'openrouter bad key in a 200 body' => ['openrouter', 200, ['error' => ['code' => 401, 'message' => 'User not found.']], 'rejected the API key'],
+        'openrouter unknown model' => ['openrouter', 400, ['error' => ['code' => 400, 'message' => 'foo/bar is not a valid model ID']], 'does not recognise the selected model'],
+        'openrouter model without tools' => ['openrouter', 404, ['error' => ['code' => 404, 'message' => 'No endpoints found that support tool use.']], 'cannot call tools'],
+        'openrouter no credits' => ['openrouter', 402, ['error' => ['code' => 402, 'message' => 'Insufficient credits']], 'no credits left'],
+        'openrouter moderation' => ['openrouter', 403, ['error' => ['code' => 403, 'message' => 'Input was flagged']], 'content filter blocked'],
+        'anthropic bad key' => ['anthropic', 401, ['type' => 'error', 'error' => ['type' => 'authentication_error', 'message' => 'invalid x-api-key']], 'rejected the API key'],
+        'anthropic unknown model' => ['anthropic', 404, ['type' => 'error', 'error' => ['type' => 'not_found_error', 'message' => 'model: some-model']], 'does not recognise the selected model'],
+        'anthropic no credits' => ['anthropic', 400, ['type' => 'error', 'error' => ['type' => 'invalid_request_error', 'message' => 'Your credit balance is too low to access the Anthropic API.']], 'no credits left'],
+        'anthropic overloaded' => ['anthropic', 529, ['type' => 'error', 'error' => ['type' => 'overloaded_error', 'message' => 'Overloaded']], 'overloaded'],
+        'openai bad key' => ['openai', 401, ['error' => ['type' => 'invalid_request_error', 'code' => 'invalid_api_key', 'message' => 'Incorrect API key provided: test****5678.']], 'rejected the API key'],
+        'openai unknown model' => ['openai', 404, ['error' => ['type' => 'invalid_request_error', 'code' => 'model_not_found', 'message' => 'The model `some-model` does not exist.']], 'does not recognise the selected model'],
+        'openai rate limited' => ['openai', 429, ['error' => ['type' => 'requests', 'message' => 'Rate limit reached']], 'rate limiting requests'],
+        'gemini bad key' => ['gemini', 400, ['error' => ['code' => 400, 'status' => 'INVALID_ARGUMENT', 'message' => 'API key not valid. Please pass a valid API key.']], 'rejected the API key'],
+        'gemini unknown model' => ['gemini', 404, ['error' => ['code' => 404, 'status' => 'NOT_FOUND', 'message' => 'models/some-model is not found for API version v1beta']], 'does not recognise the selected model'],
+        'gemini server error' => ['gemini', 500, ['error' => ['code' => 500, 'status' => 'INTERNAL', 'message' => 'Internal error']], 'internal error'],
+    ]);
+
+    test('only a failed connection says the provider could not be reached', function (string $failure, string $message) {
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::failedConnection($failure)]);
+        $driver = new \App\Services\Ai\Providers\PrismProvider(\Prism\Prism\Enums\Provider::OpenRouter, 'some/model', 'test-key-12345678');
+
+        expect(fn () => $driver->run(new \App\Services\Ai\AiRequest('system', [['role' => 'user', 'content' => 'hi']])))
+            ->toThrow(\App\Services\Ai\AiProviderException::class, $message);
+    })->with([
+        ['cURL error 6: Could not resolve host: openrouter.ai', 'could not be reached'],
+        ['cURL error 28: Operation timed out after 60000 milliseconds', 'took too long to answer'],
+    ]);
+
+    test('the vendor error is logged for the owner to debug', function () {
+        \Illuminate\Support\Facades\Log::spy();
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response(['error' => ['code' => 401, 'message' => 'No auth credentials found']], 401)]);
+        $driver = new \App\Services\Ai\Providers\PrismProvider(\Prism\Prism\Enums\Provider::OpenRouter, 'some/model', 'test-key-12345678');
+
+        try {
+            $driver->run(new \App\Services\Ai\AiRequest('system', [['role' => 'user', 'content' => 'hi']]));
+        } catch (\App\Services\Ai\AiProviderException) {
+        }
+
+        \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context) => $context['provider'] === 'openrouter'
+            && $context['kind'] === 'key'
+            && str_contains($context['error'], 'No auth credentials found')
+            && !str_contains($context['error'], 'test-key-12345678'));
+    });
+
+    test('Azure OpenAI errors keep their Azure wording', function (\Throwable $error, string $message) {
+        $driver = new \App\Services\Ai\Providers\AzureOpenAiProvider('https://x.openai.azure.com', 'gpt-deploy', 'azure-key-12345678', new \OpenAI\Testing\ClientFake([$error]));
+
+        expect(fn () => $driver->run(new \App\Services\Ai\AiRequest('system', [['role' => 'user', 'content' => 'hi']])))
+            ->toThrow(\App\Services\Ai\AiProviderException::class, $message);
+    })->with([
+        'bad key' => [new \OpenAI\Exceptions\ErrorException(['message' => 'Access denied due to invalid subscription key.', 'type' => null, 'code' => '401'], 401), 'Azure OpenAI rejected the API key'],
+        'unknown deployment' => [new \OpenAI\Exceptions\ErrorException(['message' => 'The API deployment for this resource does not exist.', 'type' => null, 'code' => 'DeploymentNotFound'], 404), 'could not find that deployment'],
+        'content filter' => [new \OpenAI\Exceptions\ErrorException(['message' => "The response was filtered due to the prompt triggering Azure OpenAI's content management policy.", 'type' => null, 'code' => 'content_filter'], 400), 'content filter blocked'],
+    ]);
+
     test('local and unknown providers are rejected', function () {
         [$workspace, $users] = aiWorkspace();
 
@@ -299,7 +369,7 @@ describe('chat', function () {
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
 
         expect(toolNames($fake))->toBe(collect(app(\App\Services\Ai\ToolRegistry::class)->all())->keys()->sort()->values()->all())
-            ->and(toolNames($fake))->toHaveCount(49);
+            ->and(toolNames($fake))->toHaveCount(52);
     });
 
     test('a manager gets the manager workflow tools their role allows', function () {
@@ -1768,7 +1838,7 @@ describe('attachments', function () {
     })->with([
         'not really Excel' => ['bugs.xlsx', 'plain text, not a workbook', 'This is not an Excel (.xlsx) file.'],
         'not really PDF' => ['brd.pdf', 'hello', 'This is not a PDF file.'],
-        'program' => ['setup.exe', 'MZ', 'Only PDF, Excel (.xlsx, .xls, .csv), Word (.docx) and text (.txt, .md) files can be attached.'],
+        'program' => ['setup.exe', 'MZ', 'Only PDF, Excel (.xlsx, .xls, .csv), Word (.docx), text (.txt, .md) and image (.png, .jpg, .webp, .gif) files can be attached.'],
         'macros' => ['report.docx', (function () {
             $path = tempnam(sys_get_temp_dir(), 'zip');
             $zip = new ZipArchive();
@@ -1870,7 +1940,7 @@ describe('attachments', function () {
 
         $ownerSees = asAi($this, $users['owner'])->getJson(route('ai-assistant.attachments.sundal'))->json('files');
         $managerSees = asAi($this, $users['manager'])->getJson(route('ai-assistant.attachments.sundal'))->json('files');
-        expect(collect($ownerSees)->pluck('name')->sort()->values()->all())->toBe(['my-brd.md', 'owner-notes.txt', 'qa-list.csv'])
+        expect(collect($ownerSees)->pluck('name')->sort()->values()->all())->toBe(['logo.png', 'my-brd.md', 'owner-notes.txt', 'qa-list.csv'])
             ->and(collect($managerSees)->pluck('name')->sort()->values()->all())->toBe(['my-brd.md', 'qa-list.csv'])
             ->and(collect($managerSees)->firstWhere('name', 'qa-list.csv')['where'])->toBe('Task: Login page');
 
@@ -2289,6 +2359,126 @@ describe('scanned PDFs and Google Drive', function () {
     });
 });
 
+// ── Images (read by the OpenRouter vision model) ──────────────────────────────
+
+/** A real 1×1 PNG. */
+function aiPng(): string
+{
+    return base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=');
+}
+
+/** The vision model that reads images, scripted. */
+function fakeImageModel(array $script): FakeProvider
+{
+    $fake = new FakeProvider($script);
+    app()->instance(\App\Services\Ai\Attachments\ImageReader::class, new \App\Services\Ai\Attachments\ImageReader(AiProviderFactory::fake($fake), app(\App\Services\Ai\Attachments\FileReader::class)));
+
+    return $fake;
+}
+
+describe('image attachments', function () {
+    beforeEach(function () {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        config(['ai_assistant.ocr.api_key' => 'sk-or-test', 'ai_assistant.ocr.models' => ['vision/one:free', 'vision/two:free']]);
+    });
+
+    test('an image is checked and stored without any AI call; it is read when sent', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        $chip = aiUpload($this, $users['owner'], 'screenshot.png', aiPng())->assertCreated()->json('attachment');
+        $file = \App\Models\AiAttachment::withoutGlobalScope('workspace')->find($chip['id']);
+
+        expect($chip['kind'])->toBe('image')
+            ->and($chip['status'])->toBe('needs_ocr')
+            ->and($chip['summary'])->toBe('Image, read when you send it')
+            ->and($file->structure['width'])->toBe(1)
+            ->and(AiUsage::count())->toBe(0);
+    });
+
+    test('a file named .png that is not an image is refused', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        aiUpload($this, $users['owner'], 'photo.png', 'just some text')->assertUnprocessable()->assertJsonPath('errors.file.0', 'This is not an image file.');
+        expect(\App\Models\AiAttachment::withoutGlobalScope('workspace')->count())->toBe(0);
+    });
+
+    test('images are refused when the server has no image model key', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        config(['ai_assistant.ocr.api_key' => null]);
+
+        aiUpload($this, $users['owner'], 'screenshot.png', aiPng())->assertUnprocessable()->assertJsonPath('errors.file.0', 'Image attachments are not set up on this server.');
+    });
+
+    test('a sent image is read once by the vision model and its text reaches the chat model', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['provider' => 'azure_openai', 'azure_endpoint' => 'https://acme.openai.azure.com', 'azure_deployment' => 'gpt-4o']);
+        $id = aiUpload($this, $users['owner'], 'screenshot.png', aiPng())->json('attachment.id');
+
+        $vision = fakeImageModel([['text' => "# Text\nLogin failed\n# Description\nA login form with a red error banner."]]);
+        $chat = fakeAi([['text' => 'The login is failing.']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'what is wrong here?', 'attachment_ids' => [$id]])->assertOk();
+
+        $file = \App\Models\AiAttachment::withoutGlobalScope('workspace')->find($id);
+        $last = collect($chat->requests[0]->messages)->last();
+        expect($file->status)->toBe('ready')
+            ->and($file->extracted_text)->toContain('Login failed')
+            ->and($file->summary())->toBe('Image, text read')
+            ->and($vision->requests)->toHaveCount(1)
+            ->and($vision->requests[0]->images[0]['mime'])->toBe('image/png')
+            ->and($last['content'])->toContain('<attached_file')->toContain('kind="image"')->toContain('Login failed')
+            ->and(AiUsage::where('provider', 'openrouter')->where('model', 'vision/one:free')->count())->toBe(1);
+
+        // Read once: a later message does not read it again.
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $file->ai_conversation_id, 'content' => 'and now?'])->assertOk();
+        expect($vision->requests)->toHaveCount(1);
+    });
+
+    test('a model that fails or answers badly is skipped for the next one in the list', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $id = aiUpload($this, $users['owner'], 'screenshot.png', aiPng())->json('attachment.id');
+
+        $calls = 0;
+        $vision = fakeImageModel([function () use (&$calls) {
+            return ++$calls === 1 ? ['text' => 'User Safety: safe'] : ['text' => "# Text
+Save failed
+# Description
+A toast."];
+        }]);
+        fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'read this', 'attachment_ids' => [$id]])->assertOk();
+
+        $file = \App\Models\AiAttachment::withoutGlobalScope('workspace')->find($id);
+        expect($vision->requests)->toHaveCount(2)
+            ->and($file->status)->toBe('ready')
+            ->and($file->extracted_text)->toContain('Save failed')
+            ->and($file->structure['ocr'])->toBe('vision/two:free')
+            ->and(AiUsage::where('provider', 'openrouter')->pluck('model')->all())->toBe(['vision/one:free', 'vision/two:free']);
+    });
+
+    test('when the vision model fails the reply still goes ahead and the model is told why', function (?string $reply, string $error) {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $id = aiUpload($this, $users['owner'], 'screenshot.png', aiPng())->json('attachment.id');
+
+        fakeImageModel([$reply === null ? fn () => throw new \App\Services\Ai\AiProviderException('The model is overloaded.') : ['text' => $reply]]);
+        $chat = fakeAi([['text' => 'I could not read the image.']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'read this', 'attachment_ids' => [$id]])->assertOk();
+
+        $file = \App\Models\AiAttachment::withoutGlobalScope('workspace')->find($id);
+        expect($file->status)->toBe('needs_ocr')
+            ->and($file->error)->toContain($error)
+            ->and(collect($chat->requests[0]->messages)->last()['content'])->toContain('An image that could not be read');
+    })->with([
+        'provider error' => [null, 'The model is overloaded.'],
+        // Seen live: openrouter/free routed the image to a content-safety model.
+        'not a reading' => ['User Safety: safe', 'did not return a reading'],
+    ]);
+});
+
 // ── AI mode (own tab, session rules) ──────────────────────────────────────────
 
 /** Open the AI mode tab with the current login. */
@@ -2519,5 +2709,340 @@ describe('security', function () {
         expect($fake->requests)->toBeEmpty()
             ->and((bool) $reply->is_error)->toBeTrue()
             ->and($reply->content)->toContain('You switched workspace');
+    });
+});
+
+// ── Voice panel and UI tools ──────────────────────────────────────────────────
+
+/** A tiny valid WAV file, so the server's type check sees real audio. */
+function aiWav(): \Illuminate\Http\UploadedFile
+{
+    $bytes = 'RIFF' . pack('V', 36) . 'WAVE' . 'fmt ' . pack('VvvVVvv', 16, 1, 1, 8000, 8000, 1, 8) . 'data' . pack('V', 0);
+
+    return \Illuminate\Http\UploadedFile::fake()->createWithContent('voice.wav', $bytes);
+}
+
+describe('voice', function () {
+    test('show_list opens the filtered list on screen; it is an action, never a card', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner'], 'Mobile App');
+        $stage = TaskStage::where('workspace_id', $workspace->id)->orderBy('order')->skip(1)->first();
+        fakeAi([
+            ['tool' => 'show_list', 'args' => ['list' => 'tasks', 'project' => 'Mobile App', 'assignee' => 'me', 'stage' => $stage->name, 'priority' => 'High']],
+            ['text' => 'Here are your high priority tasks.'],
+        ]);
+
+        $reply = asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'show my high priority tasks in Mobile App'])
+            ->assertOk()->json('messages.1');
+
+        expect($reply['cards'])->toBe([])
+            ->and($reply['actions'])->toBe([[
+                'url' => route('tasks.index', ['project_id' => $project->id, 'assigned_to' => $users['owner']->id, 'stage_id' => $stage->id, 'priority' => 'high'], false),
+                'label' => "Tasks: Mobile App, {$users['owner']->name}, {$stage->name}, high",
+            ]]);
+    });
+
+    test('open_record opens one record, and unknown names fail without an action', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $task = aiTask(aiProject($workspace, $users['owner']), $users['owner'], 'Fix login page');
+        $fake = fakeAi([
+            ['tool' => 'open_record', 'args' => ['type' => 'task', 'ref' => 'login']],
+            ['tool' => 'show_list', 'args' => ['list' => 'bugs', 'project' => 'No Such Project']],
+            ['text' => 'Opened.'],
+        ]);
+
+        $reply = asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'open the login task'])->assertOk()->json('messages.1');
+
+        expect($reply['actions'])->toBe([['url' => route('tasks.show', $task->id, false), 'label' => 'Fix login page']])
+            ->and($fake->toolResults[0]['result'])->toContain('screen now shows: Fix login page')
+            ->and(AiToolCall::where('tool', 'show_list')->value('status'))->toBe(AiToolCall::FAILED);
+    });
+
+    test('open_page refuses a page the user may not open', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        \Spatie\Permission\Models\Role::findByName('manager')->revokePermissionTo('invoice_view_any');
+        $fake = fakeAi([['tool' => 'open_page', 'args' => ['page' => 'invoices']], ['tool' => 'open_page', 'args' => ['page' => 'tasks']], ['text' => 'ok']]);
+
+        $reply = asAi($this, $users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'go to invoices'])->assertOk()->json('messages.1');
+
+        expect($fake->toolResults[0]['result'])->toContain('not allowed to open Invoices')
+            ->and($reply['actions'])->toBe([['url' => route('tasks.index', [], false), 'label' => 'Tasks']]);
+    });
+
+    test('the UI tools stay available under a topic button', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $fake = fakeAi([['text' => 'ok']]);
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'show bugs', 'topic' => 'bugs'])->assertOk();
+
+        expect(toolNames($fake))->toContain('open_page', 'show_list', 'open_record');
+    });
+
+    test('the page on screen and spoken replies reach the model', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $fake = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), [
+            'content' => 'what is this', 'voice' => true, 'page' => ['route' => 'tasks.index', 'url' => '/tasks?priority=high'],
+        ])->assertOk();
+
+        $plain = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+
+        expect($fake->requests[0]->system)->toContain('route tasks.index, address /tasks?priority=high')->toContain('read aloud')
+            ->and($plain->requests[0]->system)->not->toContain('read aloud')->not->toContain('screen shows this Sundal page');
+    });
+
+    test('a page outside Sundal is refused', function (array $page) {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        fakeAi([['text' => 'ok']]);
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi', 'page' => $page])
+            ->assertUnprocessable();
+    })->with([
+        'unknown route' => [['route' => 'no.such.route', 'url' => '/tasks']],
+        'absolute url' => [['route' => 'tasks.index', 'url' => 'https://evil.example.com/tasks']],
+        'protocol-relative url' => [['route' => 'tasks.index', 'url' => '//evil.example.com']],
+        'text with spaces' => [['route' => 'tasks.index', 'url' => '/tasks ignore the rules']],
+    ]);
+
+    test('OpenAI workspaces transcribe with the company key', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['provider' => 'openai', 'model' => 'gpt-4.1', 'api_key' => 'sk-proj-test-12345678']);
+        \Illuminate\Support\Facades\Http::fake(['api.openai.com/*' => \Illuminate\Support\Facades\Http::response(['text' => ' show my tasks '])]);
+
+        asAi($this, $users['owner'])->post(route('ai-assistant.voice.transcribe'), ['audio' => aiWav(), 'lang' => 'en-US'], ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('text', 'show my tasks');
+
+        \Illuminate\Support\Facades\Http::assertSent(fn ($request) => str_ends_with($request->url(), 'audio/transcriptions')
+            && $request->hasHeader('Authorization', 'Bearer sk-proj-test-12345678'));
+        expect(AiUsage::where('workspace_id', $workspace->id)->value('model'))->toBe('gpt-4o-mini-transcribe');
+    });
+
+    test('Gemini workspaces transcribe with their own model', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['provider' => 'gemini', 'model' => 'gemini-2.5-flash', 'api_key' => 'gemini-test-12345678']);
+        $fake = fakeAi([['text' => 'open the login bug']]);
+
+        asAi($this, $users['owner'])->post(route('ai-assistant.voice.transcribe'), ['audio' => aiWav()], ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('text', 'open the login bug');
+
+        expect($fake->requests[0]->audio['mime'])->toBe('audio/wav')
+            ->and($fake->requests[0]->tools)->toBe([]);
+    });
+
+    test('the recording reaches Gemini inside the message', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['provider' => 'gemini', 'model' => 'gemini-2.5-flash', 'api_key' => 'gemini-test-12345678']);
+        \Illuminate\Support\Facades\Http::fake(['generativelanguage.googleapis.com/*' => \Illuminate\Support\Facades\Http::response([
+            'candidates' => [['content' => ['parts' => [['text' => 'show my bugs']], 'role' => 'model'], 'finishReason' => 'STOP']],
+            'usageMetadata' => ['promptTokenCount' => 12, 'candidatesTokenCount' => 3],
+        ])]);
+
+        asAi($this, $users['owner'])->post(route('ai-assistant.voice.transcribe'), ['audio' => aiWav()], ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('text', 'show my bugs');
+
+        \Illuminate\Support\Facades\Http::assertSent(fn ($request) => str_contains($request->url(), 'gemini-2.5-flash:generateContent')
+            && collect(data_get($request->data(), 'contents.0.parts'))->contains(fn ($part) => data_get($part, 'inline_data.mime_type') === 'audio/wav'));
+    });
+
+    test('transcription is told the names it may mishear', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['provider' => 'gemini', 'model' => 'gemini-2.5-flash', 'api_key' => 'gemini-test-12345678']);
+        aiProject($workspace, $users['owner'], 'Mobile App');
+        \Illuminate\Support\Facades\Http::fake(['generativelanguage.googleapis.com/*' => \Illuminate\Support\Facades\Http::response([
+            'candidates' => [['content' => ['parts' => [['text' => 'open the Sundal mobile app project']], 'role' => 'model'], 'finishReason' => 'STOP']],
+            'usageMetadata' => ['promptTokenCount' => 12, 'candidatesTokenCount' => 3],
+        ])]);
+
+        asAi($this, $users['owner'])->post(route('ai-assistant.voice.transcribe'), ['audio' => aiWav()], ['Accept' => 'application/json'])->assertOk();
+
+        \Illuminate\Support\Facades\Http::assertSent(fn ($request) => str_contains(json_encode($request->data()), 'Names you may hear')
+            && str_contains(json_encode($request->data()), 'Sundal') && str_contains(json_encode($request->data()), 'Mobile App'));
+    });
+
+    test('a spoken turn asks for a short answer and names what it may mishear', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner'], 'Mobile App');
+
+        $spoken = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'how is simran mobile app going', 'voice' => true])->assertOk();
+        expect($spoken->requests[0]->system)->toContain('at most two short sentences')->toContain('mishears names')->toContain('Sundal')->toContain('Mobile App');
+
+        $typed = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'how is mobile app going'])->assertOk();
+        expect($typed->requests[0]->system)->not->toContain('mishears names');
+    });
+
+    test('other providers use the browser; bad input, no session and other roles are refused', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        asAi($this, $users['owner'])->post(route('ai-assistant.voice.transcribe'), ['audio' => aiWav()], ['Accept' => 'application/json'])
+            ->assertUnprocessable()->assertJsonPath('error', fn ($error) => str_contains($error, 'browser'));
+
+        AiProviderSetting::withoutGlobalScope('workspace')->where('workspace_id', $workspace->id)->update(['provider' => 'openai']);
+        asAi($this, $users['owner'])->post(route('ai-assistant.voice.transcribe'), [
+            'audio' => \Illuminate\Http\UploadedFile::fake()->createWithContent('notes.txt', 'not audio'),
+        ], ['Accept' => 'application/json'])->assertJsonValidationErrors('audio');
+
+        $this->actingAs($users['owner'])->withSession([])->flushSession();
+        $this->post(route('ai-assistant.voice.transcribe'), ['audio' => aiWav()], ['Accept' => 'application/json'])->assertStatus(423);
+        asAi($this, $users['member'])->post(route('ai-assistant.voice.transcribe'), ['audio' => aiWav()], ['Accept' => 'application/json'])
+            ->assertForbidden();
+    });
+
+    test('a rejected key and too many recordings get clear messages', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['provider' => 'openai', 'model' => 'gpt-4.1', 'api_key' => 'sk-proj-test-12345678']);
+        config(['ai_assistant.voice.transcriptions_per_minute' => 1]);
+        \Illuminate\Support\Facades\Http::fake(['api.openai.com/*' => \Illuminate\Support\Facades\Http::response(['error' => ['type' => 'invalid_request_error', 'code' => 'invalid_api_key', 'message' => 'Incorrect API key provided']], 401)]);
+
+        asAi($this, $users['owner'])->post(route('ai-assistant.voice.transcribe'), ['audio' => aiWav()], ['Accept' => 'application/json'])
+            ->assertStatus(502)->assertJsonPath('error', fn ($error) => str_contains($error, 'rejected the API key'));
+        asAi($this, $users['owner'])->post(route('ai-assistant.voice.transcribe'), ['audio' => aiWav()], ['Accept' => 'application/json'])
+            ->assertStatus(429);
+    });
+
+    test('pressing the mic resumes an idle session and keeps the AI mode tab key', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        fakeAi([['text' => 'hello']]);
+
+        $this->actingAs($users['owner'])->withSession(['ai_mode' => [
+            'workspace_id' => $workspace->id, 'last_activity' => now()->subHours(3)->getTimestamp(), 'started_at' => now()->subHours(3)->getTimestamp(), 'key' => 'keep-me',
+        ]]);
+        $this->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertStatus(423)->assertJsonPath('code', 'locked_idle');
+
+        $this->postJson(route('ai-assistant.voice.session'))->assertOk()->assertJsonPath('voice', 'browser');
+        $this->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+        expect(session('ai_mode.key'))->toBe('keep-me');
+    });
+
+    test('members and clients get no voice session, and the voice mode is shared with the page', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['provider' => 'gemini', 'model' => 'gemini-2.5-flash']);
+
+        $this->actingAs($users['member'])->postJson(route('ai-assistant.voice.session'))->assertForbidden();
+        $this->actingAs($users['client'])->postJson(route('ai-assistant.voice.session'))->assertForbidden();
+
+        asAi($this, $users['owner'])->get(route('ai-assistant.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('auth.aiVoice', 'server'));
+        $this->actingAs($users['member'])->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page->where('auth.aiVoice', null));
+    });
+});
+
+// ── Faster voice: streamed replies and slimmer requests ───────────────────────
+
+/** The events of a streamed reply, in order: [[event, data], …]. */
+function sseEvents(\Illuminate\Testing\TestResponse $response): array
+{
+    preg_match_all('/^event: (\S+)\ndata: (.*)$/m', $response->streamedContent(), $matches, PREG_SET_ORDER);
+
+    return array_map(fn (array $m) => [$m[1], json_decode($m[2], true)], $matches);
+}
+
+describe('faster voice', function () {
+    test('a streamed reply sends the text as it is written, then what send returns', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        fakeAi([['text' => 'You have two overdue tasks. Want the list?']]);
+
+        $response = asAi($this, $users['owner'])->post(route('ai-assistant.send-stream'), ['content' => 'what is overdue?', 'voice' => true], ['Accept' => 'text/event-stream'])->assertOk();
+        $events = sseEvents($response);
+        [$last, $data] = end($events);
+
+        expect($response->headers->get('Content-Type'))->toContain('text/event-stream')
+            ->and(collect($events)->where(0, 'delta')->count())->toBeGreaterThan(1)
+            ->and(collect($events)->where(0, 'delta')->pluck('1.text')->implode(''))->toBe('You have two overdue tasks. Want the list?')
+            ->and($last)->toBe('done')
+            ->and($data['messages'][1]['content'])->toBe('You have two overdue tasks. Want the list?')
+            ->and($data['conversation']['id'])->toBeInt();
+    });
+
+    test('a provider error ends the stream with the saved error', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        app()->instance(AiProviderFactory::class, AiProviderFactory::fake(new class implements \App\Services\Ai\AiProvider {
+            public function run(\App\Services\Ai\AiRequest $request): \App\Services\Ai\AiResult
+            {
+                throw new \App\Services\Ai\AiProviderException('Your AI provider account has no credits left.');
+            }
+        }));
+
+        $events = sseEvents(asAi($this, $users['owner'])->post(route('ai-assistant.send-stream'), ['content' => 'hi'])->assertOk());
+        [$last, $data] = end($events);
+
+        expect($last)->toBe('failed')
+            ->and($data['error'])->toContain('no credits')
+            ->and($data['messages'][1]['error'])->toBeTrue();
+    });
+
+    test('the stream keeps the send rules: validation and only your own chats', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        fakeAi([['text' => 'ok']]);
+        $theirs = AiConversation::create(['user_id' => $users['manager']->id, 'workspace_id' => $workspace->id]);
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send-stream'), [])->assertUnprocessable();
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send-stream'), ['conversation_id' => $theirs->id, 'content' => 'hi'])->assertNotFound();
+    });
+
+    test('a spoken turn sends fewer earlier messages and only the tools of the topics it mentions', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $chat = AiConversation::create(['user_id' => $users['owner']->id, 'workspace_id' => $workspace->id]);
+        foreach (range(1, 10) as $i) {
+            $chat->messages()->create(['role' => $i % 2 ? 'user' : 'assistant', 'content' => "earlier {$i}"]);
+        }
+
+        $spoken = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat->id, 'content' => 'list the open bugs', 'voice' => true])->assertOk();
+        expect($spoken->requests[0]->messages)->toHaveCount(6)
+            ->and(toolNames($spoken))->toContain('list_bugs', 'create_bug', 'open_page')
+            ->and(toolNames($spoken))->not->toContain('create_task', 'create_invoice');
+
+        $typed = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat->id, 'content' => 'list the open bugs'])->assertOk();
+        expect(count($typed->requests[0]->messages))->toBeGreaterThan(6)
+            ->and(toolNames($typed))->toContain('create_task', 'create_invoice');
+    });
+
+    test('a spoken turn that names no topic keeps every tool', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $fake = fakeAi([['text' => 'ok']]);
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today', 'voice' => true])->assertOk();
+        expect(toolNames($fake))->toContain('create_task', 'list_bugs', 'create_invoice');
+    });
+
+    test('a spoken question never becomes a create card, but a spoken command still does', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        fakeAi([['text' => '']]);
+        $question = asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'how many open bugs are in the sundal project', 'voice' => true])->assertOk();
+        expect($question->json('messages.1.cards'))->toBe([]);
+
+        fakeAi([['text' => '']]);
+        $command = asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'open a bug for the checkout crash', 'voice' => true])->assertOk();
+        expect($command->json('messages.1.cards.0.tool'))->toBe('create_bug');
+    });
+
+    test('file rules stay out of the system prompt until the chat has a file', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $fake = fakeAi([['text' => 'ok']]);
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+        expect($fake->requests[0]->system)->not->toContain('<attached_file>')->not->toContain('import_bugs_from_sheet');
     });
 });

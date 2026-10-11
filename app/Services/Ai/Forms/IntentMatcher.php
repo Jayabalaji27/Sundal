@@ -23,6 +23,15 @@ class IntentMatcher
             return null;
         }
 
+        // A question is not a command ("how many open bugs", spoken without a "?"),
+        // but "can you create a task…" is a request.
+        $request = (bool) preg_match('/^ (please )?(can|could|would|will) (you|u) /', $t);
+        if (!$request && (str_ends_with(trim($t), '?') || preg_match('/^ (how|what|whats|what\'s|which|who|whom|whose|when|where|why|is|are|was|were|do|does|did|has|have|show|list|tell|give) /', $t))) {
+            return null;
+        }
+        // "open bugs" / "open tasks" describes them; it does not ask to open (create) one.
+        $t = preg_replace('/\bopen (?=(bugs|tasks|issues|tickets|items)\b)/', '', $t);
+
         if (preg_match('/\binvite\b/', $t)) {
             preg_match('/[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/', $t, $email);
 

@@ -1,16 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { Link, router, usePage } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import {
-    Archive, ArchiveRestore, ArrowLeft, ArrowUp, Bot, Bug, Check, CheckCheck, ChevronDown, ChevronsUpDown, Clock, Copy, CornerDownLeft, ExternalLink,
-    FolderKanban, HelpCircle, ListTodo, Loader2, LogOut, MessageSquare, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Pencil, Plus,
+    Archive, ArchiveRestore, ArrowLeft, ArrowUp, AudioLines, Bot, Bug, Check, CheckCheck, ChevronDown, ChevronsUpDown, Clock, Copy, CornerDownLeft, ExternalLink,
+    FolderKanban, HelpCircle, ListTodo, Loader2, LogOut, MessageSquare, Mic, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus,
     Receipt, Settings as SettingsIcon, Sparkles, Star, Trash2, Undo2, UserRound, Users, X,
 } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -20,71 +19,20 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/custom-toast';
 import { AiModeShell, type AiModeConfig } from '@/components/ai-mode-shell';
-import { ImportTable, type ImportChanges, type ImportView } from '@/components/ai-import-card';
-import { PlanList, type PlanChanges, type PlanView } from '@/components/ai-plan-card';
-import { AttachMenu, DropZone, FileChip, FileSuggestions, SundalFilesDialog, openDrivePicker, useAttachments, type AttachmentChip, type GoogleDriveConfig } from '@/components/ai-attachments';
+import { AttachMenu, DropZone, FileChip, FileSuggestions, ImageNotice, SundalFilesDialog, openDrivePicker, useAttachments, type GoogleDriveConfig } from '@/components/ai-attachments';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { notifySignedOut } from '@/lib/ai-mode';
+import { ActionLinks, ConfirmCard, FormattedText, errorMessage, type Message, type ToolCard } from '@/components/ai-confirm-card';
+import { VoiceDocked } from '@/components/ai-voice-orb';
+import { useVoice } from '@/lib/ai-voice/store';
+import { MicBlockedError, type ListenHandle } from '@/lib/ai-voice/recognizer';
+import { dictate, setFloating, setVoiceMode, startLive, voiceEngine, type VoiceMode } from '@/lib/ai-voice/assistant';
 
 declare const route: any;
-
-type CardStatus = 'pending' | 'done' | 'failed' | 'cancelled' | 'expired' | 'undone';
-
-interface ToolCard {
-    id: number;
-    tool: string;
-    summary: string;
-    status: CardStatus;
-    details: Record<string, string>;
-    /** Every record a bulk action touches, listed in full. */
-    items: string[];
-    /** Risky actions: the user must type this to confirm. */
-    confirm_phrase: string | null;
-    link: string | null;
-    can_undo: boolean;
-    undo_until: string | null;
-    error: string | null;
-    /** Drafts: "question" while a must-know value is missing, then "review". */
-    stage: 'question' | 'review';
-    /** Missing must-know fields, in order; the first is asked. */
-    ask: string[];
-    question: string | null;
-    /** The draft's values: shown as choice buttons, a summary, or the Edit form. */
-    fields: FormFieldState[];
-    form_error: string | null;
-    /** A richer card: the import table (sheet rows → bugs or tasks). */
-    view?: CardView | null;
-}
-
-type CardView = ImportView | PlanView;
-
-interface FormFieldState {
-    name: string;
-    label: string;
-    type: 'select' | 'multi' | 'date' | 'number' | 'text';
-    required: boolean;
-    value: string | string[] | null;
-    options: { value: string; label: string }[];
-    /** Why the field was left for the user, e.g. "Several match Ravi". */
-    note: string | null;
-    error: string | null;
-}
 
 interface TopicOption {
     key: string;
     label: string;
-}
-
-interface Message {
-    id: number;
-    role: 'user' | 'assistant';
-    content: string;
-    created_at: string;
-    cards: ToolCard[];
-    /** Files sent with this message. */
-    attachments?: AttachmentChip[];
-    /** Shown in the chat only, never saved: the provider refused or failed. */
-    error?: boolean;
 }
 
 interface Conversation {
@@ -152,12 +100,6 @@ interface Props {
     aiMode?: AiModeConfig;
 }
 
-const errorMessage = (error: any, fallback: string): string =>
-    error?.response?.data?.error
-    ?? error?.response?.data?.message
-    ?? (Object.values(error?.response?.data?.errors ?? {})[0] as string[] | undefined)?.[0]
-    ?? fallback;
-
 export default function AiAssistantPage(props: Props) {
     const { t } = useTranslation();
     const breadcrumbs = [{ title: t('Dashboard'), href: route('dashboard') }, { title: t('AI Assistant') }];
@@ -217,41 +159,6 @@ export default function AiAssistantPage(props: Props) {
         <PageTemplate title={t('AI Assistant')} breadcrumbs={breadcrumbs} noPadding={!framed}>
             {body}
         </PageTemplate>
-    );
-}
-
-/**
- * The model's replies use a little Markdown: **bold**, [links](/tasks/12) and
- * "- " bullets. Rendered as React elements, never as HTML, so a reply cannot
- * inject markup. Only links inside Sundal (relative paths, as the tools
- * return) are clickable: a reply could repeat a link planted in a record
- * (prompt injection), so other addresses are shown as plain text instead.
- */
-function FormattedText({ text }: { text: string }) {
-    const inline = (line: string, key: string) =>
-        line.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)\s]+\))/g).map((part, i) => {
-            const bold = part.match(/^\*\*([^*]+)\*\*$/);
-            if (bold) return <strong key={`${key}-${i}`}>{bold[1]}</strong>;
-            const link = part.match(/^\[([^\]]+)\]\(([^)\s]+)\)$/);
-            // "/tasks/12" yes; "//evil.com" and "/\evil.com" (other sites) no.
-            if (link && /^\/(?![/\\])/.test(link[2])) {
-                return <a key={`${key}-${i}`} href={link[2]} className="text-primary underline">{link[1]}</a>;
-            }
-            if (link) {
-                return <span key={`${key}-${i}`}>{link[1]} ({link[2]})</span>;
-            }
-            return <span key={`${key}-${i}`}>{part}</span>;
-        });
-
-    return (
-        <>
-            {text.split('\n').map((line, i) => {
-                const bullet = line.match(/^\s*[-*]\s+(.*)$/);
-                return bullet
-                    ? <div key={i} className="flex gap-2"><span>•</span><span>{inline(bullet[1], `l${i}`)}</span></div>
-                    : <div key={i}>{line.trim() === '' ? ' ' : inline(line, `l${i}`)}</div>;
-            })}
-        </>
     );
 }
 
@@ -465,8 +372,23 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
     const [loadingList, setLoadingList] = useState(false);
     // "Ask how to do something": the Help topic for the new chat about to open.
     const nextTopicRef = useRef<string | null>(null);
-    const [activeId, setActiveId] = useState<number | null>(initial[0]?.id ?? null);
+    // Expanded from voice mode on another Sundal page (?conversation=…&voice=1): open that
+    // chat and carry on talking here. Read once, then removed from the address so a
+    // reload does not start voice mode again.
+    const [handoff] = useState<{ conversationId: number | null; voice: boolean } | null>(() => {
+        if (!standalone || typeof window === 'undefined') return null;
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has('voice') && !url.searchParams.has('conversation')) return null;
+        const start = { conversationId: Number(url.searchParams.get('conversation')) || null, voice: url.searchParams.get('voice') === '1' };
+        url.searchParams.delete('conversation');
+        url.searchParams.delete('voice');
+        window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+        return start;
+    });
+    const [activeId, setActiveId] = useState<number | null>(handoff ? handoff.conversationId : initial[0]?.id ?? null);
     const [messages, setMessages] = useState<Message[]>([]);
+    // The chat whose messages finished loading (voice mode carried over waits for them).
+    const [loadedId, setLoadedId] = useState<number | null>(null);
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -500,6 +422,15 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
     // (including any error bubble), so don't reload and overwrite them.
     const createdHereRef = useRef<number | null>(null);
 
+    // Voice: the message box's mic and voice-mode buttons, and voice mode docked over the chat.
+    const voice = useVoice();
+    const voiceSetting: VoiceMode | null = auth?.aiAssistant === 'allowed' ? auth?.aiVoice ?? null : null;
+    const canTalk = voiceEngine(voiceSetting) !== null;
+    const docked = voice.live && !voice.floating;
+    useEffect(() => {
+        if (voiceSetting) setVoiceMode(voiceSetting);
+    }, [voiceSetting]);
+
     useEffect(() => {
         if (activeId === null) {
             setMessages([]);
@@ -519,13 +450,40 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
         axios.get(route('ai-assistant.conversations.show', activeId))
             .then(({ data }) => { if (!stale) setMessages(data.messages); })
             .catch(() => { if (!stale) toast.error(t('Could not load this conversation.')); })
-            .finally(() => { if (!stale) setLoading(false); });
+            .finally(() => { if (!stale) { setLoading(false); setLoadedId(activeId); } });
 
         return () => {
             stale = true;
             setLoading(false);
         };
     }, [activeId]);
+
+    // Voice mode carried over from another Sundal page: start it once the chat is loaded,
+    // with its messages, so a spoken "yes" can still answer a waiting card.
+    const voiceHandoff = useRef(handoff?.voice ?? false);
+    useEffect(() => {
+        if (!voiceHandoff.current || !canTalk) return;
+        const id = handoff?.conversationId ?? null;
+        if (id !== null && (activeId !== id || loadedId !== id)) return;
+        voiceHandoff.current = false;
+        startLive({ floating: false, conversationId: id, messages: id !== null ? messages : [] });
+    }, [activeId, loadedId, canTalk]);
+
+    // Voice mode is on another chat (it made a new one, or was expanded from the
+    // floating card): open that chat, with the messages voice mode already has.
+    useEffect(() => {
+        if (!voice.live || !voice.conversationId || voice.conversationId === activeId) return;
+        createdHereRef.current = voice.conversationId;
+        setActiveId(voice.conversationId);
+        setMessages(voice.messages.filter(m => m.id > 0));
+        loadList(filter, 1);
+    }, [voice.live, voice.conversationId]);
+
+    // What voice mode says and does lands in this chat too.
+    useEffect(() => {
+        if (voice.conversationId === null || voice.conversationId !== activeId) return;
+        setMessages(prev => withFresh(prev, voice.messages.filter(m => m.id > 0)));
+    }, [voice.messages]);
 
     useEffect(() => {
         // Scroll only the message list; scrollIntoView would also move the page around it.
@@ -712,6 +670,7 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
             large={showWelcome}
             attach={attach}
             onSundal={() => setSundalOpen(true)}
+            onVoiceMode={canTalk ? () => startLive({ floating: false, conversationId: activeId, messages }) : undefined}
             onDrive={googleDrive ? () => {
                 openDrivePicker(googleDrive, (fileId, name, token) => attach.addChip(
                     `drive-${fileId}-${Date.now()}`,
@@ -740,7 +699,9 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
 
             <SundalFilesDialog open={sundalOpen} onOpenChange={setSundalOpen} onPick={file => attach.addFromSundal(file.id, file.name, file.size)} />
             <DropZone onFiles={attach.add} className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+                {/* Voice mode floats over Sundal from here; the AI mode tab cannot float over another tab. */}
+                {docked && <VoiceDocked voice={voice} onFloat={standalone ? undefined : () => setFloating(true)} />}
                 {/* The Sundal page has no AI mode bar: the model sits above the chat. */}
                 {!standalone && model && (
                     <header className="flex items-center gap-2 border-b px-3 py-2.5 sm:px-4">
@@ -797,7 +758,7 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
                             <div className="mx-auto max-w-4xl space-y-6 px-4 py-6">
                                 {loading && <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />}
                                 {!loading && messages.map(message => (
-                                    <ChatMessage key={message.id} message={message} userName={auth?.user?.name ?? ''} onCardChange={onCardChange} />
+                                    <ChatMessage key={message.id} message={message} userName={auth?.user?.name ?? ''} onCardChange={onCardChange} newTab={standalone} />
                                 ))}
                                 {sending && (
                                     <div className="flex gap-3" aria-live="polite">
@@ -1198,10 +1159,12 @@ function ProfileMenu({ standalone, compact = false }: { standalone: boolean; com
 }
 
 /** The message box: grows with the text; topic picker and send button underneath. */
-function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, large, attach, onSundal, onDrive }: {
+function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, large, attach, onSundal, onDrive, onVoiceMode }: {
     attach: ReturnType<typeof useAttachments>;
     onSundal: () => void;
     onDrive?: () => void;
+    /** Starts voice mode; absent when this browser cannot listen (then no mic either). */
+    onVoiceMode?: () => void;
     value: string;
     onChange: (value: string) => void;
     onSend: () => void;
@@ -1215,6 +1178,9 @@ function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, la
     const ref = useRef<HTMLTextAreaElement>(null);
     const current = topics.find(o => o.key === topic);
     const CurrentIcon = (topic && TOPIC_ICONS[topic]) || Sparkles;
+    // Dictation adds to what was in the box when the mic was pressed.
+    const dictationBase = useRef('');
+    const empty = !value.trim() && attach.files.length === 0;
 
     // Grow with the text, up to about 8 lines.
     useEffect(() => {
@@ -1241,6 +1207,7 @@ function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, la
                     {attach.files.map(file => <FileChip key={file.key} file={file} onRemove={() => attach.remove(file.key)} />)}
                 </div>
             )}
+            <ImageNotice files={attach.files} />
             {!value.trim() && <div className="pt-2"><FileSuggestions files={attach.ready} onPick={text => { onChange(text); ref.current?.focus(); }} /></div>}
             <div className="flex gap-2.5 px-4 pt-3.5">
                 <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" aria-hidden />
@@ -1301,19 +1268,106 @@ function Composer({ value, onChange, onSend, sending, topics, topic, onTopic, la
                 <span className={`ml-auto hidden text-[11px] tabular-nums sm:inline ${value.length > MAX_LENGTH * 0.9 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                     {value.length}/{MAX_LENGTH}
                 </span>
-                <Button type="submit" size="icon" className="ml-auto h-8 w-8 rounded-full sm:ml-0" disabled={sending || attach.uploading || (!value.trim() && attach.ready.length === 0)} aria-label={attach.uploading ? t('Wait for the files to be read') : t('Send')}>
-                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
-                </Button>
+                {onVoiceMode && (
+                    <DictateButton
+                        className="ml-auto sm:ml-0"
+                        disabled={sending}
+                        onStart={() => { dictationBase.current = value; }}
+                        onText={(text, done) => {
+                            onChange(joinDictation(dictationBase.current, text));
+                            if (done) ref.current?.focus();
+                        }}
+                    />
+                )}
+                {onVoiceMode && empty && !sending ? (
+                    // As in ChatGPT: with nothing to send, the send button starts voice mode.
+                    <Button type="button" size="icon" className="h-8 w-8 rounded-full" onClick={onVoiceMode} aria-label={t('Start voice mode')} title={t('Voice mode: talk with the assistant')}>
+                        <AudioLines className="h-4 w-4" />
+                    </Button>
+                ) : (
+                    <Button type="submit" size="icon" className={`h-8 w-8 rounded-full ${onVoiceMode ? '' : 'ml-auto sm:ml-0'}`} disabled={sending || attach.uploading || (!value.trim() && attach.ready.length === 0)} aria-label={attach.uploading ? t('Wait for the files to be read') : t('Send')}>
+                        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" />}
+                    </Button>
+                )}
             </div>
         </form>
     );
 }
 
+/** Dictated words after what was already typed. */
+function joinDictation(base: string, text: string): string {
+    if (!text) return base;
+    return base.trim() ? `${base.replace(/\s+$/, '')} ${text}` : text;
+}
+
+/**
+ * The message box's mic: speech to text, nothing is sent. Words appear as
+ * they are heard (browser speech) or once the clip is transcribed (the
+ * company's own key). Click again, or pause, to stop.
+ */
+function DictateButton({ className = '', disabled, onStart, onText }: {
+    className?: string;
+    disabled: boolean;
+    onStart: () => void;
+    /** The words so far; done = the final text. */
+    onText: (text: string, done: boolean) => void;
+}) {
+    const { t } = useTranslation();
+    const [state, setState] = useState<'idle' | 'listening' | 'transcribing'>('idle');
+    const [level, setLevel] = useState(0);
+    const handle = useRef<ListenHandle | null>(null);
+
+    useEffect(() => () => handle.current?.cancel(), []);
+
+    const start = async () => {
+        const listening = dictate({ onInterim: text => onText(text, false), onLevel: setLevel, onTranscribing: () => setState('transcribing') });
+        if (!listening) return;
+        handle.current = listening;
+        onStart();
+        setState('listening');
+        try {
+            onText(await listening.result, true);
+        } catch (error) {
+            onText('', true);
+            toast.error(error instanceof MicBlockedError
+                ? t('The microphone is blocked. Allow it for this site in the browser, then try again.')
+                : errorMessage(error, t('Could not hear that. Please try again.')));
+        } finally {
+            handle.current = null;
+            setState('idle');
+            setLevel(0);
+        }
+    };
+
+    const label = state === 'listening' ? t('Stop dictating') : state === 'transcribing' ? t('Getting your words…') : t('Dictate');
+
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={`relative h-8 w-8 rounded-full ${state === 'listening' ? 'bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/40' : 'text-muted-foreground'} ${className}`}
+            disabled={disabled || state === 'transcribing'}
+            onClick={() => (state === 'listening' ? handle.current?.stop() : void start())}
+            aria-pressed={state === 'listening'}
+            aria-label={label}
+            title={label}
+        >
+            {state === 'listening' && (
+                <span aria-hidden className="absolute inset-0 rounded-full bg-rose-400/30 transition-transform duration-100" style={{ transform: `scale(${1 + level * 0.5})` }} />
+            )}
+            {state === 'transcribing' ? <Loader2 className="relative h-4 w-4 animate-spin" /> : <Mic className="relative h-4 w-4" />}
+        </Button>
+    );
+}
+
 /** One message: avatar, name and time, the text, and any confirm cards. */
-function ChatMessage({ message, userName, onCardChange }: {
+function ChatMessage({ message, userName, onCardChange, newTab }: {
     message: Message;
     userName: string;
     onCardChange: (card: ToolCard, note: Message | null) => void;
+    /** AI mode tab: pages open next to it, never in place of the chat. */
+    newTab: boolean;
 }) {
     const { t } = useTranslation();
     const mine = message.role === 'user';
@@ -1355,6 +1409,7 @@ function ChatMessage({ message, userName, onCardChange }: {
                         {!mine && !message.error ? <FormattedText text={message.content} /> : message.content}
                     </div>
                 )}
+                <ActionLinks actions={message.actions ?? []} newTab={newTab} />
                 {message.cards.map(card => <ConfirmCard key={card.id} card={card} onChange={onCardChange} />)}
                 {!mine && !message.error && message.content && (
                     <div className="flex opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
@@ -1365,358 +1420,6 @@ function ChatMessage({ message, userName, onCardChange }: {
                     </div>
                 )}
             </div>
-        </div>
-    );
-}
-
-/** "Title: Login page · Priority: Medium · Assignee: Unassigned" for a draft. */
-function knownValues(fields: FormFieldState[]): string {
-    return fields
-        .filter(f => !isEmpty(f.value))
-        .map(f => {
-            const values = Array.isArray(f.value) ? f.value : [f.value as string];
-            const labels = values.map(v => f.options.find(o => o.value === v)?.label ?? v);
-            return `${f.label}: ${labels.join(', ')}`;
-        })
-        .join(' · ');
-}
-
-function ConfirmCard({ card, onChange }: { card: ToolCard; onChange: (card: ToolCard, note: Message | null) => void }) {
-    const { t } = useTranslation();
-    const [busy, setBusy] = useState<'confirm' | 'cancel' | 'undo' | 'update' | 'edit' | null>(null);
-    const [phrase, setPhrase] = useState('');
-    const [editing, setEditing] = useState(false);
-    // Hide the Undo button once its 10 minutes are over, without a reload.
-    const [undoOpen, setUndoOpen] = useState(card.can_undo);
-    useEffect(() => {
-        setUndoOpen(card.can_undo);
-        if (!card.can_undo || !card.undo_until) return;
-        const ms = new Date(card.undo_until).getTime() - Date.now();
-        const timer = setTimeout(() => setUndoOpen(false), Math.max(0, ms));
-        return () => clearTimeout(timer);
-    }, [card.can_undo, card.undo_until]);
-
-    const fields = card.fields ?? [];
-    const pending = card.status === 'pending';
-    // A draft still missing a must-know value: one question, answered with buttons.
-    const asking = pending && card.stage === 'question' && (card.ask?.length ?? 0) > 0;
-    const askField = asking ? fields.find(f => f.name === card.ask[0]) : undefined;
-
-    // Edit form values, reset whenever the server sends the card back.
-    const [values, setValues] = useState<Record<string, string | string[]>>(() => formValues(fields));
-    useEffect(() => setValues(formValues(fields)), [card.fields]);
-
-    const phraseOk = !card.confirm_phrase || phrase.trim().toLowerCase() === card.confirm_phrase.toLowerCase();
-
-    const post = async (action: 'confirm' | 'cancel' | 'undo' | 'update' | 'edit', body: object = {}) => {
-        setBusy(action);
-        try {
-            const { data } = await axios.post(route(`ai-assistant.tool-calls.${action}`, card.id), body);
-            onChange(data.card, data.message);
-            if (data.card.status === 'failed') toast.error(data.card.error || t('The action failed.'));
-            return data.card as ToolCard;
-        } catch (error) {
-            toast.error(errorMessage(error, t('Could not update this card.')));
-            return null;
-        } finally {
-            setBusy(null);
-        }
-    };
-
-    /** A clicked choice, a typed answer or the Edit form: no AI call. */
-    const update = async (fieldValues: Record<string, string | string[]>) => {
-        const updated = await post('update', { fields: fieldValues });
-        if (updated && !(updated.fields ?? []).some(f => f.error)) setEditing(false);
-    };
-
-    const statusLabel: Record<CardStatus, string> = {
-        pending: asking ? t('Needs an answer') : t('Waiting for you'),
-        done: t('Done'),
-        failed: t('Failed'),
-        cancelled: t('Cancelled'),
-        expired: t('Expired'),
-        undone: t('Undone'),
-    };
-
-    const known = knownValues(fields);
-    const view = card.view ?? null;
-    // An editable table (sheet import): changes go straight to the server, no AI call.
-    const editView = (changes: ImportChanges | PlanChanges) => post('edit', { changes });
-    const confirmLabel = view?.type === 'import' && view.kind === 'bugs'
-        ? t('Create {{count}} bugs', { count: view.included })
-        : view ? t('Create {{count}} tasks', { count: view.included }) : t('Confirm');
-
-    return (
-        <Card className={pending ? 'border-violet-300 dark:border-violet-700' : ''}>
-            <CardContent className="space-y-3 p-3">
-                <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm font-medium">{card.summary}</p>
-                    <Badge variant={card.status === 'done' ? 'default' : card.status === 'failed' ? 'destructive' : 'secondary'}>
-                        {statusLabel[card.status]}
-                    </Badge>
-                </div>
-
-                {pending && view?.type === 'import' ? (
-                    <ImportTable view={view} busy={busy !== null} onEdit={editView} />
-                ) : pending && view?.type === 'plan' ? (
-                    <PlanList view={view} busy={busy !== null} onEdit={editView} />
-                ) : pending && editing ? (
-                    <>
-                        <CardForm cardId={card.id} fields={fields} values={values} onChange={(name, value) => setValues(prev => ({ ...prev, [name]: value }))} />
-                        <div className="flex gap-2">
-                            <Button size="sm" onClick={() => update(values)} disabled={busy !== null}>
-                                {busy === 'update' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
-                                {t('Save')}
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setValues(formValues(fields)); }} disabled={busy !== null}>
-                                {t('Back')}
-                            </Button>
-                        </div>
-                    </>
-                ) : asking && askField ? (
-                    <>
-                        <ChoiceButtons field={askField} question={card.question ?? askField.label} disabled={busy !== null} onPick={value => update({ [askField.name]: value })} />
-                        {known && <p className="text-xs text-muted-foreground">{known}</p>}
-                    </>
-                ) : (
-                    <>
-                        {Object.keys(card.details).length > 0 ? (
-                            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                                {Object.entries(card.details).map(([label, value]) => (
-                                    <div key={label} className="contents">
-                                        <dt className="text-muted-foreground">{label}</dt>
-                                        <dd>{value}</dd>
-                                    </div>
-                                ))}
-                            </dl>
-                        ) : known && <p className="text-xs text-muted-foreground">{known}</p>}
-                        {card.items.length > 0 && (
-                            <ul className="max-h-48 list-disc space-y-0.5 overflow-y-auto rounded-md bg-muted/50 py-2 pl-6 pr-2 text-xs">
-                                {card.items.map((item, i) => <li key={i}>{item}</li>)}
-                            </ul>
-                        )}
-                    </>
-                )}
-
-                {pending && card.form_error && <p className="text-xs text-destructive">{card.form_error}</p>}
-                {card.error && <p className="text-xs text-destructive">{card.error}</p>}
-
-                {pending && !editing && !asking && card.confirm_phrase && (
-                    <div className="space-y-1">
-                        <Label htmlFor={`phrase-${card.id}`} className="text-xs">
-                            {t('This cannot be undone. Type {{phrase}} to confirm.', { phrase: card.confirm_phrase })}
-                        </Label>
-                        <Input id={`phrase-${card.id}`} value={phrase} onChange={e => setPhrase(e.target.value)} className="h-8 text-xs" autoComplete="off" />
-                    </div>
-                )}
-
-                {pending && !editing && (
-                    <div className="flex flex-wrap gap-2">
-                        {!asking && (
-                            <Button size="sm" onClick={() => post('confirm', card.confirm_phrase ? { phrase } : {})} disabled={busy !== null || !phraseOk || !!card.form_error || !!view?.problem}>
-                                {busy === 'confirm' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
-                                {confirmLabel}
-                            </Button>
-                        )}
-                        {fields.length > 0 && (
-                            <Button size="sm" variant="outline" onClick={() => setEditing(true)} disabled={busy !== null}>
-                                <Pencil className="mr-1 h-3 w-3" />
-                                {t('Edit')}
-                            </Button>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => post('cancel')} disabled={busy !== null}>
-                            <X className="mr-1 h-3 w-3" />
-                            {t('Cancel')}
-                        </Button>
-                    </div>
-                )}
-
-                {card.status === 'done' && (card.link || undoOpen) && (
-                    <div className="flex flex-wrap items-center gap-3">
-                        {card.link && (
-                            <Link href={card.link} className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                                {t('Open record')} <ExternalLink className="h-3 w-3" />
-                            </Link>
-                        )}
-                        {undoOpen && (
-                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => post('undo')} disabled={busy !== null}>
-                                {busy === 'undo' ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Undo2 className="mr-1 h-3 w-3" />}
-                                {t('Undo')}
-                            </Button>
-                        )}
-                    </div>
-                )}
-            </CardContent>
-        </Card>
-    );
-}
-
-const MAX_CHOICE_BUTTONS = 8;
-
-/**
- * The answer to one draft question: the choices as buttons (the rest in a
- * short list), or a small box for a name, email or date. One click updates
- * the draft on the server; no AI call.
- */
-function ChoiceButtons({ field, question, disabled, onPick }: {
-    field: FormFieldState;
-    question: string;
-    disabled: boolean;
-    onPick: (value: string | string[]) => void;
-}) {
-    const { t } = useTranslation();
-    const [text, setText] = useState('');
-    const [picked, setPicked] = useState<string[]>([]);
-    const shown = field.options.slice(0, MAX_CHOICE_BUTTONS);
-    const rest = field.options.slice(MAX_CHOICE_BUTTONS);
-
-    return (
-        <div className="space-y-2">
-            <p className="text-sm">{question}</p>
-            {field.note && <p className="text-xs text-amber-600 dark:text-amber-500">{field.note}</p>}
-
-            {field.type === 'select' && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                    {shown.map(option => (
-                        <Button key={option.value} type="button" size="sm" variant="outline" className="h-7 px-2.5 text-xs" disabled={disabled} onClick={() => onPick(option.value)}>
-                            {option.label}
-                        </Button>
-                    ))}
-                    {rest.length > 0 && (
-                        <select className={`${fieldClass} h-7 w-auto`} value="" disabled={disabled} onChange={e => e.target.value && onPick(e.target.value)} aria-label={t('More choices')}>
-                            <option value="">{t('More…')}</option>
-                            {rest.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                        </select>
-                    )}
-                </div>
-            )}
-
-            {field.type === 'multi' && (
-                <div className="space-y-2">
-                    <div className="flex flex-wrap gap-1.5">
-                        {field.options.slice(0, 20).map(option => {
-                            const on = picked.includes(option.value);
-                            return (
-                                <Button
-                                    key={option.value}
-                                    type="button"
-                                    size="sm"
-                                    variant={on ? 'default' : 'outline'}
-                                    className="h-7 px-2.5 text-xs"
-                                    aria-pressed={on}
-                                    disabled={disabled}
-                                    onClick={() => setPicked(prev => (on ? prev.filter(v => v !== option.value) : [...prev, option.value]))}
-                                >
-                                    {option.label}
-                                </Button>
-                            );
-                        })}
-                    </div>
-                    <Button type="button" size="sm" className="h-7 text-xs" disabled={disabled || picked.length === 0} onClick={() => onPick(picked)}>
-                        {t('Done')}
-                    </Button>
-                </div>
-            )}
-
-            {(field.type === 'text' || field.type === 'date' || field.type === 'number') && (
-                <form className="flex gap-2" onSubmit={(e: FormEvent) => { e.preventDefault(); if (text.trim()) onPick(text.trim()); }}>
-                    <Input type={field.type} min={field.type === 'number' ? 0 : undefined} step={field.type === 'number' ? 'any' : undefined} value={text} onChange={e => setText(e.target.value)} className="h-8 text-xs" autoFocus />
-                    <Button type="submit" size="sm" className="h-8" disabled={disabled || !text.trim()}>{t('OK')}</Button>
-                </form>
-            )}
-        </div>
-    );
-}
-
-const isEmpty = (value: string | string[] | null | undefined) =>
-    value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
-
-function formValues(fields: FormFieldState[]): Record<string, string | string[]> {
-    return Object.fromEntries(fields.map(f => [f.name, f.type === 'multi' ? (Array.isArray(f.value) ? f.value : []) : (f.value as string | null) ?? '']));
-}
-
-const fieldClass = 'h-8 w-full rounded-md border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
-
-/**
- * The editable part of a form card. Values the user named are pre-filled;
- * the rest are picked here, from lists the server built for this user.
- */
-function CardForm({ cardId, fields, values, onChange }: {
-    cardId: number;
-    fields: FormFieldState[];
-    values: Record<string, string | string[]>;
-    onChange: (name: string, value: string | string[]) => void;
-}) {
-    const { t } = useTranslation();
-
-    return (
-        <div className="space-y-2.5">
-            {fields.map(field => {
-                const id = `card-${cardId}-${field.name}`;
-                const value = values[field.name];
-                const invalid = !!field.error;
-
-                return (
-                    <div key={field.name} className="space-y-1">
-                        <Label htmlFor={id} className="text-xs">
-                            {field.label}
-                            {field.required && <span className="text-destructive"> *</span>}
-                        </Label>
-
-                        {field.type === 'select' && (
-                            <select
-                                id={id}
-                                className={`${fieldClass} ${invalid ? 'border-destructive' : ''}`}
-                                value={(value as string) ?? ''}
-                                onChange={e => onChange(field.name, e.target.value)}
-                                aria-invalid={invalid}
-                            >
-                                <option value="">{t('Choose…')}</option>
-                                {field.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                            </select>
-                        )}
-
-                        {field.type === 'multi' && (
-                            <div id={id} className={`max-h-36 space-y-1 overflow-y-auto rounded-md border p-2 ${invalid ? 'border-destructive' : ''}`}>
-                                {field.options.length === 0 && <p className="text-xs text-muted-foreground">{t('Nobody to choose from.')}</p>}
-                                {field.options.map(option => {
-                                    const selected = Array.isArray(value) && value.includes(option.value);
-                                    return (
-                                        <label key={option.value} className="flex cursor-pointer items-center gap-2 text-xs">
-                                            <input
-                                                type="checkbox"
-                                                checked={selected}
-                                                onChange={() => {
-                                                    const current = Array.isArray(value) ? value : [];
-                                                    onChange(field.name, selected ? current.filter(v => v !== option.value) : [...current, option.value]);
-                                                }}
-                                            />
-                                            {option.label}
-                                        </label>
-                                    );
-                                })}
-                            </div>
-                        )}
-
-                        {(field.type === 'date' || field.type === 'text' || field.type === 'number') && (
-                            <Input
-                                id={id}
-                                type={field.type}
-                                min={field.type === 'number' ? 0 : undefined}
-                                step={field.type === 'number' ? 'any' : undefined}
-                                className={`h-8 text-xs ${invalid ? 'border-destructive' : ''}`}
-                                value={(value as string) ?? ''}
-                                onChange={e => onChange(field.name, e.target.value)}
-                                aria-invalid={invalid}
-                            />
-                        )}
-
-                        {field.error
-                            ? <p className="text-xs text-destructive">{field.error}</p>
-                            : field.note && <p className="text-xs text-amber-600 dark:text-amber-500">{field.note}</p>}
-                    </div>
-                );
-            })}
         </div>
     );
 }
@@ -1798,6 +1501,10 @@ function SettingsForm({ settings, providers, usage, retentionOptions, idleTimeou
                     <CardTitle>{configured ? t('AI provider') : t('Connect your AI provider')}</CardTitle>
                     <CardDescription>
                         {t('The assistant runs on your company\'s own AI account. Your messages, and the Sundal records the assistant reads to answer them, are sent to this provider using your API key, under your agreement with that provider.')}
+                        {' '}
+                        {['openai', 'gemini'].includes(form.provider)
+                            ? t('Voice recordings from the mic are transcribed by this provider too.')
+                            : t('This provider cannot transcribe speech, so the mic uses the browser\'s own speech recognition (Chrome or Edge), which sends the audio to the browser maker.')}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">

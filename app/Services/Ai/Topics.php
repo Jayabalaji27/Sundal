@@ -16,8 +16,8 @@ use App\Models\User;
  */
 class Topics
 {
-    /** Look-ups every topic keeps: resolving names and "who changed this". */
-    public const SHARED = ['list_projects', 'list_team_members', 'get_record_history', 'read_attachment', 'get_sheet_rows'];
+    /** Look-ups every topic keeps: resolving names, "who changed this", and opening things on screen. */
+    public const SHARED = ['list_projects', 'list_team_members', 'get_record_history', 'read_attachment', 'get_sheet_rows', 'open_page', 'show_list', 'open_record'];
 
     public const TOOLS = [
         'tasks' => ['list_tasks', 'create_task', 'assign_task', 'change_task_status', 'list_sprints', 'add_tasks_to_sprint', 'import_tasks_from_sheet', 'plan_tasks_from_document'],

@@ -8,6 +8,7 @@ import { usePage, router } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import { ShieldAlert } from 'lucide-react';
 import FlashMessages from '@/components/FlashMessages';
+import { AiVoiceAssistant } from '@/components/ai-voice-assistant';
 
 declare const route: any;
 
@@ -37,6 +38,7 @@ export default function AppSidebarLayout({ children, breadcrumbs = [] }: PropsWi
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
                 {children}
             </AppContent>
+            <AiVoiceAssistant />
         </AppShell>
     );
 }
