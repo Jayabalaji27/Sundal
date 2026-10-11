@@ -63,6 +63,20 @@ class AiAccess
         return self::role($user) === 'owner';
     }
 
+    /**
+     * How the voice panel turns speech into text: 'server' (the company's own
+     * OpenAI or Gemini key), 'browser' (the browser's speech recognition), or
+     * null when no provider is connected.
+     */
+    public static function voiceMode(?AiProviderSetting $settings): ?string
+    {
+        if (!$settings) {
+            return null;
+        }
+
+        return in_array($settings->provider, Transcriber::PROVIDERS, true) ? 'server' : 'browser';
+    }
+
     public static function settings(User $user): ?AiProviderSetting
     {
         if (!$user->current_workspace_id) {

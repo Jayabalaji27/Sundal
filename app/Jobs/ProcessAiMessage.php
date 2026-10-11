@@ -35,6 +35,8 @@ class ProcessAiMessage implements ShouldQueue
         public readonly int $userId,
         public readonly int $conversationId,
         public readonly int $messageId,
+        /** See AiAssistant::reply(). */
+        public readonly array $client = [],
     ) {}
 
     public function handle(AiAssistant $assistant): void
@@ -73,7 +75,7 @@ class ProcessAiMessage implements ShouldQueue
             }
 
             try {
-                $assistant->respond($conversation, $user, $message->content);
+                $assistant->respond($conversation, $user, $message->content, $this->client);
             } catch (AiProviderException) {
                 // respond() already saved the error in the chat.
             }

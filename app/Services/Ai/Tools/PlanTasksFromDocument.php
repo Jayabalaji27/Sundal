@@ -11,6 +11,7 @@ use App\Models\Project;
 use App\Models\ProjectMilestone;
 use App\Models\User;
 use App\Services\Ai\Attachments\DocumentAnalyzer;
+use App\Services\Ai\Attachments\ImageReader;
 use App\Services\Ai\Attachments\ScannedPdfReader;
 
 /**
@@ -28,6 +29,7 @@ class PlanTasksFromDocument extends AiTool implements EditableCard
         private readonly RecordResolver $resolver,
         private readonly DocumentAnalyzer $analyzer,
         private readonly ScannedPdfReader $scans,
+        private readonly ImageReader $images,
         private readonly CreateProject $createProject,
         private readonly CreateMilestone $createMilestone,
         private readonly CreateTask $createTask,
@@ -95,7 +97,7 @@ class PlanTasksFromDocument extends AiTool implements EditableCard
             throw new ToolInputException(__('":file" is a spreadsheet. Use import_tasks_from_sheet or import_bugs_from_sheet.', ['file' => $file->original_name]));
         }
         if ($file->status === AiAttachment::NEEDS_OCR) {
-            $file = $this->scans->read($file, $user);
+            $file = $file->kind === AiAttachment::IMAGE ? $this->images->read($file, $user) : $this->scans->read($file, $user);
         }
 
         $plan = $this->analyzer->plan($file, $user, trim((string) ($args['focus'] ?? '')));

@@ -2,7 +2,7 @@
 
 namespace App\Services\Ai\Providers;
 
-use App\Services\Ai\AiProvider;
+use App\Services\Ai\StreamsReplies;
 use App\Services\Ai\AiRequest;
 use App\Services\Ai\AiResult;
 use Closure;
@@ -13,7 +13,7 @@ use Closure;
  * ['text' => '...']. A closure step receives the request and the tool
  * results so far and returns one of those.
  */
-class FakeProvider implements AiProvider
+class FakeProvider implements StreamsReplies
 {
     /** @var AiRequest[] */
     public array $requests = [];
@@ -45,5 +45,16 @@ class FakeProvider implements AiProvider
         }
 
         return new AiResult('', 10, 5);
+    }
+
+    /** The scripted reply, handed over a few words at a time. */
+    public function stream(AiRequest $request, callable $onDelta): AiResult
+    {
+        $result = $this->run($request);
+        foreach (preg_split('/(?<= )/', $result->text, -1, PREG_SPLIT_NO_EMPTY) as $piece) {
+            $onDelta($piece);
+        }
+
+        return $result;
     }
 }

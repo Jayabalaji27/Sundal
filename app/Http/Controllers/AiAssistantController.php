@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * The AI Assistant page for company owners and managers. Routes sit behind
@@ -192,6 +193,103 @@ class AiAssistantController extends Controller
 
     public function send(Request $request, AiAssistant $assistant): JsonResponse
     {
+        $started = $this->beginSend($request);
+        if ($started instanceof JsonResponse) {
+            return $started;
+        }
+        ['conversation' => $conversation, 'content' => $content, 'attachments' => $attachmentIds, 'client' => $client, 'after' => $firstNewId] = $started;
+
+        // Queue mode: answer in the background; the page polls the conversation.
+        if (config('ai_assistant.queue')) {
+            $message = $assistant->addUserMessage($conversation, $content, $attachmentIds);
+            \App\Jobs\ProcessAiMessage::dispatch($request->user()->id, $conversation->id, $message->id, $client);
+
+            return response()->json([
+                'conversation' => ConversationList::row($conversation->fresh()),
+                'messages' => $this->messagesWithCards($conversation, $firstNewId),
+                'pending' => true,
+            ], 202);
+        }
+
+        // A reply can take several AI round trips. Let the provider timeout end a slow
+        // call (a normal, saved error with the form fallback) instead of PHP's 30 s
+        // limit killing the request with nothing saved.
+        @set_time_limit((int) config('ai_assistant.sync_time_limit', 300));
+
+        try {
+            $assistant->reply($conversation, $request->user(), $content, $attachmentIds, $client);
+        } catch (AiProviderException $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+                'conversation' => ConversationList::row($conversation->fresh()),
+                'messages' => $this->messagesWithCards($conversation, $firstNewId),
+            ], 502);
+        }
+
+        return response()->json([
+            'conversation' => ConversationList::row($conversation->fresh()),
+            'messages' => $this->messagesWithCards($conversation, $firstNewId),
+        ]);
+    }
+
+    /**
+     * The same as send, answered as it is written (Server-Sent Events), so the
+     * voice panel can speak the first sentence while the rest is still coming.
+     * "delta" events carry reply text; the last event, "done" (or "failed",
+     * with the saved error), carries what send would have returned. Always
+     * answered now, also in queue mode: the user is waiting on the stream.
+     */
+    public function sendStream(Request $request, AiAssistant $assistant): JsonResponse|StreamedResponse
+    {
+        $started = $this->beginSend($request);
+        if ($started instanceof JsonResponse) {
+            return $started;
+        }
+        ['conversation' => $conversation, 'content' => $content, 'attachments' => $attachmentIds, 'client' => $client, 'after' => $firstNewId] = $started;
+        $user = $request->user();
+
+        return response()->stream(function () use ($assistant, $conversation, $user, $content, $attachmentIds, $client, $firstNewId) {
+            @set_time_limit((int) config('ai_assistant.sync_time_limit', 300));
+            // As Laravel's eventStream: push each event past PHP's output buffer at once.
+            $emit = function (string $event, array $data) {
+                echo "event: {$event}\ndata: " . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
+            };
+
+            $failure = [];
+            try {
+                $assistant->reply($conversation, $user, $content, $attachmentIds, $client, fn (string $text) => $emit('delta', ['text' => $text]));
+            } catch (AiProviderException $e) {
+                $failure = ['error' => $e->getMessage()];
+            } catch (\Throwable $e) {
+                report($e);
+                $failure = ['error' => __('The assistant could not answer. Please try again.')];
+            }
+
+            $emit($failure ? 'failed' : 'done', [
+                ...$failure,
+                'conversation' => ConversationList::row($conversation->fresh()),
+                'messages' => $this->messagesWithCards($conversation, $firstNewId),
+            ]);
+        }, 200, [
+            'Content-Type' => 'text/event-stream; charset=UTF-8',
+            'Cache-Control' => 'no-cache, no-transform',
+            // Nginx / LiteSpeed: pass each event on at once instead of buffering the reply.
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
+
+    /**
+     * Checks shared by send and sendStream: validation, rate limit, the files,
+     * and the conversation (new or the user's own).
+     *
+     * @return JsonResponse|array{conversation: AiConversation, content: string, attachments: int[], client: array, after: int}
+     */
+    private function beginSend(Request $request): JsonResponse|array
+    {
         $user = $request->user();
         $this->ensureCanUse($request);
 
@@ -203,6 +301,15 @@ class AiAssistantController extends Controller
             'attachment_ids.*' => 'integer|distinct',
             // Topic button: a key sets it, '' or null clears it, absent leaves it.
             'topic' => ['nullable', 'string', Rule::in(['', ...Topics::keys()])],
+            // The Sundal page the user is looking at (voice panel), and whether the reply is read aloud.
+            'page' => 'nullable|array',
+            'page.route' => ['required_with:page', 'string', 'max:100', fn (string $attribute, mixed $value, \Closure $fail) => \Illuminate\Support\Facades\Route::has((string) $value) || $fail(__('Unknown page.'))],
+            'page.url' => ['required_with:page', 'string', 'max:500', 'regex:#^/(?![/\\\\])\S*$#'],
+            'voice' => 'nullable|boolean',
+        ]);
+        $client = array_filter([
+            'page' => isset($validated['page']) ? ['route' => $validated['page']['route'], 'url' => $validated['page']['url']] : null,
+            'voice' => (bool) ($validated['voice'] ?? false),
         ]);
 
         $limiterKey = 'ai-assistant:' . $user->id;
@@ -229,39 +336,13 @@ class AiAssistantController extends Controller
             $conversation->update(['archived_at' => null]);
         }
 
-        $firstNewId = (int) $conversation->messages()->max('id');
-
-        // Queue mode: answer in the background; the page polls the conversation.
-        if (config('ai_assistant.queue')) {
-            $message = $assistant->addUserMessage($conversation, $content, $attachmentIds);
-            \App\Jobs\ProcessAiMessage::dispatch($user->id, $conversation->id, $message->id);
-
-            return response()->json([
-                'conversation' => ConversationList::row($conversation->fresh()),
-                'messages' => $this->messagesWithCards($conversation, $firstNewId),
-                'pending' => true,
-            ], 202);
-        }
-
-        // A reply can take several AI round trips. Let the provider timeout end a slow
-        // call (a normal, saved error with the form fallback) instead of PHP's 30 s
-        // limit killing the request with nothing saved.
-        @set_time_limit((int) config('ai_assistant.sync_time_limit', 300));
-
-        try {
-            $assistant->reply($conversation, $user, $content, $attachmentIds);
-        } catch (AiProviderException $e) {
-            return response()->json([
-                'error' => $e->getMessage(),
-                'conversation' => ConversationList::row($conversation->fresh()),
-                'messages' => $this->messagesWithCards($conversation, $firstNewId),
-            ], 502);
-        }
-
-        return response()->json([
-            'conversation' => ConversationList::row($conversation->fresh()),
-            'messages' => $this->messagesWithCards($conversation, $firstNewId),
-        ]);
+        return [
+            'conversation' => $conversation,
+            'content' => $content,
+            'attachments' => $attachmentIds,
+            'client' => $client,
+            'after' => (int) $conversation->messages()->max('id'),
+        ];
     }
 
     /**
@@ -390,16 +471,17 @@ class AiAssistantController extends Controller
             ->orderBy('id')
             ->get()
             ->groupBy('ai_message_id');
-        $cards = AiToolCall::where('ai_conversation_id', $conversation->id)
+        $calls = AiToolCall::where('ai_conversation_id', $conversation->id)
             ->whereIn('ai_message_id', $messages->pluck('id'))
-            ->whereNotNull('summary')
             ->orderBy('id')
             ->get()
             ->groupBy('ai_message_id');
 
         return $messages->map(fn (AiMessage $m) => [
-            ...$this->messageJson($m, ($cards[$m->id] ?? collect())->map(fn (AiToolCall $c) => $c->toCard())->values()->all()),
+            ...$this->messageJson($m, ($calls[$m->id] ?? collect())->whereNotNull('summary')->map(fn (AiToolCall $c) => $c->toCard())->values()->all()),
             'attachments' => ($files[$m->id] ?? collect())->map(fn (AiAttachment $f) => $f->toChip())->values()->all(),
+            // What the UI tools put on screen (open a page, a filtered list, a record).
+            'actions' => ($calls[$m->id] ?? collect())->map(fn (AiToolCall $c) => $c->result['ui'] ?? null)->filter()->values()->all(),
         ])->all();
     }
 

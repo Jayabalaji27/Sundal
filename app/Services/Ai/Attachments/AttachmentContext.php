@@ -25,6 +25,7 @@ class AttachmentContext
         $open = sprintf('<attached_file id="%d" name="%s" kind="%s">', $file->id, self::attr($file->original_name), $file->kind);
 
         $body = match (true) {
+            $file->status === AiAttachment::NEEDS_OCR && $file->kind === AiAttachment::IMAGE => __('An image that could not be read: :reason read_attachment can try again.', ['reason' => rtrim((string) ($file->error ?: __('it has not been read yet')), '.') . '.']),
             $file->status === AiAttachment::NEEDS_OCR => __('A scanned PDF (:pages pages) with no text layer. read_attachment can have it read by the AI model, if the model supports PDFs.', ['pages' => $file->structure['pages'] ?? '?']),
             $file->kind === AiAttachment::SPREADSHEET => self::describeSheets($file),
             mb_strlen((string) $file->extracted_text) <= self::INLINE_CHARS => trim((string) $file->extracted_text),

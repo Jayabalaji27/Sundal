@@ -3,7 +3,8 @@
  * switch in the Sundal header. The Sundal tabs and the AI mode tab talk over
  * a BroadcastChannel (same browser, same site only):
  *
- *  AI tab  → Sundal tabs: 'ai-alive' (every few seconds), 'ai-closed'
+ *  AI tab  → Sundal tabs: 'ai-alive' (every few seconds), 'ai-closed',
+ *                          'navigate' (voice mode opened a page: show it in Sundal)
  *  Sundal  → AI tab:       'app-alive', 'app-closing', 'close', 'signed-out'
  *  either  → the others:   'ping' (who is there?)
  *
@@ -18,6 +19,7 @@ export const AI_MODE_WINDOW = 'sundal-ai-mode';
 export type AiModeMessage =
     | { type: 'ai-alive' }
     | { type: 'ai-closed' }
+    | { type: 'navigate'; url: string }
     | { type: 'app-alive' }
     | { type: 'app-closing' }
     | { type: 'close' }
@@ -46,13 +48,28 @@ export function notifySignedOut(): void {
     post({ type: 'signed-out' });
 }
 
+/** What the AI mode tab opens with: a chat, and whether voice mode carries on there. */
+export interface AiModeStart {
+    conversationId?: number | null;
+    voice?: boolean;
+}
+
+/** The AI mode address, with the chat and voice mode to continue (read once by the AI tab). */
+export function aiModeUrl(start: AiModeStart = {}): string {
+    const params: Record<string, number> = {};
+    if (start.conversationId) params.conversation = start.conversationId;
+    if (start.voice) params.voice = 1;
+
+    return route('ai-mode', params);
+}
+
 /**
  * Open the AI mode tab, or bring it to the front if it is already open
- * (a named window is reused). Must run inside the click, or the browser
- * blocks it. Returns false when it was blocked.
+ * (a named window is reused; with `start` it opens that chat). Must run
+ * inside the click, or the browser blocks it. Returns false when it was blocked.
  */
-export function openAiModeTab(): boolean {
-    const tab = window.open(route('ai-mode'), AI_MODE_WINDOW);
+export function openAiModeTab(start?: AiModeStart): boolean {
+    const tab = window.open(start ? aiModeUrl(start) : route('ai-mode'), AI_MODE_WINDOW);
     tab?.focus();
 
     return !!tab;

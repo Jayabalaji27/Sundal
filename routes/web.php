@@ -458,11 +458,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('keep-alive', [\App\Http\Controllers\AiModeController::class, 'keepAlive'])->name('keep-alive');
             Route::post('unlock', [\App\Http\Controllers\AiModeController::class, 'unlock'])->name('unlock');
         });
+        // Voice panel (mic on every Sundal page): pressing the mic starts the AI session,
+        // as opening the assistant page does, so this one sits outside ai.mode.
+        Route::post('ai-assistant/voice/session', [\App\Http\Controllers\AiVoiceController::class, 'session'])
+            ->middleware(['ai.assistant', 'module.access'])
+            ->name('ai-assistant.voice.session');
 
         // ai.mode: every assistant request needs a live AI session (opened page, same
         // workspace, not idle); requests from the AI mode tab also need Sundal open.
         Route::middleware(['ai.assistant', 'module.access', 'ai.mode'])->prefix('ai-assistant')->name('ai-assistant.')->group(function () {
             Route::post('messages', [\App\Http\Controllers\AiAssistantController::class, 'send'])->name('send');
+            // The same, streamed as it is written (voice panel: speak the first sentence early).
+            Route::post('messages/stream', [\App\Http\Controllers\AiAssistantController::class, 'sendStream'])->name('send-stream');
+            Route::post('voice/transcribe', [\App\Http\Controllers\AiVoiceController::class, 'transcribe'])->name('voice.transcribe');
             Route::get('conversations', [\App\Http\Controllers\AiAssistantController::class, 'conversations'])->name('conversations.index');
             Route::get('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'show'])->name('conversations.show');
             Route::patch('conversations/{conversation}', [\App\Http\Controllers\AiAssistantController::class, 'update'])->name('conversations.update');

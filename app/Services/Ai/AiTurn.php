@@ -22,5 +22,7 @@ final class AiTurn
         public readonly User $user,
         public readonly string $prompt,
         public readonly AiProviderSetting $settings,
+        /** What the user's screen shows and whether the reply is spoken; see AiAssistant::reply(). */
+        public readonly array $client = [],
     ) {}
 }

@@ -6,18 +6,20 @@ use App\Models\AiAttachment;
 use App\Models\User;
 use App\Services\Ai\AiAccess;
 use App\Services\Ai\Attachments\AttachmentContext;
+use App\Services\Ai\Attachments\ImageReader;
 use App\Services\Ai\Attachments\ScannedPdfReader;
 
 /**
  * Read part of a file the user attached: a document's section, or a
  * spreadsheet's outline. A scanned PDF is first read by the AI model when
- * it can read PDFs (Phase 4).
+ * it can read PDFs (Phase 4); an image not read yet is read by ImageReader.
  */
 class ReadAttachment extends AiTool
 {
     public function __construct(
         private readonly RecordResolver $resolver,
         private readonly ScannedPdfReader $scans,
+        private readonly ImageReader $images,
     ) {}
 
     public function name(): string
@@ -27,7 +29,7 @@ class ReadAttachment extends AiTool
 
     public function description(): string
     {
-        return 'Read a file the user attached (PDF, Word, text or spreadsheet). For a document, give a section number (from its outline) to read that section; without one you get the outline and section 1. For a spreadsheet you get its sheets and columns; use get_sheet_rows for rows.';
+        return 'Read a file the user attached (PDF, Word, text, image or spreadsheet). For an image you get its text and a short description. For a document, give a section number (from its outline) to read that section; without one you get the outline and section 1. For a spreadsheet you get its sheets and columns; use get_sheet_rows for rows.';
     }
 
     public function permissions(): array
@@ -54,7 +56,7 @@ class ReadAttachment extends AiTool
         $file = $this->resolver->attachment($user, (string) ($args['attachment'] ?? ''));
 
         if ($file->status === AiAttachment::NEEDS_OCR) {
-            $file = $this->scans->read($file, $user);
+            $file = $file->kind === AiAttachment::IMAGE ? $this->images->read($file, $user) : $this->scans->read($file, $user);
         }
 
         if ($file->kind === AiAttachment::SPREADSHEET) {

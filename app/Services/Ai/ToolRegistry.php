@@ -78,6 +78,10 @@ class ToolRegistry
         Tools\ImportBugsFromSheet::class,
         Tools\ImportTasksFromSheet::class,
         Tools\PlanTasksFromDocument::class,
+        // What the user sees: pages, filtered lists and records (voice and chat)
+        Tools\OpenPageTool::class,
+        Tools\ShowListTool::class,
+        Tools\OpenRecordTool::class,
     ];
 
     /** @var AiTool[]|null */

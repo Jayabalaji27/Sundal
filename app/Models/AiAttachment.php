@@ -22,12 +22,15 @@ class AiAttachment extends Model
 
     public const READY = 'ready';
     public const FAILED = 'failed';
-    /** A scanned PDF: no text layer; a vision-capable model can read it. */
+    /** A scanned PDF (no text layer) or an image not read yet; a vision model can read it. */
     public const NEEDS_OCR = 'needs_ocr';
 
     public const SPREADSHEET = 'spreadsheet';
     public const DOCUMENT = 'document';
     public const TEXT = 'text';
+    public const IMAGE = 'image';
+
+    public const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 
     protected $fillable = [
         'workspace_id', 'user_id', 'ai_conversation_id', 'ai_message_id', 'source', 'original_name', 'extension',
@@ -95,6 +98,13 @@ class AiAttachment extends Model
     {
         if ($this->status === self::FAILED) {
             return (string) $this->error;
+        }
+        if ($this->kind === self::IMAGE) {
+            return match (true) {
+                $this->status === self::READY => __('Image, text read'),
+                (bool) $this->error => (string) $this->error,
+                default => __('Image, read when you send it'),
+            };
         }
         if ($this->status === self::NEEDS_OCR) {
             return __('Scanned PDF (:pages pages), no text layer', ['pages' => $this->structure['pages'] ?? '?']);

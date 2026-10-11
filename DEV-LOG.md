@@ -792,6 +792,128 @@ Tests: `AiAssistantTest` 157 (27 new). Real model (OpenRouter, nemotron free) in
 sheet → import card → confirm → undo; BRD → 7 tasks in 3 milestones (cancelled).
 Run Pest with `php -d memory_limit=2G vendor/bin/pest` (`artisan test` uses 128 MB).
 
+- **Phase 5, images (OCR):** .png/.jpg/.jpeg/.webp/.gif accepted (upload, paste, Sundal
+  files, Drive). `FileReader` checks magic bytes and `getimagesize()` only; the image is read
+  when the message is sent (`AiAssistant::readImages` → `ImageReader`) by an OpenRouter
+  vision model on **Sundal's own key**, not the company's, so Azure workspaces get images
+  too. It returns the text exactly plus a short description, stored once on the attachment;
+  usage logged per workspace (provider `openrouter`) and counted toward its token cap. A
+  failed read keeps the file `needs_ocr` with the reason, tells the model, and the reply
+  still goes ahead. Needs `AI_ASSISTANT_OCR_KEY` in `.env`; without it images are refused.
+  `AI_ASSISTANT_OCR_MODELS` (comma-separated) is tried in order, next model on any failure;
+  default: free vision models `dots-studio/dots-3-note-preview:free`, Gemma 4 26B/31B,
+  Nemotron 3 Nano Omni. Not `openrouter/free` (seen routing an image to a safety model that
+  answered "User Safety: safe"); a reply without the `# Text` / `# Description` format is
+  rejected. Time budgets: 75 s per image over all models, 120 s per message.
+  Live check (local, workspace 2's OpenRouter key, no credits): dots read a screenshot in
+  ~35 s, the chat model drafted a correct bug from it; Gemma often rate limited.
+  Tests: `AiAssistantTest` 202 (7 new).
+
+### AI Assistant: faster voice on free models (2026-10-11)
+
+Voice replies took 26 s typical / 67 s p90 on the free OpenRouter model, almost all of it the chat
+model (≈17k input tokens per call, no streaming). Changes (no paid services):
+
+- **Slimmer spoken turns** (`ai_assistant.voice.*`): 6 earlier messages instead of 20; with no
+  topic button, only the tools of the topics the words mention (`Topics::mentioned`, plus the
+  shared look-ups and any waiting draft's tool; all tools when nothing is mentioned). File rules
+  leave the system prompt unless the chat has files (all turns).
+- **Streamed replies:** `POST ai-assistant/messages/stream` (`ai-assistant.send-stream`), same
+  checks as send (`beginSend`), Server-Sent Events: `delta` text, then `done` / `failed` with what
+  send returns. `StreamsReplies` (PrismProvider via Prism `asStream`, FakeProvider); Azure falls
+  back to one piece. The voice panel speaks each sentence as it arrives (`speechQueue`), says
+  "One moment." after 2.5 s with nothing yet, and falls back to the normal send only when the
+  stream request got no answer at all (never sends twice).
+- **Turn-taking:** end of speech after 0.8 s of silence (was 1.2 s).
+
+Live (nemotron free, same question): typed 12.0 s / 24.4k input tokens; spoken 8.6 s / 17.5k;
+spoken + streamed 6.8 s, ≈4.3k tokens per call. OpenRouter free = 50 requests/day on an account
+that never bought credits (20/min), so it runs out after a few test rounds: Google AI Studio
+(Gemini Flash free, ≈1,500/day) or Groq (gpt-oss-120b free, 1,000/day, 8k tokens/min, which
+the slimmed voice turns fit) are better free keys. Tests: `AiAssistantTest` + 6.
+
+Follow-up (2026-10-12), from voice testing:
+- **Clearer voice:** `speaker.ts` ranks voices by clarity (Edge "Natural"/neural > Apple
+  enhanced > Google > online > old offline SAPI voices such as David/Zira, which were picked
+  before because offline voices came first), cached until `voiceschanged`.
+- **Short spoken replies:** stricter voice rule (≤2 sentences, ~30 words, offer instead of
+  list); the panel speaks at most 2 sentences, then "The rest is on screen." (the full reply
+  stays in the chat); list numbers, tables and markdown are not read out. An output-token cap
+  was tried and removed: the free reasoning model spent all 800 tokens thinking and answered
+  nothing.
+- **Misheard names** ("Sundal" → "Simran"): `VoiceVocabulary` (app, workspace, visible project
+  titles, active members) goes into the spoken-turn prompt (use the closest-sounding name) and
+  into server transcription (OpenAI `prompt`, Gemini system prompt). Browser recognition cannot
+  take a word list; the free model still asks rather than guesses.
+- **Spoken questions made bug cards:** `IntentMatcher` treated "how many open bugs" (no "?" from
+  speech) as "open (create) a bug". Questions now get no card ("can you create…" still does), and
+  "open bugs/tasks" is read as an adjective.
+
+### AI provider error messages (2026-10-11)
+
+- **Bug:** every OpenRouter failure (bad key, unknown model, moderation) showed "could not be
+  reached". Prism's OpenRouter driver throws a new `PrismException` without the HTTP response,
+  so the status lookup found nothing. Gemini's bad key (400 `API key not valid`) and Anthropic's
+  low balance (400) hit the same fallback.
+- **Fix:** `App\Services\Ai\ProviderErrors` is shared by `PrismProvider` and `AzureOpenAiProvider`.
+  It reads the status from the `RequestException`, openai-php's `ErrorException`, the
+  `PrismException` code, or OpenRouter's message text, then checks the vendor's error text.
+  New messages: model cannot call tools, content filter, too large, overloaded, provider
+  internal error, timeout. "Could not be reached" now means only a failed connection. Azure
+  keeps its own wording. Each failure is logged (`AI provider call failed`) with the vendor's
+  error so owners can see the real cause in `laravel.log`.
+
+Tests: `AiAssistantTest` 179 (22 new: real Prism drivers fed vendor error bodies via `Http::fake`).
+
+### Voice assistant (2026-10-11)
+
+A mic and a small panel on every Sundal page (owners and managers with the AI Assistant).
+You speak, the normal assistant answers aloud, opens pages and filtered lists, and shows
+confirm cards in the panel.
+
+- **UI tools** (`Tools\UiTool`): `open_page`, `show_list`, `open_record`. These change what is
+  on screen, never the data. The server builds a relative URL from the list pages' own filter
+  params (`project_id`, `stage_id`/`status_id`, `priority`, `severity`, `assigned_to`,
+  `search`, `view`), resolving names with `RecordResolver`. Each call is saved as a DONE tool call
+  with `result.ui`, and `messages.*.actions` carries it to the page. The chat page shows actions as
+  links; the voice panel opens the last one with `router.visit`. All three are in
+  `Topics::SHARED`.
+- **Page context and voice flag:** `send` takes `page {route, url}` (named route, relative URL
+  with no spaces) and `voice`. Both go into the system prompt (the page is marked as data;
+  voice asks for one or two spoken sentences) and pass through `ProcessAiMessage`.
+- **Speech to text:** for OpenAI, `PrismProvider::transcribe` (`gpt-4o-mini-transcribe`,
+  `AI_ASSISTANT_TRANSCRIBE_MODEL`). For Gemini, the workspace model gets the audio in the
+  message (`AiRequest::$audio`). Other providers use the browser's speech recognition
+  (`AiAccess::voiceMode`, shared as `auth.aiVoice`). `POST ai-assistant/voice/transcribe` is
+  limited to 4 MB per clip and 30 a minute, and counts towards the token cap.
+- **Session:** `POST ai-assistant/voice/session` calls `AiMode::resume()`. This works like
+  opening the assistant page, but keeps the AI mode tab's heartbeat key.
+- **Frontend, ChatGPT-style:** the confirm card, `FormattedText` and the message types moved to
+  `components/ai-confirm-card.tsx`. The voice code is in `lib/ai-voice/`: a module store that
+  survives Inertia visits, a recorder or browser recognizer, `speechSynthesis`, and spoken
+  commands.
+  - **Mic button** in the message box (`DictateButton`): speech to text only. The words land in
+    the box and are never sent by themselves.
+  - **Voice mode** (`startLive`): a live conversation that listens again after every reply.
+    - Start it with the button that replaces Send while the box is empty, the **Voice** launcher
+      on every page (`components/ai-voice-assistant.tsx` in `app-sidebar-layout`), or Alt+V.
+    - **Docked** over the chat, it shows an orb, a caption and a waiting card
+      (`components/ai-voice-orb.tsx`), and its messages land in the chat.
+    - **Floating** (a card at the bottom right), it stays across pages.
+    - Float and expand switch between the two. When a reply opens a page, docked voice mode
+      floats and follows it.
+    - Controls: mute mic and end. Tap the orb to interrupt a reply.
+    - It pauses itself after 2 minutes with nothing said.
+  - **AI mode tab:** voice mode stays docked. The pages it opens appear in the Sundal tab
+    (`navigate` on the AI mode BroadcastChannel; `AiModeToggle` opens Sundal paths only).
+  - A spoken "yes", "cancel" or "undo" answers a card with no AI call; "stop" ends voice mode.
+    "Yes" confirms only everyday cards: no typed phrase, no import or plan table, at most 10
+    items.
+- The mic needs HTTPS (or localhost).
+
+Tests: `AiAssistantTest` 195 (16 new). `AiModulesTest` and `DashboardTest` failed 16 tests
+before this change too.
+
 ---
 
 ## Known Pending Items
