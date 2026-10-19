@@ -4,8 +4,6 @@
  * (superadmin / company owner / manager / member / client).
  */
 
-use App\Models\Bug;
-use App\Models\BugStatus;
 use App\Models\ChatConversation;
 use App\Models\ChatMessage;
 use App\Models\Contract;
@@ -408,8 +406,8 @@ describe('Company owner', function () {
     test('project deletion is blocked while invoices exist and otherwise removes linked bugs', function () {
         [$owner, $ws] = qaOwner();
         $project = qaProject($ws, $owner);
-        $status = BugStatus::create(['workspace_id' => $ws->id, 'name' => 'Open', 'color' => '#f00', 'is_default' => true]);
-        $bug = Bug::create(['project_id' => $project->id, 'bug_status_id' => $status->id, 'title' => 'B', 'priority' => 'low', 'severity' => 'minor', 'reported_by' => $owner->id]);
+        $bug = Task::create(['project_id' => $project->id, 'type' => 'bug', 'task_stage_id' => TaskStage::where('workspace_id', $ws->id)->value('id'),
+            'title' => 'B', 'priority' => 'low', 'severity' => 'minor', 'progress' => 0, 'created_by' => $owner->id]);
         $invoice = qaInvoice($project, $owner);
 
         $this->actingAs($owner)->getJson(route('projects.deletion-summary', $project))
@@ -420,7 +418,7 @@ describe('Company owner', function () {
 
         $invoice->delete();
         $this->actingAs($owner)->delete(route('projects.destroy', $project))->assertRedirect(route('projects.index'));
-        expect(Project::find($project->id))->toBeNull()->and(Bug::find($bug->id))->toBeNull();
+        expect(Project::find($project->id))->toBeNull()->and(Task::find($bug->id))->toBeNull();
     });
 
     test('settings roles hide Super Admin and mark the current role', function () {

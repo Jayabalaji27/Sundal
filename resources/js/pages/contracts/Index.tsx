@@ -831,8 +831,8 @@ export default function ContractsIndex() {
                             name: 'client_id', 
                             label: t('Client'), 
                             type: 'select',
-                            required: false,
-                            placeholder: t('Select client (optional)'),
+                            required: true,
+                            placeholder: t('Select client'),
                             options: clients?.map((client: any) => ({ value: client.id, label: client.name })) || []
                         },
                         { 

@@ -20,6 +20,7 @@ import { CrudDeleteModal } from '@/components/CrudDeleteModal';
 import { UpgradePlanModal } from '@/components/UpgradePlanModal';
 import { ImportModal } from '@/components/ImportModal';
 import ViewPopup from './view';
+import { consumeCreateIntent } from '@/utils/create-intent';
 
 export default function Companies() {
   const { t } = useTranslation();
@@ -303,6 +304,12 @@ export default function Companies() {
     setFormMode('create');
     setIsFormModalOpen(true);
   };
+
+  // Opened from the header's Create › Company (?action=create).
+  useEffect(() => {
+    if (consumeCreateIntent()) handleAddNew();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   const handleFormSubmit = (formData: any) => {
     if (formMode === 'create') {

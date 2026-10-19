@@ -2,7 +2,6 @@
 
 namespace App\Services\Ai\Forms;
 
-use App\Models\BugStatus;
 use App\Models\TaskStage;
 use App\Models\User;
 use App\Services\Ai\Tools\AiTool;
@@ -348,6 +347,13 @@ class FormBuilder
 
         $matches = $this->resolver->candidates(clone $query, $ref, $this->column($kind));
 
+        // Bugs move through task stages: a bug word the user said ("resolved") means its stage.
+        if ($kind === 'task_stage' && $matches->isEmpty()
+            && ($stage = TaskStage::forBugStatus((int) $user->current_workspace_id, $ref))
+            && $this->saidPhrase($said, $ref)) {
+            return [$stage, null, collect([$stage])];
+        }
+
         if ($matches->count() === 1 && $this->saidName($said, $ref, $this->nameOf($kind, $matches->first()))) {
             return [$matches->first(), null, $matches];
         }
@@ -445,7 +451,6 @@ class FormBuilder
             'bug' => $this->resolver->bugs($user)->with('project:id,title')
                 ->when($projectId, fn ($q) => $q->where('project_id', $projectId))->orderByDesc('id'),
             'task_stage' => TaskStage::forWorkspace($workspaceId)->ordered(),
-            'bug_status' => BugStatus::forWorkspace($workspaceId)->ordered(),
             'invoice' => $this->resolver->draftInvoices($user)->with('client:id,name')->orderByDesc('id'),
             'unpaid_invoice' => $this->resolver->unpaidInvoices($user)->with('client:id,name')->orderByDesc('id'),
             'expense' => $this->resolver->openExpenses($user)->with('project:id,title')
@@ -522,7 +527,6 @@ class FormBuilder
         return match ($kind) {
             'member', 'members' => __('person'),
             'task_stage' => __('stage'),
-            'bug_status' => __('status'),
             'unpaid_invoice' => __('invoice'),
             'billable_tasks' => __('task'),
             'budget_category' => __('budget category'),

@@ -13,10 +13,11 @@ import {
     Ticket, Gift, DollarSign, MessageSquare, Globe, FolderOpen,
     ClipboardList, Clock, Bot, Video, Building2, BarChart3, BookOpen,
     TrendingUp, Radio, Bug, ListTodo, Receipt, FileIcon, Zap, AlertTriangle,
-    Bell, Mail, FolderKanban, Users, History, Sparkles
+    Bell, Mail, FolderKanban, Users, History, Sparkles, ClipboardCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AppLogo from './app-logo';
+import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { hasPermission } from '@/utils/authorization';
@@ -40,233 +41,174 @@ export function AppSidebar() {
     const isMobile = useIsMobile();
 
     // ─── SaaS Super Admin ────────────────────────────────────────────────────
+    // Login History lives in the profile menu, as it does for company owners.
     const getSuperAdminNavItems = (): NavItem[] => {
         const items: NavItem[] = [];
         if (hasPermission(permissions, 'dashboard_view')) {
-            items.push({ title: t('Dashboard'), href: route('dashboard'), icon: LayoutGrid, group: t('Overview') });
+            items.push({ title: t('Dashboard'), href: route('dashboard'), icon: LayoutGrid });
         }
         if (hasPermission(permissions, 'company_view_any')) {
-            items.push({ title: t('Companies'), href: route('companies.index'), icon: Building2, group: t('Management') });
+            items.push({ title: t('Companies'), href: route('companies.index'), icon: Building2 });
         }
         // Media Library is intentionally NOT offered to superadmin: the route sits behind
         // block.superadmin.workspace middleware (superadmin has no current_workspace_id and
         // is meant to reach workspace-scoped data only via Impersonate), so linking it here
         // always dead-ends in a 403.
-        if (hasPermission(permissions, 'plan_view_any') || hasPermission(permissions, 'plan_manage_requests') || hasPermission(permissions, 'plan_manage_orders')) {
-            const planChildren = [];
-            if (hasPermission(permissions, 'plan_view_any')) planChildren.push({ title: t('Plan'), href: route('plans.index') });
-            if (hasPermission(permissions, 'plan_manage_requests')) planChildren.push({ title: t('Plan Requests'), href: route('plan-requests.index') });
-            if (hasPermission(permissions, 'plan_manage_orders')) planChildren.push({ title: t('Plan Orders'), href: route('plan-orders.index') });
-            items.push({ title: t('Plans'), icon: CreditCard, group: t('Management'), children: planChildren });
+        // Subscriptions: plan requests and plan orders are one queue (a company wants a plan).
+        if (hasPermission(permissions, 'plan_manage_orders') || hasPermission(permissions, 'plan_manage_requests')) {
+            items.push({
+                title: t('Subscriptions'),
+                href: hasPermission(permissions, 'plan_manage_orders') ? route('plan-orders.index') : route('plan-requests.index'),
+                icon: Receipt,
+                matches: [route('plan-orders.index'), route('plan-requests.index')],
+            });
+        }
+        if (hasPermission(permissions, 'plan_view_any')) {
+            items.push({ title: t('Plans'), href: route('plans.index'), icon: CreditCard });
         }
         if (hasPermission(permissions, 'coupon_view_any')) {
-            items.push({ title: t('Coupons'), href: route('coupons.index'), icon: Ticket, group: t('Management') });
+            items.push({ title: t('Coupons'), href: route('coupons.index'), icon: Ticket });
         }
         if (flags.currency_mgmt && hasPermission(permissions, 'currency_view_any')) {
-            items.push({ title: t('Currency'), href: route('currencies.index'), icon: DollarSign, group: t('Management') });
+            items.push({ title: t('Currency'), href: route('currencies.index'), icon: DollarSign });
         }
         if (flags.referral && hasPermission(permissions, 'referral_view_any')) {
-            items.push({ title: t('Referral Program'), href: route('referral.index'), icon: Gift, group: t('Management') });
+            items.push({ title: t('Referral Program'), href: route('referral.index'), icon: Gift });
         }
-        const landingChildren = [];
-        if (hasPermission(permissions, 'landing_page_manage')) landingChildren.push({ title: t('Landing Page'), href: route('landing-page.settings') });
-        if (hasPermission(permissions, 'custom_page_view_any')) landingChildren.push({ title: t('Custom Pages'), href: route('landing-page.custom-pages.index') });
-        if (hasPermission(permissions, 'contact_view_any')) landingChildren.push({ title: t('Contact Inquiries'), href: route('contacts.index') });
-        if (hasPermission(permissions, 'newsletter_view_any')) landingChildren.push({ title: t('Newsletter'), href: route('newsletters.index') });
-        if (landingChildren.length > 0) {
-            items.push({ title: t('Landing Page'), icon: Globe, group: t('Management'), children: landingChildren });
-        }
-        if (hasPermission(permissions, 'user_view_logs')) {
-            items.push({ title: t('Login History'), href: route('users.all-logs'), icon: History, group: t('System Control') });
+        const websiteChildren = [];
+        if (hasPermission(permissions, 'landing_page_manage')) websiteChildren.push({ title: t('Landing Page'), href: route('landing-page.settings') });
+        if (hasPermission(permissions, 'custom_page_view_any')) websiteChildren.push({ title: t('Custom Pages'), href: route('landing-page.custom-pages.index') });
+        if (hasPermission(permissions, 'contact_view_any')) websiteChildren.push({ title: t('Contact Inquiries'), href: route('contacts.index') });
+        if (flags.newsletter && hasPermission(permissions, 'newsletter_view_any')) websiteChildren.push({ title: t('Newsletter'), href: route('newsletters.index') });
+        if (websiteChildren.length > 0) {
+            items.push({ title: t('Website'), icon: Globe, children: websiteChildren });
         }
         if (hasPermission(permissions, 'settings_view')) {
-            items.push({ title: t('Settings'), href: route('settings'), icon: Settings, group: t('System Control') });
+            items.push({ title: t('Settings'), href: route('settings'), icon: Settings });
         }
         return items;
     };
 
-    // ─── Common items — Phase 2: 13 top-level items ──────────────────────────
+    // The one section heading in the workspace sidebar: optional tools, each behind a
+    // feature flag (config/features.php). Everything above it is one short list.
+    const TOOLS_GROUP = t('Tools');
+
+    // ─── Workspace users (company, manager, member, client) ──────────────────
+    // Each role sees the pages its work needs, in the order a day goes.
+    // Billing, Login History and Settings live in the profile menu.
     const buildCommonNavItems = (): NavItem[] => {
-        const items: NavItem[] = [];
+        const main: NavItem[] = [];
+        const tools: NavItem[] = [];
         // Chat, Meetings, Knowledge Base and AI need the Pro Add-on (CheckModuleAccess);
         // hide them instead of linking to a route that bounces back to the dashboard.
         const modulesLocked = !!auth?.modulesLocked;
-
-        // 1. Dashboard
-        if (hasPermission(permissions, 'dashboard_view')) {
-            items.push({ title: t('Dashboard'), href: route('dashboard'), icon: LayoutGrid, group: t('Overview') });
-        }
-
-        // 2. Workspaces
-        if (hasPermission(permissions, 'workspace_view_any')) {
-            items.push({ title: t('Workspaces'), href: route('workspaces.index'), icon: Building2, group: t('Overview') });
-        }
-
-        // Team (member management) — needs a current workspace to link into
+        const workspaceRole = auth?.user?.workspace_role;
+        const isOwner = workspaceRole === 'owner';
+        const isManager = workspaceRole === 'manager';
+        const isMember = workspaceRole === 'member';
+        const isClient = workspaceRole === 'client';
+        const can = (permission: string) => hasPermission(permissions, permission);
         const currentWorkspaceId = auth?.user?.current_workspace_id;
-        if (hasPermission(permissions, 'team_view') && currentWorkspaceId) {
-            items.push({ title: t('Team'), href: route('team.index', currentWorkspaceId), icon: Users, group: t('Overview') });
-        }
 
-        // 3. Projects (with Tasks, Bugs, Sprints as children) — expanded by default
-        // for members, so they can jump straight to Tasks/Bugs without an extra click.
-        if (hasPermission(permissions, 'project_view_any') || hasPermission(permissions, 'task_view_any')) {
-            const projectChildren: { title: string; href: string }[] = [];
-            if (hasPermission(permissions, 'project_view_any')) {
-                projectChildren.push({ title: t('All Projects'), href: route('projects.index') });
-            }
-            if (hasPermission(permissions, 'task_view_any')) {
-                projectChildren.push({ title: t('Tasks'), href: route('tasks.index') });
-            }
-            if (hasPermission(permissions, 'bug_view_any')) {
-                projectChildren.push({ title: t('Bugs'), href: route('bugs.index') });
-            }
-            if (flags.portfolios && hasPermission(permissions, 'project_view_any')) {
-                try { projectChildren.push({ title: t('Portfolios'), href: route('portfolios.index') }); } catch {}
-            }
-            items.push({
-                title: t('Projects'), icon: FolderOpen, group: t('Work'), children: projectChildren,
-                defaultOpen: auth?.user?.workspace_role === 'member',
+        if (can('dashboard_view')) {
+            main.push({ title: t('Dashboard'), href: route('dashboard'), icon: LayoutGrid });
+        }
+        if (can('project_view_any')) {
+            main.push({ title: t('Projects'), href: route('projects.index'), icon: FolderOpen });
+        }
+        if (can('task_view_any')) {
+            // Members only see their own tasks there, so say so.
+            main.push({ title: isMember ? t('My Tasks') : t('Tasks'), href: route('tasks.index'), icon: CheckSquare });
+        }
+        // One timesheet page: the week, submitted from the same screen. Owners log
+        // time from the header timer; reviewing time is in Approvals.
+        if (can('timesheet_view_any') && !isOwner) {
+            main.push({ title: t('Timesheet'), href: route('timesheets.weekly-view'), icon: Clock, matches: [route('timesheets.index')] });
+        }
+        // Meetings sit with the day-to-day work (after Timesheet, as in Zoho Sprints), for
+        // everyone who may see meetings. Until Zoom or Google Meet is connected
+        // (Settings → Integrations) the page says so.
+        if (flags.meetings && !modulesLocked && (can('zoom_meeting_view_any') || can('google_meeting_view_any'))) {
+            main.push({ title: t('Meetings'), href: route('meetings.index'), icon: Video, forceFullReload: true, matches: [route('zoom-meetings.index'), route('google-meetings.index')] });
+        }
+        // Timesheets and expenses waiting for a decision, in one inbox.
+        if (can('timesheet_approve') || can('expense_approval_view_any')) {
+            const waiting = auth?.approvalsWaiting;
+            main.push({
+                title: t('Approvals'),
+                href: route('approvals.index'),
+                icon: ClipboardCheck,
+                forceFullReload: true,
+                badge: waiting ? { label: String(waiting) } : undefined,
+                matches: [route('timesheet-approvals.index'), route('expense-approvals.index')],
             });
         }
-
-        // 4. Calendar
-        if (hasPermission(permissions, 'task_calendar_view')) {
-            try { items.push({ title: t('Calendar'), href: route('task-calendar.index'), icon: Calendar, group: t('Work') }); } catch {}
+        // Members claim expenses; owners and managers review them in Approvals.
+        if (isMember && can('expense_view_any')) {
+            main.push({ title: t('Expenses'), href: route('expenses.index'), icon: Receipt });
+        }
+        if (can('invoice_view_any') && !isMember) {
+            main.push({ title: t('Invoices'), href: route('invoices.index'), icon: Receipt });
+        }
+        if (flags.budgets_page && can('budget_view_any') && !isClient) {
+            main.push({ title: t('Budgets'), href: route('budgets.index'), icon: DollarSign });
+        }
+        // Contracts are between the owner and the client (e-signature).
+        if (flags.contracts && can('contract_view_any') && (isOwner || isClient)) {
+            try { main.push({ title: t('Contracts'), href: route('contracts.index'), icon: FileText }); } catch {}
+        }
+        // Reports: hours and amounts by project and person.
+        if (can('report_timesheet')) {
+            main.push({ title: t('Reports'), href: route('timesheet-reports.index'), icon: BarChart3 });
+        }
+        if (flags.project_reports && can('project_report_view_any')) {
+            main.push({ title: t('Project Reports'), href: route('project-reports.index'), icon: BarChart3 });
+        }
+        if (can('team_view') && currentWorkspaceId && (isOwner || isManager)) {
+            main.push({ title: t('Team'), href: route('team.index', currentWorkspaceId), icon: Users });
         }
 
-        // 5. Timesheets
-        if (hasPermission(permissions, 'timesheet_view_any')) {
-            const timesheetChildren = [
-                { title: t('My Timesheets'), href: route('timesheets.index') },
-                { title: t('Weekly'), href: route('timesheets.weekly-view') },
-            ];
-            if (hasPermission(permissions, 'timesheet_approve')) {
-                timesheetChildren.push({ title: t('Approvals'), href: route('timesheet-approvals.index') });
-            }
-            items.push({ title: t('Timesheets'), icon: Clock, group: t('Work'), children: timesheetChildren });
+        // ── Optional tools ──
+        if (flags.bugs_menu && can('bug_view_any')) {
+            tools.push({ title: t('Bugs'), href: route('tasks.index', { type: 'bug' }), icon: Bug, group: TOOLS_GROUP });
         }
-
-        // 6. Contracts — kept in the Work group, right after Timesheets, so the
-        // Work group stays contiguous (Communication is inserted right after it).
-        if (hasPermission(permissions, 'contract_view_any')) {
-            try { items.push({ title: t('Contracts'), href: route('contracts.index'), icon: FileText, group: t('Work') }); } catch {}
+        if (flags.calendar && can('task_calendar_view')) {
+            try { tools.push({ title: t('Calendar'), href: route('task-calendar.index'), icon: Calendar, group: TOOLS_GROUP }); } catch {}
         }
-
-        // 7. Communication (Chat + Meetings) — placed directly after the Work group.
-        if (!modulesLocked && hasPermission(permissions, 'chat_view')) {
-            items.push({ title: t('Chat'), href: route('chat.index'), icon: MessageSquare, group: t('Communication') });
+        if (flags.chat && !modulesLocked && can('chat_view')) {
+            tools.push({ title: t('Chat'), href: route('chat.index'), icon: MessageSquare, group: TOOLS_GROUP });
         }
-        if (!modulesLocked && (hasPermission(permissions, 'zoom_meeting_view_any') || hasPermission(permissions, 'google_meeting_view_any'))) {
-            const meetingsChildren: { title: string; href: string }[] = [];
-            if (hasPermission(permissions, 'zoom_meeting_view_any')) {
-                meetingsChildren.push({ title: t('Zoom Meetings'), href: route('zoom-meetings.index') });
-            }
-            if (hasPermission(permissions, 'google_meeting_view_any')) {
-                meetingsChildren.push({ title: t('Google Meetings'), href: route('google-meetings.index') });
-            }
-            items.push({ title: t('Meetings'), icon: Video, group: t('Communication'), children: meetingsChildren });
+        if (flags.knowledge_base && !modulesLocked && can('kb_view_any')) {
+            tools.push({ title: t('Knowledge Base'), href: route('kb.index'), icon: BookOpen, group: TOOLS_GROUP });
         }
-
-        // 8. Finance (unified shell → Invoices, Budgets, Expenses, Expense Approvals)
-        if (hasPermission(permissions, 'invoice_view_any') || hasPermission(permissions, 'budget_view_any') || hasPermission(permissions, 'expense_view_any')) {
-            const financeChildren: { title: string; href: string }[] = [];
-            if (hasPermission(permissions, 'invoice_view_any')) {
-                financeChildren.push({ title: t('Invoices'), href: route('invoices.index') });
-            }
-            if (hasPermission(permissions, 'budget_view_any')) {
-                financeChildren.push({ title: t('Budgets'), href: route('budgets.index') });
-            }
-            if (hasPermission(permissions, 'expense_view_any')) {
-                financeChildren.push({ title: t('Expenses'), href: route('expenses.index') });
-            }
-            if (hasPermission(permissions, 'expense_approval_view_any')) {
-                financeChildren.push({ title: t('Expense Approvals'), href: route('expense-approvals.index') });
-            }
-            if (hasPermission(permissions, 'tax_view_any')) {
-                financeChildren.push({ title: t('Taxes'), href: route('taxes.index') });
-            }
-            items.push({ title: t('Finance'), icon: FileText, group: t('Finance'), children: financeChildren });
+        if (flags.notes && can('note_view_any')) {
+            tools.push({ title: t('Notes'), href: route('notes.index'), icon: BookOpen, group: TOOLS_GROUP });
         }
-
-        // 9. Docs (Knowledge Base + Notes merged)
-        if (hasPermission(permissions, 'kb_view_any') || hasPermission(permissions, 'note_view_any')) {
-            const docsChildren: { title: string; href: string }[] = [];
-            if (!modulesLocked && hasPermission(permissions, 'kb_view_any')) {
-                docsChildren.push({ title: t('Knowledge Base'), href: route('kb.index') });
-            }
-            if (hasPermission(permissions, 'note_view_any')) {
-                docsChildren.push({ title: t('Notes'), href: route('notes.index') });
-            }
-            items.push({ title: t('Docs'), icon: BookOpen, group: t('Content'), children: docsChildren });
+        // Forms are built by owners and managers; members only fill in the public link.
+        if (flags.forms && can('form_view_any') && !isMember) {
+            tools.push({ title: t('Forms'), href: route('forms.index'), icon: ClipboardList, group: TOOLS_GROUP });
         }
-
-        // 10. Forms
-        if (hasPermission(permissions, 'form_view_any')) {
-            items.push({ title: t('Forms'), href: route('forms.index'), icon: ClipboardList, group: t('Content') });
+        if (flags.portfolios && can('project_view_any')) {
+            try { tools.push({ title: t('Portfolios'), href: route('portfolios.index'), icon: FolderKanban, group: TOOLS_GROUP }); } catch {}
         }
-
-        // 11. AI (Risk Radar + Resource Conflicts + custom agents)
-        if (!modulesLocked && (hasPermission(permissions, 'agent_use') || hasPermission(permissions, 'agent_view_any'))) {
-            items.push({ title: t('AI'), href: route('ai.index'), icon: Bot, group: t('Intelligence') });
+        if (flags.ai && !modulesLocked && (can('agent_use') || can('agent_view_any'))) {
+            tools.push({ title: t('AI'), href: route('ai.index'), icon: Bot, group: TOOLS_GROUP });
         }
-
         // AI Assistant: owners and managers only (aiAssistant is null for other roles).
         // Owners without the AI add-on still see it, and the route sends them to the
         // plans page; managers only see it when the owner's plan includes AI.
+        // On desktop it opens from the "AI mode" switch in the header instead.
         const aiAssistant: string | null = auth?.aiAssistant ?? null;
-        const isWorkspaceOwner = auth?.user?.workspace_role === 'owner';
-        if (isMobile && aiAssistant && (aiAssistant !== 'plan' || isWorkspaceOwner)) {
-            items.push({ title: t('AI Assistant'), href: route('ai-assistant.index'), icon: Sparkles, group: t('Intelligence') });
+        if (flags.ai_assistant && isMobile && aiAssistant && (aiAssistant !== 'plan' || isOwner)) {
+            tools.push({ title: t('AI Assistant'), href: route('ai-assistant.index'), icon: Sparkles, group: TOOLS_GROUP });
         }
 
-        // 12. Reports
-        if (hasPermission(permissions, 'project_report_view_any') || hasPermission(permissions, 'report_timesheet')) {
-            const reportsChildren: { title: string; href: string }[] = [];
-            if (hasPermission(permissions, 'project_report_view_any')) {
-                reportsChildren.push({ title: t('Project Reports'), href: route('project-reports.index') });
-            }
-            if (hasPermission(permissions, 'report_timesheet')) {
-                reportsChildren.push({ title: t('Timesheet Reports'), href: route('timesheet-reports.index') });
-            }
-            items.push({ title: t('Reports'), icon: BarChart3, group: t('Intelligence'), children: reportsChildren });
-        }
-
-        return items;
-    };
-
-    // ─── SaaS Company User ───────────────────────────────────────────────────
-    const getSaasNavItems = (): NavItem[] => {
-        const items = buildCommonNavItems();
-        // Plans (billing) — single entry
-        if (hasPermission(permissions, 'plan_view_any') || hasPermission(permissions, 'plan_view_my_requests') || hasPermission(permissions, 'plan_view_my_orders')) {
-            items.push({ title: t('Billing'), href: route('plans.index'), icon: CreditCard, group: t('Account') });
-        }
-        if (hasPermission(permissions, 'user_view_logs')) {
-            items.push({ title: t('Login History'), href: route('users.all-logs'), icon: History, group: t('Account') });
-        }
-        if (hasPermission(permissions, 'settings_view')) {
-            items.push({ title: t('Settings'), href: route('settings'), icon: Settings, group: t('Account') });
-        }
-        return items;
-    };
-
-    // ─── Non-SaaS ────────────────────────────────────────────────────────────
-    const getNonSaasNavItems = (): NavItem[] => {
-        const items = buildCommonNavItems();
-        if (hasPermission(permissions, 'user_view_logs')) {
-            items.push({ title: t('Login History'), href: route('users.all-logs'), icon: History, group: t('Account') });
-        }
-        if (hasPermission(permissions, 'settings_view')) {
-            items.push({ title: t('Settings'), href: route('settings'), icon: Settings, group: t('Account') });
-        }
-        return items;
+        return [...main, ...tools];
     };
 
     const getNavItems = (): NavItem[] => {
         if (isSaasMode && isSuperAdmin) return getSuperAdminNavItems();
-        if (isSaasMode) return getSaasNavItems();
-        return getNonSaasNavItems();
+        return buildCommonNavItems();
     };
 
     // Memoized so NavMain (which re-syncs its expanded-menu state whenever this
@@ -384,12 +326,21 @@ export function AppSidebar() {
                         </div>
                     </Link>
                 </div>
-
-
+                {/* Workspace picker under the logo (only for people in more than one workspace). */}
+                {!(isSaasMode && isSuperAdmin) && (
+                    <div className="px-2 pb-1">
+                        <WorkspaceSwitcher variant="sidebar" />
+                    </div>
+                )}
             </SidebarHeader>
 
             <SidebarContent style={sidebarStyle} className={style !== 'plain' ? 'sidebar-styled' : ''}>
-                <NavMain items={filteredNavItems} position={effectivePosition} sidebarStyle={style} />
+                <NavMain
+                    items={filteredNavItems}
+                    position={effectivePosition}
+                    sidebarStyle={style}
+                    collapsibleGroups={isSaasMode && isSuperAdmin ? [] : [TOOLS_GROUP]}
+                />
             </SidebarContent>
 
             <SidebarFooter>

@@ -12,6 +12,8 @@ import { toast } from '@/components/custom-toast';
 import { hasPermission } from '@/utils/authorization';
 import { useTranslation } from 'react-i18next';
 import ZoomMeetingModal from './ZoomMeetingModal';
+import { consumeCreateIntent } from '@/utils/create-intent';
+import { MeetingSetupNotice } from '@/components/meetings/setup-notice';
 import { formatDateTime } from '@/lib/utils';
 
 export default function ZoomMeetingIndex() {
@@ -23,6 +25,13 @@ export default function ZoomMeetingIndex() {
     const [selectedProject, setSelectedProject] = useState(pageFilters.project_id || 'all');
     const [showFilters, setShowFilters] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    // The workspace owner changes any meeting; anyone else the ones they scheduled.
+    const canModify = (meeting: any) => auth?.user?.workspace_role === 'owner' || meeting?.user_id === auth?.user?.id;
+    // "Schedule meeting" on a project's Meetings tab lands here with ?action=create&project_id=.
+    useEffect(() => {
+        // Only once Zoom is connected: that is what gives a meeting its join link.
+        if (consumeCreateIntent() && hasZoomConfig) setIsCreateModalOpen(true);
+    }, []);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [currentMeeting, setCurrentMeeting] = useState<any>(null);
@@ -107,41 +116,9 @@ export default function ZoomMeetingIndex() {
         router.get(route('zoom-meetings.index'), { page: 1 }, { preserveState: false, preserveScroll: false });
     };
 
-    // Show configuration message when Zoom is not configured
-    if (!hasZoomConfig) {
-        const canConfigureZoom = hasPermission(auth?.permissions, 'settings_zoom');
-
-        return (
-            <PageTemplate title={t('Zoom Meetings')} url="/zoom-meetings">
-                <Card>
-                    <CardContent className="p-6 text-center">
-                        <Video className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">
-                            {t('Zoom Integration Not Configured')}
-                        </h3>
-                        <p className="text-gray-500 mb-4">
-                            {canConfigureZoom 
-                                ? t('Please configure your Zoom API credentials in Settings to use this feature.')
-                                : t('Zoom integration has not been configured yet. Ask your workspace owner to configure Zoom.')
-                            }
-                        </p>
-                        <div className="flex items-center justify-center gap-2">
-                            {canConfigureZoom && (
-                                <Button onClick={() => router.get(route('settings') + '#zoom-settings')}>
-                                    {t('Configure Zoom Settings')}
-                                </Button>
-                            )}
-                            {hasPermission(auth?.permissions, 'google_meeting_view_any') && (
-                                <Button variant="outline" onClick={() => router.get(route('google-meetings.index'))}>
-                                    {t('Switch to Google Meet')}
-                                </Button>
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
-            </PageTemplate>
-        );
-    }
+    // Until Zoom is connected the list still shows (with a notice), but nothing new can be scheduled.
+    const canConfigureZoom = hasPermission(auth?.permissions, 'settings_zoom');
+    const canSchedule = hasZoomConfig && hasPermission(auth?.permissions, 'zoom_meeting_create');
 
     const pageActions = [];
 
@@ -154,7 +131,7 @@ export default function ZoomMeetingIndex() {
         });
     }
 
-    if (hasPermission(auth?.permissions, 'zoom_meeting_create')) {
+    if (canSchedule) {
         pageActions.push({
             label: t('Create Meeting'),
             icon: <Plus className="h-4 w-4 mr-2" />,
@@ -179,6 +156,12 @@ export default function ZoomMeetingIndex() {
             breadcrumbs={breadcrumbs}
             noPadding
         >
+            {!hasZoomConfig && (
+                <MeetingSetupNotice
+                    providers={['zoom']}
+                    canConnect={canConfigureZoom}
+                />
+            )}
             {/* Overview Row */}
             <Card className="mb-4 hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
@@ -390,7 +373,7 @@ export default function ZoomMeetingIndex() {
                                                     <Eye className="h-4 w-4" />
                                                 </Button>
                                             )}
-                                            {hasPermission(auth?.permissions, 'zoom_meeting_update') && (
+                                            {hasPermission(auth?.permissions, 'zoom_meeting_update') && canModify(meeting) && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
@@ -400,7 +383,7 @@ export default function ZoomMeetingIndex() {
                                                     <Edit className="h-4 w-4" />
                                                 </Button>
                                             )}
-                                            {hasPermission(auth?.permissions, 'zoom_meeting_delete') && (
+                                            {hasPermission(auth?.permissions, 'zoom_meeting_delete') && canModify(meeting) && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
@@ -423,7 +406,7 @@ export default function ZoomMeetingIndex() {
                                         <p className="text-gray-500 mb-4">
                                             Get started by creating your first Zoom meeting.
                                         </p>
-                                        {hasPermission(auth?.permissions, 'zoom_meeting_create') && (
+                                        {canSchedule && (
                                             <Button onClick={() => setIsCreateModalOpen(true)}>
                                                 <Plus className="h-4 w-4 mr-2" />
                                                 Create Meeting
@@ -470,6 +453,7 @@ export default function ZoomMeetingIndex() {
             <ZoomMeetingModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
+                initialProjectId={selectedProject !== 'all' ? String(selectedProject) : undefined}
                 projects={projects || []}
                 members={members || []}
             />

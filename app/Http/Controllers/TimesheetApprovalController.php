@@ -4,11 +4,16 @@ namespace App\Http\Controllers;
 
 use App\Models\TimesheetApproval;
 use App\Models\Timesheet;
+use App\Services\ApprovalQueue;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class TimesheetApprovalController extends Controller
 {
+    public function __construct(private ApprovalQueue $queue)
+    {
+    }
+
     public function index(Request $request)
     {
         $user = auth()->user();
@@ -23,17 +28,17 @@ class TimesheetApprovalController extends Controller
             abort(403, 'Access denied. Only owners and managers can access timesheet approvals.');
         }
         
-        // Validate status filter
-        $validStatuses = ['pending', 'approved', 'rejected', 'all'];
-        $statusFilter = $request->status && in_array($request->status, $validStatuses) ? $request->status : 'all';
-        
-        $query = TimesheetApproval::with(['timesheet.user', 'timesheet.entries', 'approver'])
-            ->whereHas('timesheet', function($q) use ($user) {
-                $q->where('workspace_id', $user->current_workspace_id);
-            });
+        // The inbox opens on what's waiting; "history" shows decided timesheets.
+        $validStatuses = ['pending', 'history', 'approved', 'rejected', 'all'];
+        $statusFilter = $request->status && in_array($request->status, $validStatuses) ? $request->status : 'pending';
 
-        if ($statusFilter !== 'all') {
-            $query->where('status', $statusFilter);
+        // Same queue the dashboard counts: whole workspace for the owner, managed projects for a manager.
+        $query = $this->queue->timesheets($user)->with(['timesheet.user', 'timesheet.entries', 'approver']);
+
+        if ($statusFilter === 'history') {
+            $query->whereIn('timesheet_approvals.status', ['approved', 'rejected']);
+        } elseif ($statusFilter !== 'all') {
+            $query->where('timesheet_approvals.status', $statusFilter);
         }
 
         if ($request->search) {
@@ -56,20 +61,6 @@ class TimesheetApprovalController extends Controller
             $toDate = $request->validate(['to_date' => 'date'])['to_date'];
             $query->whereHas('timesheet', function($q) use ($toDate) {
                 $q->where('end_date', '<=', $toDate);
-            });
-        }
-
-        // Managers only see approvals from their assigned projects
-        if (!$isOwner && $userWorkspaceRole === 'manager') {
-            $query->whereHas('timesheet.entries', function($q) use ($user) {
-                $q->whereHas('project', function($projectQuery) use ($user) {
-                    $projectQuery->where(function($pq) use ($user) {
-                        $pq->whereHas('members', function($memberQuery) use ($user) {
-                            $memberQuery->where('user_id', $user->id);
-                        })
-                        ->orWhere('created_by', $user->id);
-                    });
-                });
             });
         }
 
@@ -122,8 +113,9 @@ class TimesheetApprovalController extends Controller
 
         return Inertia::render('timesheets/Approvals', [
             'approvals' => $approvals,
-            'filters' => $request->only(['status', 'search', 'per_page', 'view', 'from_date', 'to_date', 'sort_field', 'sort_direction']),
-            'userWorkspaceRole' => $isOwner ? 'owner' : $userWorkspaceRole
+            'filters' => ['status' => $statusFilter] + $request->only(['search', 'per_page', 'from_date', 'to_date', 'sort_field', 'sort_direction']),
+            'userWorkspaceRole' => $isOwner ? 'owner' : $userWorkspaceRole,
+            'approvalCounts' => $this->queue->counts($user),
         ]);
     }
 
@@ -138,6 +130,7 @@ class TimesheetApprovalController extends Controller
         if (!$isOwner && $userWorkspaceRole !== 'manager') {
             abort(403, 'Access denied.');
         }
+        abort_unless($this->queue->inTimesheetQueue($user, $approval), 403);
         
         $approval->load(['timesheet.user', 'timesheet.entries.project', 'timesheet.entries.task', 'approver']);
         
@@ -169,6 +162,7 @@ class TimesheetApprovalController extends Controller
         if ($this->isOwnTimesheet($approval, $user, $isOwner)) {
             return back()->with('error', __('You cannot approve or reject your own timesheet. The workspace owner reviews it.'));
         }
+        abort_unless($this->queue->inTimesheetQueue($user, $approval), 403);
         
         $validated = $request->validate([
             'comments' => 'nullable|string'
@@ -206,6 +200,7 @@ class TimesheetApprovalController extends Controller
         if ($this->isOwnTimesheet($approval, $user, $isOwner)) {
             return back()->with('error', __('You cannot approve or reject your own timesheet. The workspace owner reviews it.'));
         }
+        abort_unless($this->queue->inTimesheetQueue($user, $approval), 403);
         
         $validated = $request->validate([
             'comments' => 'required|string'
@@ -240,8 +235,8 @@ class TimesheetApprovalController extends Controller
             'comments' => 'nullable|string'
         ]);
 
-        $approvals = TimesheetApproval::with('timesheet')->whereIn('id', $validated['approval_ids'])
-            ->where('status', 'pending')
+        $approvals = $this->queue->timesheets($user)->with('timesheet')->whereIn('timesheet_approvals.id', $validated['approval_ids'])
+            ->where('timesheet_approvals.status', 'pending')
             ->get()
             ->reject(fn ($approval) => $this->isOwnTimesheet($approval, $user, $isOwner));
 
@@ -281,8 +276,8 @@ class TimesheetApprovalController extends Controller
             'comments' => 'required|string'
         ]);
 
-        $approvals = TimesheetApproval::with('timesheet')->whereIn('id', $validated['approval_ids'])
-            ->where('status', 'pending')
+        $approvals = $this->queue->timesheets($user)->with('timesheet')->whereIn('timesheet_approvals.id', $validated['approval_ids'])
+            ->where('timesheet_approvals.status', 'pending')
             ->get()
             ->reject(fn ($approval) => $this->isOwnTimesheet($approval, $user, $isOwner));
 

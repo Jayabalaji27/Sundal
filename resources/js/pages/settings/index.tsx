@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useEffect, useState } from 'react';
-import { Palette, DollarSign, CreditCard, ShieldCheck, Zap, Key, ChevronRight, Layers } from 'lucide-react';
+import { Palette, DollarSign, CreditCard, ShieldCheck, Zap, Key, ChevronRight, Layers, Languages } from 'lucide-react';
 import SystemSettings from './components/system-settings';
 import { Link, usePage } from '@inertiajs/react';
 
@@ -72,7 +72,7 @@ export default function Settings() {
   const {
     systemSettings = {}, cacheSize = '0.00', timezones = {}, dateFormats = {}, timeFormats = {},
     paymentSettings = {}, slackSettings = {}, telegramSettings = {}, webhooks = [], isSaasMode = true,
-    isDemoMode = false, isSuperAdmin = false, roles = [] as RoleSummary[], taxes = [],
+    isDemoMode = false, isSuperAdmin = false, roles = [] as RoleSummary[], taxes = [], auth,
   } = usePage().props as any;
 
   useEffect(() => {
@@ -96,12 +96,14 @@ export default function Settings() {
     roles: roles.length > 0,
     general: true,
   };
+  // "Invoicing" (currency, payment gateways, tax rates, invoice layout) is not the
+  // subscription - that's Billing in the profile menu - so it isn't called Billing here.
   const tabs = [
-    { key: 'integrations', label: t('Integrations') },
-    { key: 'branding', label: t('Branding') },
-    { key: 'billing', label: t('Billing') },
-    { key: 'roles', label: t('Roles') },
     { key: 'general', label: t('General') },
+    { key: 'branding', label: t('Branding') },
+    { key: 'billing', label: t('Invoicing') },
+    { key: 'integrations', label: t('Integrations') },
+    { key: 'roles', label: t('Roles') },
   ].filter(tb => tabHasContent[tb.key]);
   // "Configure" buttons elsewhere in the app link to #<section-id> anchors that
   // live inside a tab panel (e.g. #zoom-settings is inside the Integrations tab),
@@ -283,11 +285,22 @@ export default function Settings() {
               />
             </section>
           )}
-          {(hasPermission('settings_view') && hasPermission('settings_email')) && (
+          {/* In SaaS mode a workspace sends through the platform's mail server unless it
+              set up its own (MailConfigService), so only the platform admin configures SMTP. */}
+          {(!isSaasMode || isSuperAdmin) && (hasPermission('settings_view') && hasPermission('settings_email')) && (
             <section id="email-settings"><EmailSettings /></section>
           )}
           {(hasPermission('settings_view') && hasPermission('settings_email_notification')) && (
             <section id="email-notification-settings"><EmailNotificationSettings /></section>
+          )}
+          {/* Same rule as the language menu: the platform admin in SaaS, the owner when self-hosted. */}
+          {(isSaasMode ? isSuperAdmin : auth?.user?.workspace_role === 'owner') && hasPermission('language_manage') && (
+            <LinkCard
+              href={route('manage-language')}
+              icon={<Languages className="h-5 w-5" />}
+              title={t('Languages')}
+              description={t('Add languages and edit the words people see in the app.')}
+            />
           )}
           {hasPermission('contract_type_view_any') && (
             <LinkCard

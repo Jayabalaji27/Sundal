@@ -34,6 +34,7 @@ class Transcriber
             throw new AiProviderException(__('This workspace has reached its monthly AI token cap. Ask your company owner to raise it.'));
         }
 
+        $started = hrtime(true);
         // OpenAI takes ISO-639-1 ("en"), not the browser's "en-US".
         $iso = $language ? strtolower(explode('-', $language)[0]) : null;
         // Names it would otherwise mishear ("Sundal" as "Simran").
@@ -66,6 +67,20 @@ class Transcriber
             'output_tokens' => $result['outputTokens'],
         ]);
 
-        return trim($result['text']);
+        $text = trim($result['text']);
+        AiLog::info('ai.voice.transcribed', [
+            ...AiLog::who($user),
+            'provider' => $settings->provider,
+            'model' => $model,
+            'mime' => $mime,
+            'bytes' => strlen($audio),
+            'language' => $iso,
+            'chars' => mb_strlen($text),
+            'input_tokens' => $result['inputTokens'],
+            'output_tokens' => $result['outputTokens'],
+            'ms' => AiLog::ms($started),
+        ]);
+
+        return $text;
     }
 }

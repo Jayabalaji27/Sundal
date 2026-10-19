@@ -6,7 +6,7 @@ import { usePage } from '@inertiajs/react';
 import { useModalStack } from '@/contexts/ModalStackContext';
 
 export function FloatingChatGpt() {
-  const { auth, isSaasMode, globalSettings } = usePage().props as any;
+  const { auth, isSaasMode, globalSettings, features } = usePage().props as any;
   const [isOpen, setIsOpen] = useState(false);
   const [generatedContent, setGeneratedContent] = useState('');
   // Stays above dialogs on purpose (usable from inside a form), so while one is
@@ -48,6 +48,11 @@ export function FloatingChatGpt() {
 
   // ...and behind agent_use, which clients don't have
   if (!isSuperAdmin && !auth?.permissions?.includes('agent_use')) {
+    canUseChatGPT = false;
+  }
+
+  // AI features are switched off for this installation (config/features.php: ai)
+  if (!features?.ai) {
     canUseChatGPT = false;
   }
 

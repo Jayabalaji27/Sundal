@@ -11,16 +11,44 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Task extends Model
 {
     use LogsActivity, \App\Models\Concerns\RecordsCreator;
+    /** A bug is a task of type "bug": same board, sprints and workflow, plus the bug details below. */
+    public const TYPES = ['task', 'bug'];
+    public const SEVERITIES = ['minor', 'major', 'critical', 'blocker'];
+    /** Fields only a bug uses. */
+    public const BUG_FIELDS = ['severity', 'steps_to_reproduce', 'expected_behavior', 'actual_behavior', 'environment', 'resolution_notes'];
+
     protected $fillable = [
-        'project_id', 'task_stage_id', 'milestone_id', 'title', 'description',
-        'priority', 'start_date', 'end_date', 'assigned_to', 'created_by', 'progress'
+        'project_id', 'type', 'task_stage_id', 'milestone_id', 'epic_id', 'title', 'description',
+        'priority', 'story_points', 'start_date', 'end_date', 'assigned_to', 'created_by', 'progress',
+        'severity', 'steps_to_reproduce', 'expected_behavior', 'actual_behavior', 'environment', 'resolution_notes',
+    ];
+
+    protected $attributes = [
+        'type' => 'task',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
-        'progress' => 'integer'
+        'progress' => 'integer',
+        'story_points' => 'integer'
     ];
+
+    public function isBug(): bool
+    {
+        return $this->type === 'bug';
+    }
+
+    public function scopeBugs($query)
+    {
+        return $query->where('tasks.type', 'bug');
+    }
+
+    /** 'task' or 'bug'; anything else leaves the query alone. */
+    public function scopeOfType($query, ?string $type)
+    {
+        return in_array($type, self::TYPES, true) ? $query->where('tasks.type', $type) : $query;
+    }
 
     public function project(): BelongsTo
     {
@@ -35,6 +63,12 @@ class Task extends Model
     public function milestone(): BelongsTo
     {
         return $this->belongsTo(ProjectMilestone::class, 'milestone_id');
+    }
+
+    /** The epic (a feature or module) this item belongs to, if any. */
+    public function epic(): BelongsTo
+    {
+        return $this->belongsTo(Epic::class);
     }
 
     public function assignedTo(): BelongsTo

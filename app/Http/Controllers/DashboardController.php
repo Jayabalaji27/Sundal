@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Services\PermissionService;
 use App\Traits\HasPermissionChecks;
+use App\Traits\PresentsAgileBoard;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class DashboardController extends Controller
 {
-    use HasPermissionChecks;
+    use HasPermissionChecks, PresentsAgileBoard;
     
     public function __construct(private PermissionService $permissionService)
     {
@@ -44,7 +45,6 @@ class DashboardController extends Controller
             ['route' => 'expenses.index', 'permission' => 'expense_view_any'],
             ['route' => 'budgets.index', 'permission' => 'budget_view_any'],
             ['route' => 'invoices.index', 'permission' => 'invoice_view_any'],
-            ['route' => 'bugs.index', 'permission' => 'bug_view_any'],
             ['route' => 'workspaces.index', 'permission' => 'workspace_view_any'],
             ['route' => 'plans.index', 'permission' => 'plan_view_any'],
             ['route' => 'companies.index', 'permission' => 'company_view_any'],
@@ -76,6 +76,7 @@ class DashboardController extends Controller
             // Only show user count for company workspace role (owner)
             if ($role === 'company' && $this->checkPermission('user_view_any')) {
                 $cards[] = [
+                    'key' => 'users',
                     'title' => __('Total Users'),
                     'value' => $this->getTotalUsers($user, $workspace, $role),
                     'icon' => 'Users',
@@ -88,6 +89,7 @@ class DashboardController extends Controller
             // Show projects if user has permission
             if ($this->checkPermission('project_view_any')) {
                 $cards[] = [
+                    'key' => 'projects',
                     'title' => __('Active Projects'),
                     'value' => $this->getActiveProjects($workspace, $user, $role),
                     'icon' => 'Activity',
@@ -102,6 +104,7 @@ class DashboardController extends Controller
             $canViewTaskCalendar = $this->checkPermission('task_calendar_view');
             if ($canViewTaskList || $canViewTaskCalendar) {
                 $cards[] = [
+                    'key' => 'deadlines',
                     'title' => __('Upcoming Deadlines'),
                     'value' => $this->getUpcomingDeadlines($workspace, $user, $role),
                     'icon' => 'Calendar',
@@ -114,6 +117,7 @@ class DashboardController extends Controller
             // Show revenue only for company workspace role with invoice permission
             if ($role === 'company' && $this->checkPermission('invoice_view_any')) {
                 $cards[] = [
+                    'key' => 'received',
                     'title' => __('Total Received'),
                     'value' => $this->getRevenue($user, $workspace, $role),
                     'format' => 'currency',
@@ -134,7 +138,13 @@ class DashboardController extends Controller
                 'expenses' => $this->checkPermission('expense_view_any') ? $this->getExpenseStats($workspace, $user, $role) : null,
                 'invoices' => (($role === 'company' || $role === 'client') && $this->checkPermission('invoice_view_any')) ? $this->getInvoiceStats($workspace, $user, $role) : null,
                 'recentActivities' => $role === 'client' ? [] : $this->getRecentActivities($workspace, $user, $role),
-                'currentWorkspace' => $workspace
+                'currentWorkspace' => $workspace,
+                // Role home pages: running sprints, what needs a decision, and the week's logged time.
+                'activeSprints' => $role === 'client' ? [] : $this->getActiveSprints($workspace, $user),
+                'attention' => $role === 'client' ? [] : $this->getAttention($workspace, $user, $role),
+                'weekHours' => $this->checkPermission('timesheet_view_any') ? $this->getWeekHours($workspace, $user) : null,
+                // Owner home: active projects whose health score isn't "healthy".
+                'projectsAtRisk' => $role === 'company' && $this->checkPermission('project_view_any') ? $this->getProjectsAtRisk($workspace) : null,
             ];
 
             return Inertia::render('dashboard', [
@@ -413,6 +423,71 @@ class DashboardController extends Controller
      * widget on the dashboard — lets members update a task's stage without
      * navigating into the project.
      */
+    /** Running sprints in the projects the user can see: progress, days left and the user's own open items. */
+    private function getActiveSprints($workspace, $user): array
+    {
+        if (!$workspace || !$this->checkPermission('sprint_view_any')) {
+            return [];
+        }
+
+        return \App\Models\Sprint::where('workspace_id', $workspace->id)
+            ->where('status', 'active')
+            ->whereHas('project', fn ($q) => $q->visibleTo($user))
+            ->with(['project:id,title', 'tasks' => fn ($q) => $q->with('taskStage:id,is_completed')])
+            ->orderByRaw('end_date IS NULL, end_date asc')
+            ->limit(6)
+            ->get()
+            ->map(fn ($sprint) => [
+                ...$this->sprintSummary($sprint),
+                'project' => $sprint->project ? $sprint->project->only('id', 'title') : null,
+                'my_open' => $sprint->tasks->where('assigned_to', $user->id)->reject(fn ($task) => $task->isCompleted())->count(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Counts that need someone's attention, each only for roles that can act on it:
+     * overdue tasks (members: their own), timesheets and expenses waiting for review.
+     */
+    private function getAttention($workspace, $user, string $role): array
+    {
+        if (!$workspace) {
+            return [];
+        }
+        $attention = [];
+
+        if ($this->checkPermission('task_view_any')) {
+            $attention['overdue_tasks'] = \App\Models\Task::visibleTo($user)->open()
+                ->whereNotNull('end_date')->whereDate('end_date', '<', today())->count();
+        }
+
+        // Same queue as the Approvals inbox, counting only what this user may decide on.
+        $queue = app(\App\Services\ApprovalQueue::class);
+        if (in_array($role, ['company', 'manager'], true) && $this->checkPermission('timesheet_approve')) {
+            $attention['timesheet_approvals'] = $queue->pendingTimesheetCount($user);
+        }
+
+        if ($this->checkPermission('expense_approval_view_any')) {
+            $attention['expense_approvals'] = $queue->waitingExpenseCount($user);
+        }
+
+        return $attention;
+    }
+
+    /** Hours the user logged this week (Monday to Sunday) in this workspace. */
+    private function getWeekHours($workspace, $user): float
+    {
+        if (!$workspace) {
+            return 0.0;
+        }
+
+        return round((float) \App\Models\TimesheetEntry::where('user_id', $user->id)
+            ->whereBetween('date', [now()->startOfWeek()->toDateString(), now()->endOfWeek()->toDateString()])
+            ->whereHas('timesheet', fn ($q) => $q->where('workspace_id', $workspace->id))
+            ->sum('hours'), 1);
+    }
+
     private function getMyTasks($workspace, $user)
     {
         try {
@@ -428,7 +503,7 @@ class DashboardController extends Controller
                 ->with(['project:id,title', 'taskStage:id,name,color,is_completed'])
                 ->orderByRaw("FIELD(priority, 'critical', 'high', 'medium', 'low')")
                 ->orderByRaw('end_date IS NULL, end_date asc')
-                ->limit(8)
+                ->limit(15)
                 ->get(['id', 'project_id', 'task_stage_id', 'title', 'priority', 'end_date', 'progress'])
                 ->map(function ($task) {
                     return [
@@ -521,18 +596,58 @@ class DashboardController extends Controller
             $paid = (clone $baseQuery)->where('status', 'paid')->count();
             $pending = (clone $baseQuery)->whereIn('status', ['draft', 'sent', 'viewed', 'partial_paid'])->notOverdue()->count();
             $overdue = (clone $baseQuery)->overdue()->count();
+
+            // Money still to come in: sent invoices that aren't fully paid.
+            $unpaid = fn ($query) => (float) $query->sum(\DB::raw('total_amount - paid_amount'));
             
             return [
                 'total' => $total,
                 'paid' => $paid,
                 'pending' => $pending,
-                'overdue' => $overdue
+                'overdue' => $overdue,
+                'outstanding_amount' => $unpaid((clone $baseQuery)->whereIn('status', \App\Models\Invoice::OVERDUE_ELIGIBLE_STATUSES)),
+                'overdue_amount' => $unpaid((clone $baseQuery)->overdue()),
             ];
         } catch (\Exception $e) {
             return ['total' => 0, 'paid' => 0, 'pending' => 0, 'overdue' => 0];
         }
     }
     
+    /**
+     * Active projects whose health score (ProjectHealthService - the same score as
+     * the project page) is "at risk" or "critical", worst first, with the main reason.
+     */
+    private function getProjectsAtRisk($workspace): array
+    {
+        if (!$workspace) {
+            return [];
+        }
+        $health = new \App\Services\ProjectHealthService();
+
+        return \App\Models\Project::forWorkspace($workspace->id)
+            ->whereIn('status', ['active', 'planning'])
+            ->orderBy('deadline')
+            ->limit(20)
+            ->get()
+            ->map(function ($project) use ($health) {
+                $result = $health->calculate($project);
+                $reason = collect($result['factors'])->firstWhere('type', 'critical') ?? collect($result['factors'])->first();
+
+                return [
+                    'id' => $project->id,
+                    'title' => $project->title,
+                    'score' => $result['score'],
+                    'status' => $result['status'],
+                    'reason' => $reason['message'] ?? null,
+                ];
+            })
+            ->reject(fn ($project) => $project['status'] === 'healthy')
+            ->sortBy('score')
+            ->take(5)
+            ->values()
+            ->all();
+    }
+
     private function getExpenseStats($workspace, $user, $role)
     {
         try {
@@ -753,7 +868,8 @@ class DashboardController extends Controller
                 'mostBoughtPlan' => $mostBoughtPlan,
                 'mostUsedCoupon' => $mostUsedCoupon,
                 'recentActivities' => $recentActivities,
-                'recentCompanies' => $this->getRecentCompanies()
+                'recentCompanies' => $this->getRecentCompanies(),
+                'subscriptions' => isSaasMode() ? $this->getSubscriptionStats() : null,
             ];
 
             return Inertia::render('dashboard', [
@@ -825,6 +941,44 @@ class DashboardController extends Controller
         }
     }
     
+    /**
+     * The platform's subscription health: monthly recurring revenue and how many
+     * companies pay, trial, have lapsed or renew soon.
+     */
+    private function getSubscriptionStats(): array
+    {
+        try {
+            $companies = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'company'));
+            $now = now();
+
+            // MRR: each company's latest paid order, while its period is still running,
+            // counted per month (a yearly order is a twelfth a month).
+            $mrr = \App\Models\PlanOrder::whereIn('status', ['approved', 'completed', 'paid'])
+                ->where('created_at', '>=', $now->copy()->subYear())
+                ->orderByDesc('created_at')
+                ->get(['user_id', 'billing_cycle', 'final_price', 'created_at'])
+                ->unique('user_id')
+                ->filter(fn ($order) => $order->billing_cycle === 'yearly' || $order->created_at >= $now->copy()->subMonth())
+                ->sum(fn ($order) => $order->billing_cycle === 'yearly' ? $order->final_price / 12 : $order->final_price);
+
+            return [
+                'mrr' => round((float) $mrr, 2),
+                'paying' => (clone $companies)->where('plan_is_active', 1)
+                    ->where(fn ($q) => $q->whereNull('is_trial')->orWhere('is_trial', 0))
+                    ->whereHas('plan', fn ($q) => $q->where('price', '>', 0))
+                    ->where(fn ($q) => $q->whereNull('plan_expire_date')->orWhere('plan_expire_date', '>=', $now))
+                    ->count(),
+                'trial' => (clone $companies)->where('is_trial', 1)
+                    ->where(fn ($q) => $q->whereNull('trial_expire_date')->orWhere('trial_expire_date', '>=', $now))
+                    ->count(),
+                'expired' => (clone $companies)->whereNotNull('plan_expire_date')->where('plan_expire_date', '<', $now)->count(),
+                'renewals_due' => (clone $companies)->whereBetween('plan_expire_date', [$now, $now->copy()->addDays(14)])->count(),
+            ];
+        } catch (\Exception $e) {
+            return ['mrr' => 0, 'paying' => 0, 'trial' => 0, 'expired' => 0, 'renewals_due' => 0];
+        }
+    }
+
     private function getCompanyStats()
     {
         try {

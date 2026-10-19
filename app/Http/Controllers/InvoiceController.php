@@ -167,14 +167,12 @@ class InvoiceController extends Controller
     }
 
     /**
-     * Whether the workspace owner has configured real SMTP settings (not the
-     * unedited "smtp.example.com" placeholder) — see EmailSettingController.
+     * Whether invoices can be emailed: the workspace's own mail server, or the
+     * platform's when the workspace hasn't set one up (see MailConfigService).
      */
     private function isEmailConfigured($workspace): bool
     {
-        $host = getSetting('email_host', 'smtp.example.com', $workspace->owner_id, $workspace->id);
-
-        return !empty($host) && $host !== 'smtp.example.com';
+        return \App\Services\MailConfigService::isEmailConfigured($workspace->owner_id, $workspace->id);
     }
 
     private const ITEM_AMOUNT_MESSAGES = [
@@ -451,7 +449,7 @@ class InvoiceController extends Controller
             abort(403, 'Access denied.');
         }
 
-        $currencyCode = settings()['defaultCurrency'] ?? 'USD';
+        $currencyCode = settings()['defaultCurrency'] ?? 'INR';
         $currencySymbol = \App\Models\Currency::where('code', $currencyCode)->value('symbol') ?? '$';
 
         $html = view('pdf.invoice', [

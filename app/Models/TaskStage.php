@@ -57,4 +57,31 @@ class TaskStage extends Model
     {
         return $query->where('workspace_id', $workspaceId);
     }
+
+    /**
+     * The stage a bug word means, now that bugs move through task stages:
+     * "Resolved", "Closed" or "Fixed" is the done stage, "Testing" the review
+     * stage, "Open" the in-progress one, and "New" the first stage.
+     */
+    public static function forBugStatus(int $workspaceId, string $status): ?self
+    {
+        // The workspace is passed in (the AI resolver, seeders), so the signed-in
+        // user's current workspace must not narrow it further.
+        $stages = static::withoutGlobalScope('workspace')->forWorkspace($workspaceId)->ordered()->get();
+        if ($stages->isEmpty()) {
+            return null;
+        }
+
+        $word = strtolower(trim($status));
+        $named = fn (array $words) => $stages->first(fn (self $s) => collect($words)->contains(fn ($w) => str_contains(strtolower($s->name), $w)));
+        $first = $stages->firstWhere('is_default', true) ?? $stages->first();
+
+        return match (true) {
+            (bool) preg_match('/resolv|clos|done|fixed|complete/', $word) => $stages->firstWhere('is_completed', true) ?? $stages->last(),
+            (bool) preg_match('/test|review|qa|verif/', $word) => $named(['review', 'test', 'qa']) ?? $named(['progress']) ?? $first,
+            (bool) preg_match('/progress|doing|open|reopen/', $word) => $named(['progress']) ?? $first,
+            (bool) preg_match('/new|todo|to do|backlog/', $word) => $first,
+            default => null,
+        };
+    }
 }

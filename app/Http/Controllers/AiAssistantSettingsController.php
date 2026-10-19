@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AiProviderSetting;
 use App\Services\Ai\AiAccess;
+use App\Services\Ai\AiLog;
 use App\Services\Ai\ConnectionTester;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -57,6 +58,15 @@ class AiAssistantSettingsController extends Controller
         }
 
         $settings->save();
+        AiLog::info('ai.settings.saved', [
+            ...AiLog::who($user),
+            'provider' => $settings->provider,
+            'model' => $settings->model,
+            'key_changed' => !empty($validated['api_key']),
+            'connection_changed' => $connectionChanged,
+            'managers_enabled' => (bool) $settings->managers_enabled,
+            'monthly_token_cap' => $settings->monthly_token_cap,
+        ]);
 
         return back()->with('success', __('AI settings saved.'));
     }
@@ -87,7 +97,16 @@ class AiAssistantSettingsController extends Controller
         ]);
         $candidate->api_key = $validated['api_key'] ?: $existing?->api_key;
 
+        $started = hrtime(true);
         $result = $tester->test($candidate);
+        AiLog::{$result['passed'] ? 'info' : 'warning'}('ai.connection.tested', [
+            ...AiLog::who($user),
+            'provider' => $candidate->provider,
+            'model' => $candidate->model,
+            'passed' => $result['passed'],
+            'message' => $result['passed'] ? null : $result['message'],
+            'ms' => AiLog::ms($started),
+        ]);
 
         // Remember the result when the tested values are the saved ones.
         if ($existing && empty($validated['api_key'])
@@ -104,7 +123,10 @@ class AiAssistantSettingsController extends Controller
     public function destroy(Request $request): RedirectResponse
     {
         abort_unless(AiAccess::canManageSettings($request->user()), 403);
-        AiAccess::settings($request->user())?->delete();
+        if ($settings = AiAccess::settings($request->user())) {
+            $settings->delete();
+            AiLog::info('ai.settings.disconnected', [...AiLog::who($request->user()), 'provider' => $settings->provider]);
+        }
 
         return back()->with('success', __('AI provider disconnected.'));
     }

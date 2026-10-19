@@ -11,7 +11,7 @@ export const defaultLandingPageSections = {
     },
     {
       key: 'hero',
-      title: 'Taskly - Project Management & Team Collaboration',
+      title: 'Sundal - Project Management & Team Collaboration',
       subtitle: 'Transform your team productivity with our comprehensive project management platform.',
       announcement_text: '🚀 New: Advanced Analytics Dashboard',
       primary_button_text: 'Start Free Trial',
@@ -65,12 +65,12 @@ export const defaultLandingPageSections = {
     },
     {
       key: 'screenshots',
-      title: 'See Taskly in Action',
+      title: 'See Sundal in Action',
       subtitle: 'Explore our intuitive interface and powerful features designed to streamline your project management.',
       screenshots_list: [
         {
           src: '/screenshots/dashboard.png',
-          alt: 'Taskly Dashboard Overview',
+          alt: 'Sundal Dashboard Overview',
           title: 'Dashboard Overview',
           description: 'Comprehensive dashboard with project analytics and team performance'
         },
@@ -108,7 +108,7 @@ export const defaultLandingPageSections = {
     },
     {
       key: 'why_choose_us',
-      title: 'Why Choose Taskly?',
+      title: 'Why Choose Sundal?',
       subtitle: 'We\'re not just another project management platform.',
       reasons: [
         { title: 'Quick Setup', description: 'Get your team organized and productive in under 5 minutes.', icon: 'clock' },
@@ -145,10 +145,10 @@ export const defaultLandingPageSections = {
     },
     {
       key: 'about',
-      title: 'About Taskly',
+      title: 'About Sundal',
       description: 'We are passionate about transforming how teams collaborate and manage projects.',
       story_title: 'Empowering Team Productivity Since 2020',
-      story_content: 'Founded by a team of project management enthusiasts and technology experts, Taskly was born from the frustration of scattered tools and inefficient workflows.',
+      story_content: 'Founded by a team of project management enthusiasts and technology experts, Sundal was born from the frustration of scattered tools and inefficient workflows.',
       image: '',
       background_color: '#f9fafb',
       dark_background_color: '#1f2937',
@@ -180,7 +180,7 @@ export const defaultLandingPageSections = {
         { value: '10K+', label: 'Happy Teams', color: 'green' }
       ],
       testimonials: [
-        { name: 'Alex Thompson', role: 'Project Manager', company: 'TechCorp Inc.', content: 'Taskly has revolutionized how we manage projects and collaborate as a team.', rating: 5 }
+        { name: 'Alex Thompson', role: 'Project Manager', company: 'TechCorp Inc.', content: 'Sundal has revolutionized how we manage projects and collaborate as a team.', rating: 5 }
       ]
     },
     {
@@ -196,12 +196,12 @@ export const defaultLandingPageSections = {
       cta_text: 'Still have questions?',
       button_text: 'Contact Support',
       faqs: [
-        { question: 'How does Taskly work?', answer: 'Taskly allows you to create projects, assign tasks, track progress, and collaborate with your team efficiently.' }
+        { question: 'How does Sundal work?', answer: 'Sundal allows you to create projects, assign tasks, track progress, and collaborate with your team efficiently.' }
       ]
     },
     {
       key: 'newsletter',
-      title: 'Stay Updated with Taskly',
+      title: 'Stay Updated with Sundal',
       subtitle: 'Get the latest updates and project management tips.',
       privacy_text: 'No spam, unsubscribe at any time.',
       benefits: [
@@ -211,7 +211,7 @@ export const defaultLandingPageSections = {
     {
       key: 'contact',
       title: 'Get in Touch',
-      subtitle: 'Have questions about Taskly? We\'d love to hear from you.',
+      subtitle: 'Have questions about Sundal? We\'d love to hear from you.',
       form_title: 'Send us a Message',
       info_title: 'Contact Information',
       info_description: 'We\'re here to help and answer any question you might have.',

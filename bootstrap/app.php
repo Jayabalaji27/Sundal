@@ -20,6 +20,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->trustProxies(at: '*');
 
+        // First, so every log line of the request carries its id.
+        $middleware->prepend(\App\Http\Middleware\AssignRequestId::class);
+
         $middleware->encryptCookies(except: ['appearance', 'themeSettings', 'sidebarSettings', 'layoutPosition']);
 
         $middleware->web(append: [

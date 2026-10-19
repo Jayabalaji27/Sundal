@@ -2,7 +2,6 @@
 
 namespace App\Services\Ai\Tools;
 
-use App\Models\Bug;
 use App\Models\TimesheetEntry;
 use App\Models\User;
 use App\Services\BudgetService;
@@ -52,12 +51,12 @@ class GetProjectReport extends AiTool
         $to = $this->resolver->date($args['to'] ?? null, __('To')) ?? now()->toDateString();
         $today = now()->toDateString();
 
-        $tasks = $project->tasks()->with('taskStage:id,name,is_completed', 'assignedTo:id,name')->get();
+        // Bugs are tasks of type bug: reported apart from the rest of the work.
+        [$bugs, $tasks] = $project->tasks()->with('taskStage:id,name,is_completed', 'assignedTo:id,name')->get()
+            ->partition(fn ($t) => $t->type === 'bug');
         $open = $tasks->filter(fn ($t) => !$t->taskStage?->is_completed);
         $overdue = $open->filter(fn ($t) => $t->end_date && $t->end_date->format('Y-m-d') < $today);
-
-        $bugs = Bug::where('project_id', $project->id)->with('bugStatus:id,name')->get();
-        $openBugs = $bugs->reject(fn ($b) => in_array($b->bugStatus?->name, ['Resolved', 'Closed'], true));
+        $openBugs = $bugs->filter(fn ($b) => !$b->taskStage?->is_completed);
 
         $hours = TimesheetEntry::where('project_id', $project->id)->whereBetween('date', [$from, $to]);
         $health = $this->health->calculate($project);

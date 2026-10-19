@@ -24,7 +24,6 @@ use App\Services\MailConfigService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -91,9 +90,16 @@ class AiAssistant
      */
     public function respond(AiConversation $conversation, User $user, string $text, array $client = [], ?callable $onDelta = null): AiMessage
     {
+        $started = hrtime(true);
         try {
-            return $this->answer($conversation, $user, $text, $client, $onDelta);
+            return $this->answer($conversation, $user, $text, $client, $onDelta, $started);
         } catch (AiProviderException $e) {
+            AiLog::warning('ai.reply.failed', [
+                ...AiLog::who($user, $conversation),
+                'channel' => !empty($client['voice']) ? 'voice' : 'chat',
+                'ms' => AiLog::ms($started),
+                'error' => $e->getMessage(),
+            ]);
             $error = $conversation->messages()->create(['role' => 'assistant', 'content' => $e->getMessage(), 'is_error' => true]);
             $conversation->forceFill(['last_message_at' => now()])->save();
 
@@ -102,14 +108,26 @@ class AiAssistant
             $this->offerForm($conversation, $user, $text, $error, topicDefault: true);
 
             throw $e;
+        } catch (Throwable $e) {
+            AiLog::error('ai.reply.crashed', [...AiLog::who($user, $conversation), 'ms' => AiLog::ms($started), 'error' => AiLog::describe($e)]);
+
+            throw $e;
         }
     }
 
-    private function answer(AiConversation $conversation, User $user, string $text, array $client, ?callable $onDelta = null): AiMessage
+    private function answer(AiConversation $conversation, User $user, string $text, array $client, ?callable $onDelta, int $started): AiMessage
     {
         // A short answer to the assistant's last question ("mobile app, high")
         // completes the waiting draft with no AI call.
         if ($answered = $this->answerDraft($conversation, $user, $text)) {
+            AiLog::info('ai.reply', [
+                ...AiLog::who($user, $conversation),
+                'message_id' => $answered->id,
+                'channel' => !empty($client['voice']) ? 'voice' : 'chat',
+                'via' => 'draft_answer',
+                'ms' => AiLog::ms($started),
+            ]);
+
             return $answered;
         }
 
@@ -192,6 +210,27 @@ class AiAssistant
             AiToolCall::whereIn('id', $turn->toolCallIds)->update(['ai_message_id' => $message->id]);
         }
 
+        AiLog::info('ai.reply', [
+            ...AiLog::who($user, $conversation),
+            'message_id' => $message->id,
+            'channel' => $voice ? 'voice' : 'chat',
+            'stream' => $onDelta !== null,
+            'page' => $client['page']['route'] ?? null,
+            'topic' => $topic,
+            'provider' => $settings->provider,
+            'model' => $settings->model,
+            'tools_offered' => count($tools),
+            // In order, as "tool:status", e.g. ["list_tasks:done", "create_task:pending"].
+            'tool_calls' => $turn->toolCallIds
+                ? AiToolCall::whereIn('id', $turn->toolCallIds)->orderBy('id')->get(['tool', 'status'])->map(fn (AiToolCall $c) => "{$c->tool}:{$c->status}")->all()
+                : [],
+            'input_tokens' => $result->inputTokens,
+            'output_tokens' => $result->outputTokens,
+            'prompt_chars' => mb_strlen($text),
+            'empty_reply' => trim($result->text) === '' ? true : null,
+            'ms' => AiLog::ms($started),
+        ]);
+
         // Fallback: the model answered without showing a card for what reads
         // like a clear command, so offer the form for it.
         if (!$turn->cardIds) {
@@ -241,7 +280,7 @@ class AiAssistant
                 $this->startDraft($tool, $user, $conversation, $intent['args'], $message);
             }
         } catch (Throwable $e) {
-            Log::warning('AI draft fallback failed', ['error' => $e->getMessage()]);
+            AiLog::warning('ai.draft_fallback.failed', [...AiLog::who($user, $conversation), 'error' => AiLog::describe($e)]);
         }
     }
 
@@ -484,6 +523,7 @@ class AiAssistant
     public function confirm(AiToolCall $call, User $user, ?string $phrase = null, ?array $fields = null): AiToolCall
     {
         return DB::transaction(function () use ($call, $user, $phrase, $fields) {
+            $started = hrtime(true);
             $call = AiToolCall::whereKey($call->id)->lockForUpdate()->firstOrFail();
             $this->guardPending($call, $user);
 
@@ -524,6 +564,10 @@ class AiAssistant
                 return $this->fail($call, $e->getMessage());
             } catch (ValidationException $e) {
                 return $this->fail($call, collect($e->errors())->flatten()->first() ?? $e->getMessage());
+            } catch (Throwable $e) {
+                AiLog::error('ai.card.crashed', [...$this->cardLog($call), 'ms' => AiLog::ms($started), 'error' => AiLog::describe($e)]);
+
+                throw $e;
             }
 
             $call->update([
@@ -534,6 +578,12 @@ class AiAssistant
                 'subject_id' => $outcome->subject?->getKey(),
             ]);
 
+            AiLog::info('ai.card.confirmed', [
+                ...$this->cardLog($call),
+                'subject' => $outcome->subject ? class_basename($outcome->subject) . '#' . $outcome->subject->getKey() : null,
+                'can_undo' => $outcome->undo !== null,
+                'ms' => AiLog::ms($started),
+            ]);
             $this->note($call, __('Done: :message', ['message' => $outcome->message]));
 
             return $call;
@@ -596,10 +646,13 @@ class AiAssistant
             try {
                 $message = DB::transaction(fn () => AiActionContext::run($call->id, fn () => $tool->undo($call->result['undo'], $user)));
             } catch (ToolInputException|ActionException $e) {
+                AiLog::info('ai.card.undo_refused', [...$this->cardLog($call), 'reason' => $e->getMessage()]);
+
                 throw ValidationException::withMessages(['card' => $e->getMessage()]);
             }
 
             $call->update(['status' => AiToolCall::UNDONE]);
+            AiLog::info('ai.card.undone', $this->cardLog($call));
             $this->note($call, __('Undone: :message', ['message' => $message]));
 
             return $call;
@@ -613,6 +666,7 @@ class AiAssistant
             $this->guardPending($call, $user);
 
             $call->update(['status' => AiToolCall::CANCELLED]);
+            AiLog::info('ai.card.cancelled', $this->cardLog($call));
             $this->note($call, __('Cancelled: :summary. Nothing was changed.', ['summary' => $call->summary]));
 
             return $call;
@@ -640,6 +694,7 @@ class AiAssistant
         // Checked again here, not only when the tool list was built.
         if (!$tool->allowedFor($turn->user)) {
             $turn->toolCallIds[] = AiToolCall::create([...$base, 'status' => AiToolCall::FAILED, 'error' => 'Not permitted.'])->id;
+            AiLog::warning('ai.tool.denied', [...AiLog::who($turn->user, $turn->conversation), 'tool' => $tool->name()]);
 
             return 'This user is not allowed to use this tool.';
         }
@@ -708,7 +763,9 @@ class AiAssistant
 
             return $e->getMessage();
         } catch (Throwable $e) {
-            Log::error('AI tool failed', ['tool' => $tool->name(), 'error' => $e->getMessage()]);
+            // The stack trace goes to the app log; the AI log says which tool and turn.
+            report($e);
+            AiLog::error('ai.tool.crashed', [...AiLog::who($turn->user, $turn->conversation), 'tool' => $tool->name(), 'error' => AiLog::describe($e)]);
             $turn->toolCallIds[] = AiToolCall::create([...$base, 'status' => AiToolCall::FAILED, 'error' => 'Internal error.'])->id;
 
             return 'The tool failed with an internal error. Tell the user it did not work.';
@@ -745,8 +802,9 @@ class AiAssistant
 
             MailConfigService::setDynamicConfig($owner->id, $workspace->id);
             $owner->notify(new AiTokenCapWarning($workspace->name, $used, $settings->monthly_token_cap));
+            AiLog::info('ai.token_cap.warned', ['workspace_id' => $settings->workspace_id, 'used' => $used, 'cap' => $settings->monthly_token_cap]);
         } catch (Throwable $e) {
-            Log::warning('AI token cap warning email failed', ['workspace_id' => $settings->workspace_id, 'error' => $e->getMessage()]);
+            AiLog::warning('ai.token_cap.warning_failed', ['workspace_id' => $settings->workspace_id, 'error' => AiLog::describe($e)]);
         }
     }
 
@@ -762,6 +820,7 @@ class AiAssistant
 
         if ($call->isExpired()) {
             $call->update(['status' => AiToolCall::EXPIRED]);
+            AiLog::info('ai.card.expired', $this->cardLog($call));
             throw ValidationException::withMessages(['card' => __('This card has expired. Ask the assistant again.')]);
         }
 
@@ -773,9 +832,22 @@ class AiAssistant
     private function fail(AiToolCall $call, string $error): AiToolCall
     {
         $call->update(['status' => AiToolCall::FAILED, 'error' => $error]);
+        AiLog::warning('ai.card.failed', [...$this->cardLog($call), 'error' => $error]);
         $this->note($call, __('Could not complete: :error', ['error' => $error]));
 
         return $call;
+    }
+
+    /** The card a log line is about. */
+    private function cardLog(AiToolCall $call): array
+    {
+        return [
+            'user_id' => $call->user_id,
+            'workspace_id' => $call->workspace_id,
+            'conversation_id' => $call->ai_conversation_id,
+            'tool_call_id' => $call->id,
+            'tool' => $call->tool,
+        ];
     }
 
     /** Record the outcome in the chat so the model knows about it next turn. */
@@ -813,6 +885,7 @@ class AiAssistant
                     $this->images->read($file, $user);
                 } catch (ToolInputException $e) {
                     $file->update(['error' => $e->getMessage()]);
+                    AiLog::warning('ai.attachment.unreadable', [...AiLog::who($user), 'attachment_id' => $file->id, 'error' => $e->getMessage()]);
                 }
             });
     }
@@ -861,6 +934,7 @@ class AiAssistant
             '',
             'Rules:',
             '- Use the tools to look things up. Never invent projects, tasks, bugs, people, ids or numbers.',
+            '- In Sundal, bugs are tasks of type bug: they share the Board, Backlog and Sprints with tasks and move through the same stages. Epics are big pieces of work in a project that group its tasks and bugs (list_epics, create_epic, set_epic). Sprints are planned from the Backlog (add_tasks_to_sprint, remove_tasks_from_sprint). Meetings are Zoom or Google Meet calls of a project (list_meetings, schedule_meeting); scheduling needs one of them connected by the workspace owner.',
             '- Write tools change nothing by themselves: they show the user a confirmation card. After calling one, ask the user to review the card. Never say a change is done until the user has confirmed it.',
             '- When calling a write tool, pass only what the user actually said. Leave out every value they did not give (project, priority, assignee, status, dates…); never fill one in yourself. The app fills sensible defaults and asks the user for anything it really needs, with the choices as buttons.',
             '- When a read answer needs a record and a name matches several, ask the user which one. Do not guess.',

@@ -13,8 +13,8 @@ use App\Services\Ai\Tools\AiTool;
  *
  * Deliberately absent (stay on the normal screens): roles and permissions,
  * plans and payments, BYOA/API keys, webhooks, removing users, deleting a
- * workspace, creating sprints (removed from the product) and creating
- * contracts (needs an uploaded file). Hard deletes are limited to everyday
+ * workspace, creating, starting or completing sprints (done on the project's
+ * Sprints page) and creating contracts (needs an uploaded file). Hard deletes are limited to everyday
  * records: draft invoices (with the number typed), unapproved expenses and
  * the user's own unsubmitted time.
  */
@@ -36,6 +36,13 @@ class ToolRegistry
         Tools\ChangeBugStatusTool::class,
         Tools\ListSprints::class,
         Tools\AddTasksToSprintTool::class,
+        Tools\RemoveTasksFromSprintTool::class,
+        // Epics (big pieces of work grouping tasks and bugs) and meetings
+        Tools\ListEpics::class,
+        Tools\CreateEpicTool::class,
+        Tools\SetEpicTool::class,
+        Tools\ListMeetings::class,
+        Tools\ScheduleMeetingTool::class,
         Tools\ListTimesheetApprovals::class,
         Tools\DecideTimesheetsTool::class,
         Tools\ListExpenseApprovals::class,

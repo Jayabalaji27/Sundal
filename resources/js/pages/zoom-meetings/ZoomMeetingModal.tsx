@@ -20,9 +20,11 @@ interface Props {
     projects: Project[];
     members: User[];
     googleCalendarEnabled?: boolean;
+    /** A new meeting starts in this project (e.g. scheduled from a project's Meetings tab). */
+    initialProjectId?: string;
 }
 
-export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, members, googleCalendarEnabled = false }: Props) {
+export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, members, googleCalendarEnabled = false, initialProjectId }: Props) {
     const { t } = useTranslation();
 
     const [formData, setFormData] = useState({
@@ -67,18 +69,18 @@ export default function ZoomMeetingModal({ isOpen, onClose, meeting, projects, m
                     start_time: '',
                     duration: 60,
                     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                    project_id: 'none',
+                    project_id: initialProjectId || 'none',
                     password: '',
                     status: 'scheduled',
                     member_ids: [],
                     is_googlecalendar_sync: false
                 });
-                setProjectMembers([]);
+                if (initialProjectId) loadProjectMembers(initialProjectId); else setProjectMembers([]);
             }
             setErrors({});
             setIsSubmitting(false);
         }
-    }, [isOpen, meeting]);
+    }, [isOpen, meeting, initialProjectId]);
 
     const loadProjectMembers = async (projectId: string) => {
         if (!projectId || projectId === 'none') {

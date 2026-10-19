@@ -396,12 +396,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
         })->middleware('permission:project_report_view_any|report_timesheet')->name('reports.index');
 
         // Meetings — redirects to Zoom or Google Meet, whichever the user can see
+        // (the connected one first, when only Google Meet is connected).
         Route::get('meetings', function (\Illuminate\Http\Request $req) use ($redirectToFirstPermittedTab) {
-            return $redirectToFirstPermittedTab($req, [
+            $tabs = [
                 'zoom'   => ['permission' => 'zoom_meeting_view_any', 'route' => 'zoom-meetings.index'],
                 'google' => ['permission' => 'google_meeting_view_any', 'route' => 'google-meetings.index'],
-            ]);
+            ];
+            $connected = fn (string $service) => rescue(fn () => app($service)->hasValidCredentials(), false, false);
+            if (!$connected(\App\Services\ZoomService::class) && $connected(\App\Services\GoogleMeetService::class)) {
+                $tabs = ['google' => $tabs['google'], 'zoom' => $tabs['zoom']];
+            }
+            return $redirectToFirstPermittedTab($req, $tabs);
         })->middleware('permission:zoom_meeting_view_any|google_meeting_view_any')->name('meetings.index');
+
+        // Approvals — one inbox for timesheets and expenses. Opens the first tab
+        // with something waiting, so the dashboard badge always lands on work.
+        Route::get('approvals', function () {
+            $counts = app(\App\Services\ApprovalQueue::class)->counts(auth()->user());
+            $tab = collect($counts)->filter()->keys()->first() ?? array_key_first($counts);
+            abort_unless($tab, 403);
+
+            return redirect()->route($tab === 'expenses' ? 'expense-approvals.index' : 'timesheet-approvals.index');
+        })->middleware('permission:timesheet_approve|expense_approval_view_any')->name('approvals.index');
 
         // Docs — redirects to Knowledge Base or Notes (merged nav entry)
         Route::get('docs', function (\Illuminate\Http\Request $req) use ($redirectToFirstPermittedTab) {
@@ -507,7 +523,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('api/media/{id}', [MediaController::class, 'destroy'])->middleware('permission:media_delete')->name('api.media.destroy');
 
         // Bug API routes
-        Route::get('api/bugs/project-data', [\App\Http\Controllers\BugController::class, 'getProjectData'])->middleware('permission:bug_view_any')->name('api.bugs.project-data');
 
         // Permissions routes with granular permissions
         Route::get('permissions', [PermissionController::class, 'index'])->middleware('permission:permission_view_any')->name('permissions.index');
@@ -721,17 +736,33 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('forms/{form}/submissions', [FormBuilderController::class, 'submissions'])->middleware('permission:form_view_submissions')->name('forms.submissions');
         Route::delete('forms/{form}/submissions/{submission}', [FormBuilderController::class, 'deleteSubmission'])->middleware('permission:form_delete_submissions')->name('forms.submissions.destroy');
 
-        // Sprint routes
-        // Sprint creation removed (not a required product feature) — sprints are
-        // view/manage-tasks only now, no sprints.store route.
+        // Project Backlog (unplanned work) and Sprints: managers create, start and
+        // complete sprints, members move tasks in and out.
+        Route::get('projects/{project}/backlog', [SprintController::class, 'backlog'])->middleware('permission:sprint_view_any')->name('projects.backlog');
         Route::get('projects/{project}/sprints', [SprintController::class, 'index'])->middleware('permission:sprint_view_any')->name('sprints.index');
+        Route::post('projects/{project}/sprints', [SprintController::class, 'store'])->middleware('permission:sprint_create')->name('sprints.store');
         Route::get('sprints/{sprint}', [SprintController::class, 'show'])->middleware('permission:sprint_view')->name('sprints.show');
         Route::put('sprints/{sprint}', [SprintController::class, 'update'])->middleware('permission:sprint_update')->name('sprints.update');
-        Route::delete('sprints/{sprint}', [SprintController::class, 'destroy'])->name('sprints.destroy');
-        Route::post('sprints/{sprint}/tasks', [SprintController::class, 'addTask'])->name('sprints.add-task');
-        Route::delete('sprints/{sprint}/tasks', [SprintController::class, 'removeTask'])->name('sprints.remove-task');
-        Route::post('sprints/{sprint}/start', [SprintController::class, 'start'])->name('sprints.start');
-        Route::post('sprints/{sprint}/complete', [SprintController::class, 'complete'])->name('sprints.complete');
+        Route::delete('sprints/{sprint}', [SprintController::class, 'destroy'])->middleware('permission:sprint_delete')->name('sprints.destroy');
+        Route::post('sprints/{sprint}/tasks', [SprintController::class, 'addTask'])->middleware('permission:sprint_manage_tasks')->name('sprints.add-task');
+        Route::delete('sprints/{sprint}/tasks', [SprintController::class, 'removeTask'])->middleware('permission:sprint_manage_tasks')->name('sprints.remove-task');
+        Route::post('sprints/{sprint}/start', [SprintController::class, 'start'])->middleware('permission:sprint_update')->name('sprints.start');
+        Route::post('sprints/{sprint}/complete', [SprintController::class, 'complete'])->middleware('permission:sprint_update')->name('sprints.complete');
+
+        // Epics: large pieces of work grouping tasks and bugs across sprints. Same
+        // permissions as sprints: managers create and edit, planners file items.
+        Route::get('projects/{project}/epics', [\App\Http\Controllers\EpicController::class, 'index'])->middleware('permission:sprint_view_any')->name('epics.index');
+        Route::post('projects/{project}/epics', [\App\Http\Controllers\EpicController::class, 'store'])->middleware('permission:sprint_create')->name('epics.store');
+        Route::put('epics/{epic}', [\App\Http\Controllers\EpicController::class, 'update'])->middleware('permission:sprint_update')->name('epics.update');
+        Route::delete('epics/{epic}', [\App\Http\Controllers\EpicController::class, 'destroy'])->middleware('permission:sprint_delete')->name('epics.destroy');
+        Route::post('epics/{epic}/tasks', [\App\Http\Controllers\EpicController::class, 'addTask'])->middleware('permission:sprint_manage_tasks')->name('epics.add-task');
+        Route::delete('epics/{epic}/tasks', [\App\Http\Controllers\EpicController::class, 'removeTask'])->middleware('permission:sprint_manage_tasks')->name('epics.remove-task');
+
+        // A project's Zoom and Google Meet meetings in one list (the project Meetings tab).
+        Route::get('projects/{project}/meetings', [\App\Http\Controllers\ProjectMeetingController::class, 'index'])->middleware(['permission:zoom_meeting_view_any|google_meeting_view_any', 'module.access'])->name('projects.meetings');
+
+        // Project Board: task stages as columns, the active sprint by default.
+        Route::get('projects/{project}/board', [\App\Http\Controllers\ProjectBoardController::class, 'show'])->middleware('permission:task_view_any')->name('projects.board');
 
         // Client Portal (admin controls — inside auth)
         Route::post('projects/{project}/portal/toggle', [ClientPortalController::class, 'toggle'])->name('portal.toggle');
@@ -843,34 +874,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('task-attachments/{taskAttachment}', [\App\Http\Controllers\TaskAttachmentController::class, 'destroy'])->middleware('permission:task_add_attachments')->name('task-attachments.destroy');
         Route::get('task-attachments/{taskAttachment}/download', [\App\Http\Controllers\TaskAttachmentController::class, 'download'])->middleware('permission:task_add_attachments')->name('task-attachments.download');
 
-        // Bug routes (create/edit are modal-based, no dedicated pages)
+        // Bugs are tasks of type bug (Tasks list, Board, Backlog, Sprints). The old
+        // bug links stay only as redirects, for bookmarks and notification emails.
         Route::get('bugs', [\App\Http\Controllers\BugController::class, 'index'])->middleware('permission:bug_view_any')->name('bugs.index');
-        Route::post('bugs', [\App\Http\Controllers\BugController::class, 'store'])->middleware('permission:bug_create')->name('bugs.store');
-        Route::get('bugs/{bug}', [\App\Http\Controllers\BugController::class, 'show'])->middleware('permission:bug_view')->name('bugs.show');
-        Route::put('bugs/{bug}', [\App\Http\Controllers\BugController::class, 'update'])->middleware('permission:bug_update')->name('bugs.update');
-        Route::patch('bugs/{bug}', [\App\Http\Controllers\BugController::class, 'update'])->middleware('permission:bug_update');
-        Route::delete('bugs/{bug}', [\App\Http\Controllers\BugController::class, 'destroy'])->middleware('permission:bug_delete')->name('bugs.destroy');
-
-        Route::put('bugs/{bug}/status', [\App\Http\Controllers\BugController::class, 'changeStatus'])->middleware('permission:bug_change_status')->name('bugs.change-status');
-
-        // Bug statuses
-        Route::get('bug-statuses', [\App\Http\Controllers\BugStatusController::class, 'index'])->middleware('permission:bug_manage_statuses')->name('bug-statuses.index');
-        Route::post('bug-statuses', [\App\Http\Controllers\BugStatusController::class, 'store'])->middleware('permission:bug_manage_statuses')->name('bug-statuses.store');
-        Route::put('bug-statuses/{bugStatus}', [\App\Http\Controllers\BugStatusController::class, 'update'])->middleware('permission:bug_manage_statuses')->name('bug-statuses.update');
-        Route::patch('bug-statuses/{bugStatus}', [\App\Http\Controllers\BugStatusController::class, 'update'])->middleware('permission:bug_manage_statuses');
-        Route::delete('bug-statuses/{bugStatus}', [\App\Http\Controllers\BugStatusController::class, 'destroy'])->middleware('permission:bug_manage_statuses')->name('bug-statuses.destroy');
-        Route::post('bug-statuses/reorder', [\App\Http\Controllers\BugStatusController::class, 'reorder'])->middleware('permission:bug_manage_statuses')->name('bug-statuses.reorder');
-        Route::put('bug-statuses/{bugStatus}/set-default', [\App\Http\Controllers\BugStatusController::class, 'setDefault'])->middleware('permission:bug_manage_statuses')->name('bug-statuses.set-default');
-
-        // Bug comments
-        Route::post('bugs/{bug}/comments', [\App\Http\Controllers\BugCommentController::class, 'store'])->middleware('permission:bug_add_comments')->name('bug-comments.store');
-        Route::put('bug-comments/{bugComment}', [\App\Http\Controllers\BugCommentController::class, 'update'])->middleware('permission:bug_add_comments')->name('bug-comments.update');
-        Route::delete('bug-comments/{bugComment}', [\App\Http\Controllers\BugCommentController::class, 'destroy'])->middleware('permission:bug_add_comments')->name('bug-comments.destroy');
-
-        // Bug attachments
-        Route::post('bugs/{bug}/attachments', [\App\Http\Controllers\BugAttachmentController::class, 'store'])->middleware('permission:bug_add_attachments')->name('bug-attachments.store');
-        Route::delete('bug-attachments/{bugAttachment}', [\App\Http\Controllers\BugAttachmentController::class, 'destroy'])->middleware('permission:bug_add_attachments')->name('bug-attachments.destroy');
-        Route::get('bug-attachments/{bugAttachment}/download', [\App\Http\Controllers\BugAttachmentController::class, 'download'])->middleware('permission:bug_add_attachments')->name('bug-attachments.download');
+        Route::get('bugs/{bug}', [\App\Http\Controllers\BugController::class, 'show'])->whereNumber('bug')->middleware('permission:bug_view')->name('bugs.show');
 
         // Timesheet routes
         Route::get('timesheets/daily-view', [\App\Http\Controllers\TimesheetController::class, 'dailyView'])->middleware('permission:timesheet_view_any')->name('timesheets.daily-view');

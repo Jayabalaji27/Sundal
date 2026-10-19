@@ -332,7 +332,7 @@ export default function Contacts() {
 
   return (
     <PageTemplate 
-      title={t("Contact Management")} 
+      title={t("Contact Inquiries")} 
       url="/contacts"
       actions={pageActions}
       breadcrumbs={breadcrumbs}

@@ -914,6 +914,43 @@ confirm cards in the panel.
 Tests: `AiAssistantTest` 195 (16 new). `AiModulesTest` and `DashboardTest` failed 16 tests
 before this change too.
 
+### RP-21 · 2026-10-19 · Business validation round: simpler UI, bugs as tasks, epics, meetings, logging (branch `ui/simplify-layout`)
+
+Each role was checked from the business side. The full findings and fix status are in
+`../Bugs/sundal-business-validation-report.md` (§13).
+
+- **Defects B1–B15:** one approval queue (`ApprovalQueue`) behind counts, list and actions;
+  report and client visibility; scope creep in the health score; INR defaults; app-name
+  branding; expense receipts; contracts need a client.
+- **Simpler menus and pages** per role. Hidden modules keep their routes (`config/features.php`).
+  The header, dashboards (platform admin included), Tasks, Timesheet and Settings were also simplified.
+- **Bugs are tasks** (`tasks.type` task/bug, `severity` and bug fields). Bug statuses map to stages
+  (migration `2026_10_19_000001`). The old bug module was removed (backup zip next to the project).
+  The Bug Assignment email template is gone (`2026_10_19_000002`).
+- **Agile:** Zoho-style project tabs (Summary, Backlog, Sprints, Epics, Milestones, Board,
+  Timesheet, Meetings, Expenses), a two-pane Backlog, Board views (Detail / Plain / Sheet) and
+  **Epics** (`epics` table and `tasks.epic_id`, `2026_10_19_000003`).
+- **Meetings:** in the main menu and a project tab. Visible before Zoom or Google Meet is
+  connected. Managers schedule, edit and cancel; others only change their own
+  (`ScheduleMeeting`, `MeetingDirectory`).
+- **AI Assistant:** 6 new tools (epics, sprint removal, meetings); the owner now has 58.
+- **Logging:**
+  - `storage/logs/ai-*.log` (`AiLog`): replies, cards, voice, attachments, provider errors and
+    settings, never the words said.
+  - `storage/logs/integrations-*.log` (`IntegrationLog`): Zoom, Google Meet, Calendar and
+    Drive, Slack, Telegram, webhooks, email and meeting scheduling, with secrets masked.
+  - `X-Request-Id` on every response and log line (`AssignRequestId`).
+  - The history log now also covers epics, meetings, AI settings and sprint moves
+    (`SprintTask` pivot).
+
+Deploy: `php artisan migrate`, then `php artisan db:seed --class=RoleSeeder --force` (manager
+permissions changed). Delete the removed bug-module files on the server.
+
+Tests: full suite 493 passed, 35 failed, 1 skipped. The 35 are the same failures as before this
+round (`AiModulesTest`, `DashboardTest`, `FunctionalTest`, `PlanAccessTest`,
+`RazorpaySettingsTest`, `Settings/*`). Run it with
+`AI_ASSISTANT_SYNC_TIME_LIMIT=0 php -d memory_limit=3G -d max_execution_time=0 vendor/bin/pest`.
+
 ---
 
 ## Known Pending Items

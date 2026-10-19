@@ -775,19 +775,23 @@ class TimesheetController extends Controller
         }
 
         $projects = $this->getAccessibleProjects($user, $workspace);
-        // This user's timesheet for the week being viewed (null if they have none yet)
-        $timesheetId = $user->timesheets()
+        // This user's timesheet for the week being viewed (null if they have none yet).
+        // Its status lets the week be submitted from this page, the one timesheet page.
+        $timesheet = $user->timesheets()
+            ->with('latestApproval')
             ->where('workspace_id', $workspace->id)
             ->whereDate('start_date', '<=', $weekStart->toDateString())
             ->whereDate('end_date', '>=', $weekStart->toDateString())
-            ->value('id');
+            ->first();
 
         return Inertia::render('timesheets/WeeklyView', [
             'weekData' => $weekData,
             'projects' => $projects,
             'weekStart' => $weekStart->toDateString(),
             'weekEnd' => $weekEnd->toDateString(),
-            'timesheetId' => $timesheetId,
+            'timesheetId' => $timesheet?->id,
+            'timesheetStatus' => $timesheet?->status,
+            'rejectionReason' => $timesheet?->status === 'rejected' ? $timesheet->latestApproval?->comments : null,
             'permissions' => [
                 'canAccessAllData' => $this->canAccessAllData($user, $workspace),
                 'canManageTimesheets' => $this->canManageTimesheets($user, $workspace),

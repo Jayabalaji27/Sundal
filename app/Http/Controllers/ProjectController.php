@@ -10,6 +10,7 @@ use App\Services\PlanLimitService;
 use App\Services\ProjectHealthService;
 use App\Services\ScopeCreepService;
 use App\Traits\HasPermissionChecks;
+use App\Traits\PresentsAgileBoard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -19,7 +20,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ProjectController extends Controller
 {
-    use HasPermissionChecks;
+    use HasPermissionChecks, PresentsAgileBoard;
 
     private const USER_PUBLIC_COLUMNS = 'users.id,users.name,users.email,users.avatar';
 
@@ -41,9 +42,26 @@ class ProjectController extends Controller
 
         // Only the user fields the page renders - full user rows carry plan, referral
         // and timer data that must not reach other workspace members or clients.
-        $query = Project::with(['workspace', 'clients:' . self::USER_PUBLIC_COLUMNS, 'creator:' . self::USER_PUBLIC_COLUMNS, 'members.user:' . self::USER_PUBLIC_COLUMNS])
-            ->forWorkspace($user->current_workspace_id)
-            ->visibleTo($user);
+        $visibleProjects = fn () => Project::forWorkspace($user->current_workspace_id)->visibleTo($user);
+        $overdue = fn ($q) => $q->whereNotNull('deadline')
+            ->whereDate('deadline', '<', today())
+            ->whereNotIn('status', ['completed', 'cancelled']);
+
+        // Header counts cover every project the user can see, not just the current
+        // page or the active filter, so they double as status filter shortcuts.
+        $statusCounts = $visibleProjects()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
+        $stats = [
+            'total' => (int) $statusCounts->sum(),
+            'planning' => (int) ($statusCounts['planning'] ?? 0),
+            'active' => (int) ($statusCounts['active'] ?? 0),
+            'on_hold' => (int) ($statusCounts['on_hold'] ?? 0),
+            'completed' => (int) ($statusCounts['completed'] ?? 0),
+            'overdue' => $overdue($visibleProjects())->count(),
+        ];
+
+        $query = $visibleProjects()->with(['workspace', 'clients:' . self::USER_PUBLIC_COLUMNS, 'creator:' . self::USER_PUBLIC_COLUMNS, 'members.user:' . self::USER_PUBLIC_COLUMNS]);
+        // Cards show "3 of 8 tasks done": done = in a completed stage, as on the project page.
+        $query->withCount(['tasks', 'tasks as completed_tasks_count' => fn ($q) => $q->whereHas('taskStage', fn ($stage) => $stage->where('is_completed', true))]);
 
         if ($request->search)
             $query->search($request->search);
@@ -51,6 +69,8 @@ class ProjectController extends Controller
             $query->byStatus($request->status);
         if ($request->priority)
             $query->byPriority($request->priority);
+        if ($request->boolean('overdue'))
+            $overdue($query);
 
         // Apply sorting with field validation
         $allowedSortFields = ['title', 'priority', 'deadline', 'status', 'created_at'];
@@ -80,9 +100,8 @@ class ProjectController extends Controller
         $projects->getCollection()->each(function ($project) {
             $project->members->each(function ($member) {
                 if ($member->user) {
-                    $member->user->avatar = check_file($member->user->avatar)
-                        ? get_file($member->user->avatar)
-                        : get_file('avatars/avatar.png');
+                    // No photo: null, so the list shows the person's initials instead of a grey silhouette.
+                    $member->user->avatar = check_file($member->user->avatar) ? get_file($member->user->avatar) : null;
                 }
             });
         });
@@ -98,10 +117,11 @@ class ProjectController extends Controller
 
         return Inertia::render('projects/Index', [
             'projects' => $projects,
+            'stats' => $stats,
             'members' => $members,
             'managers' => $managers,
             'clients' => $clients,
-            'filters' => $request->only(['search', 'status', 'priority', 'sort_field', 'sort_direction', 'per_page', 'view']),
+            'filters' => $request->only(['search', 'status', 'priority', 'overdue', 'sort_field', 'sort_direction', 'per_page', 'view']),
             'userWorkspaceRole' => $userWorkspaceRole,
             'permissions' => $this->getModuleCrudPermissions('project')
         ]);
@@ -136,16 +156,20 @@ class ProjectController extends Controller
             'description' => 'nullable|string',
             'client_ids' => 'array',
             'client_ids.*' => 'exists:users,id',
-            'status' => 'required|in:planning,active,on_hold,completed,cancelled',
-            'priority' => 'required|in:low,medium,high,urgent',
+            // Only the title is needed to start a project; the rest has a default.
+            'status' => 'nullable|in:planning,active,on_hold,completed,cancelled',
+            'priority' => 'nullable|in:low,medium,high,urgent',
             'start_date' => 'nullable|date',
-            'deadline' => 'nullable|date|after:start_date',
+            'deadline' => ['nullable', 'date', ...($request->filled('start_date') ? ['after:start_date'] : [])],
             'estimated_hours' => 'nullable|integer|min:0',
             'budget' => 'nullable|numeric|min:0',
             'is_public' => 'boolean',
             'member_ids' => 'array',
             'member_ids.*' => 'exists:users,id'
         ]);
+
+        $validated['status'] = $validated['status'] ?? 'planning';
+        $validated['priority'] = $validated['priority'] ?? 'medium';
 
         // Shared with the AI assistant: creates the project, clients and members,
         // logs it and fires the Slack event.
@@ -209,6 +233,9 @@ class ProjectController extends Controller
 
         // Handle attachments with pagination and search
         $attachmentsQuery = $project->attachments()->with(['mediaItem', 'uploadedBy']);
+        if (!$sharedWithClient('files')) {
+            $attachmentsQuery->whereRaw('1 = 0');
+        }
 
         if ($request->attachment_search) {
             $attachmentsQuery->where(function ($query) use ($request) {
@@ -230,8 +257,11 @@ class ProjectController extends Controller
         $notes = $project->notes()->with('creator')->latest()->get();
         $project->setRelation('notes', $notes);
 
-        // Handle activities with pagination and search
+        // Handle activities with pagination and search (the activity log is internal for clients)
         $activitiesQuery = $project->activities()->with('user');
+        if (!$sharedWithClient('activity')) {
+            $activitiesQuery->whereRaw('1 = 0');
+        }
 
         if ($request->activity_search) {
             $activitiesQuery->where('description', 'like', '%' . $request->activity_search . '%');
@@ -250,6 +280,10 @@ class ProjectController extends Controller
         if (!$sharedWithClient('expenses')) {
             $project->setRelation('expenses', collect());
         }
+        // The project's budget figure is internal too, not just the budget record.
+        if (!$sharedWithClient('budget')) {
+            $project->makeHidden('budget');
+        }
 
         // Load project tasks with related data
         $projectTasks = !$sharedWithClient('task') ? collect() : \App\Models\Task::with(['taskStage', 'assignedTo:' . self::USER_PUBLIC_COLUMNS, 'creator:' . self::USER_PUBLIC_COLUMNS])
@@ -266,22 +300,6 @@ class ProjectController extends Controller
                 }
             }
         });
-        // Load project bugs with related data
-        $projectBugs = !$sharedWithClient('recent_bugs') ? collect() : \App\Models\Bug::with(['bugStatus', 'assignedTo:' . self::USER_PUBLIC_COLUMNS, 'reportedBy:' . self::USER_PUBLIC_COLUMNS])
-            ->where('project_id', $project->id)
-            ->latest()
-            ->get();
-        
-        $projectBugs->each(function ($bug) {
-            foreach (['assignedTo','reportedBy'] as $relation) {
-                if ($bug->$relation) {
-                    $bug->$relation->avatar = check_file($bug->$relation->avatar)
-                        ? get_file($bug->$relation->avatar)
-                        : get_file('avatars/avatar.png');
-                }
-            }
-        });
-
         // Load project timesheets with related data (team-internal: never sent to clients)
         $projectTimesheets = $isClient ? collect() : \App\Models\Timesheet::with([
             'user:' . self::USER_PUBLIC_COLUMNS,
@@ -307,25 +325,27 @@ class ProjectController extends Controller
                 return $timesheet;
             });
 
-        // Calculate project totals (only submitted timesheets)
+        // Calculate project totals (only submitted timesheets) - team-internal, so not for clients
         $submittedTimesheets = $projectTimesheets->whereIn('status', ['submitted', 'approved']);
-        $project->total_project_hours = $submittedTimesheets->sum('total_hours');
-        $project->total_billable_hours = $submittedTimesheets->sum('billable_hours');
-        $project->billable_rate_percentage = $project->total_project_hours > 0
-            ? round(($project->total_billable_hours / $project->total_project_hours) * 100)
-            : 0;
-        // Every hours figure on the page comes from the same counted (submitted/
-        // approved) set - rejected and draft time is not "logged" project time.
-        $activeMemberIds = $submittedTimesheets->pluck('user.id')->filter()->unique();
-        $project->total_team_members = $activeMemberIds->count();
-        $project->team_size = $project->members->pluck('user_id')->merge($activeMemberIds)->unique()->count();
-        $project->avg_hours_per_member = $activeMemberIds->count() > 0
-            ? round($project->total_project_hours / $activeMemberIds->count(), 1)
-            : 0;
-        $project->approved_timesheets_count = $projectTimesheets->where('status', 'approved')->count();
-        $project->submitted_timesheets_percentage = $projectTimesheets->count() > 0
-            ? round(($submittedTimesheets->count() / $projectTimesheets->count()) * 100)
-            : 0;
+        if (!$isClient) {
+            $project->total_project_hours = $submittedTimesheets->sum('total_hours');
+            $project->total_billable_hours = $submittedTimesheets->sum('billable_hours');
+            $project->billable_rate_percentage = $project->total_project_hours > 0
+                ? round(($project->total_billable_hours / $project->total_project_hours) * 100)
+                : 0;
+            // Every hours figure on the page comes from the same counted (submitted/
+            // approved) set - rejected and draft time is not "logged" project time.
+            $activeMemberIds = $submittedTimesheets->pluck('user.id')->filter()->unique();
+            $project->total_team_members = $activeMemberIds->count();
+            $project->team_size = $project->members->pluck('user_id')->merge($activeMemberIds)->unique()->count();
+            $project->avg_hours_per_member = $activeMemberIds->count() > 0
+                ? round($project->total_project_hours / $activeMemberIds->count(), 1)
+                : 0;
+            $project->approved_timesheets_count = $projectTimesheets->where('status', 'approved')->count();
+            $project->submitted_timesheets_percentage = $projectTimesheets->count() > 0
+                ? round(($submittedTimesheets->count() / $projectTimesheets->count()) * 100)
+                : 0;
+        }
 
         // project members with avatar URLs
         $project->members->each(function ($member) {
@@ -391,12 +411,14 @@ class ProjectController extends Controller
 
         return Inertia::render('projects/Show', [
             'project' => $project,
+            // Header and "Create" menu shared with the Backlog and Board pages (ProjectShell).
+            'shellProject' => $project->shellSummary(),
+            'taskForm' => $this->taskFormData($project),
             'budget' => $budget,
             'members' => $members,
             'managers' => $managers,
             'clients' => $clients,
             'projectTasks' => $projectTasks,
-            'projectBugs' => $projectBugs,
             'projectTimesheets' => $projectTimesheets,
             'userWorkspaceRole' => $userWorkspaceRole,
             'canManageBudget' => $this->checkPermission('project_manage_budget'),
@@ -1113,14 +1135,14 @@ class ProjectController extends Controller
 
         $project->setRelation('expenses', $expenses);
 
-        // Load project tasks
+        // Load project tasks, and its bugs (tasks of type bug) for their own section
         $project->tasks = \App\Models\Task::with(['taskStage', 'assignedTo', 'creator'])
             ->where('project_id', $project->id)
+            ->where('type', 'task')
             ->latest()
             ->get();
 
-        // Load project bugs
-        $project->bugs = \App\Models\Bug::with(['bugStatus', 'assignedTo', 'reportedBy'])
+        $project->bugs = \App\Models\Task::bugs()->with(['taskStage', 'assignedTo', 'creator'])
             ->where('project_id', $project->id)
             ->latest()
             ->get();
@@ -1203,7 +1225,7 @@ class ProjectController extends Controller
             }
         });
         $project->bugs->each(function ($bug) {
-            foreach (['assignedTo', 'reportedBy'] as $relation) {
+            foreach (['assignedTo', 'creator'] as $relation) {
                 if ($bug->$relation) {
                     $bug->$relation->avatar = check_file($bug->$relation->avatar)
                         ? get_file($bug->$relation->avatar)

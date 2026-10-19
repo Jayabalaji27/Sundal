@@ -137,12 +137,15 @@ class StandupController extends Controller
             ->whereDate('t.end_date', '<', now())
             ->count();
 
-        $criticalBugs = DB::table('bugs as b')
+        // Bugs are tasks of type bug; open ones are not in a completed stage.
+        $criticalBugs = DB::table('tasks as b')
             ->join('projects as p', 'p.id', '=', 'b.project_id')
+            ->leftJoin('task_stages as s', 's.id', '=', 'b.task_stage_id')
+            ->where('b.type', 'bug')
             ->where('b.assigned_to', $userId)
             ->where('p.workspace_id', $workspaceId)
             ->whereIn('b.severity', ['critical', 'blocker'])
-            ->whereNull('b.resolved_by')
+            ->where(fn ($q) => $q->whereNull('s.is_completed')->orWhere('s.is_completed', false))
             ->count();
 
         $blockers = [];

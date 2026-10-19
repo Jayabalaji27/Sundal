@@ -111,10 +111,12 @@ class ProjectHealthService
         }
 
         // ── 4. Open critical / blocker bugs ─────────────────────────────────
-        $criticalBugs = DB::table('bugs')
-            ->where('project_id', $project->id)
-            ->whereIn('severity', ['critical', 'blocker'])
-            ->whereNull('resolved_by')
+        $criticalBugs = DB::table('tasks')
+            ->leftJoin('task_stages', 'task_stages.id', '=', 'tasks.task_stage_id')
+            ->where('tasks.project_id', $project->id)
+            ->where('tasks.type', 'bug')
+            ->whereIn('tasks.severity', ['critical', 'blocker'])
+            ->where(fn ($q) => $q->whereNull('task_stages.is_completed')->orWhere('task_stages.is_completed', false))
             ->count();
 
         $metrics['critical_bugs'] = $criticalBugs;
@@ -157,6 +159,24 @@ class ProjectHealthService
                 $score -= 10;
                 $factors[] = ['type' => 'warning', 'message' => 'Budget at ' . round(($spent / $budget) * 100) . '% utilization'];
             }
+        }
+
+        // ── 7. Scope creep ──────────────────────────────────────────────────
+        // Part of the score, so the page never shows "healthy" next to a high
+        // scope-creep warning for the same project.
+        $creep = (new ScopeCreepService())->detect($project);
+        $metrics['scope_creep_rate'] = $creep['creep_rate'];
+        $metrics['added_after_baseline'] = $creep['added_after_baseline'];
+
+        [$penalty, $type] = match ($creep['status']) {
+            'severe'   => [20, 'critical'],
+            'high'     => [15, 'warning'],
+            'moderate' => [5, 'info'],
+            default    => [0, null],
+        };
+        if ($type) {
+            $score -= $penalty;
+            $factors[] = ['type' => $type, 'message' => "Scope grew {$creep['creep_rate']}% ({$creep['added_after_baseline']} tasks added after the plan)"];
         }
 
         // ── Clamp score ──────────────────────────────────────────────────────

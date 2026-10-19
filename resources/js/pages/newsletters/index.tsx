@@ -303,7 +303,7 @@ export default function Newsletters() {
 
   return (
     <PageTemplate 
-      title={t("Newsletter Management")} 
+      title={t("Newsletter")} 
       url="/newsletters"
       actions={pageActions}
       breadcrumbs={breadcrumbs}

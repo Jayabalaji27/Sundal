@@ -64,7 +64,7 @@ class EmailTemplateService
 
             return true;
         } catch (Exception $e) {
-            \Log::error('Email sending failed: ' . $e->getMessage());
+            IntegrationLog::failed('mail', 'send', $e, null, ['template' => $templateName, 'to' => IntegrationLog::maskEmail($toEmail)]);
             throw $e;
         }
     }
@@ -125,7 +125,7 @@ class EmailTemplateService
             
             return true;
         } catch (Exception $e) {
-            \Log::error('Email sending failed: ' . $e->getMessage());
+            IntegrationLog::failed('mail', 'send', $e, null, ['template' => $templateName, 'to' => IntegrationLog::maskEmail($toEmail)]);
             throw $e;
         }
     }

@@ -8,8 +8,6 @@ use App\Models\AiConversation;
 use App\Models\AiProviderSetting;
 use App\Models\AiToolCall;
 use App\Models\AiUsage;
-use App\Models\Bug;
-use App\Models\BugStatus;
 use App\Models\Plan;
 use App\Models\Project;
 use App\Models\ProjectActivity;
@@ -73,7 +71,7 @@ function aiWorkspace(bool $withAddon = true): array
         $users[$role] = $user;
     }
 
-    // WorkspaceObserver seeds the default stages (To Do … Done) and bug statuses.
+    // WorkspaceObserver seeds the default stages (To Do … Done); bugs use them too.
     return [$workspace, $users];
 }
 
@@ -109,6 +107,21 @@ function aiProject(Workspace $workspace, User $creator, string $title = 'Website
         'workspace_id' => $workspace->id, 'title' => $title, 'status' => 'active', 'priority' => 'medium',
         'progress' => 0, 'created_by' => $creator->id, 'visibility' => 'workspace',
     ]);
+}
+
+/** A bug: a task of type bug, in the workspace's first stage. */
+function aiBug(Project $project, User $creator, string $title, array $attrs = []): Task
+{
+    return Task::create(array_merge([
+        'project_id' => $project->id,
+        'type' => 'bug',
+        'task_stage_id' => TaskStage::where('workspace_id', $project->workspace_id)->orderBy('order')->value('id'),
+        'title' => $title,
+        'priority' => 'high',
+        'severity' => 'major',
+        'progress' => 0,
+        'created_by' => $creator->id,
+    ], $attrs));
 }
 
 function aiTask(Project $project, User $creator, string $title, array $attrs = []): Task
@@ -292,7 +305,7 @@ describe('settings', function () {
     ]);
 
     test('the vendor error is logged for the owner to debug', function () {
-        \Illuminate\Support\Facades\Log::spy();
+        $log = captureLog('ai');
         \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::response(['error' => ['code' => 401, 'message' => 'No auth credentials found']], 401)]);
         $driver = new \App\Services\Ai\Providers\PrismProvider(\Prism\Prism\Enums\Provider::OpenRouter, 'some/model', 'test-key-12345678');
 
@@ -301,10 +314,11 @@ describe('settings', function () {
         } catch (\App\Services\Ai\AiProviderException) {
         }
 
-        \Illuminate\Support\Facades\Log::shouldHaveReceived('warning')->withArgs(fn (string $message, array $context) => $context['provider'] === 'openrouter'
-            && $context['kind'] === 'key'
-            && str_contains($context['error'], 'No auth credentials found')
-            && !str_contains($context['error'], 'test-key-12345678'));
+        $line = loggedLines($log, 'ai.provider.error')[0];
+        expect($line['provider'])->toBe('openrouter')
+            ->and($line['kind'])->toBe('key')
+            ->and($line['error'])->toContain('No auth credentials found')
+            ->and($line['error'])->not->toContain('test-key-12345678');
     });
 
     test('Azure OpenAI errors keep their Azure wording', function (\Throwable $error, string $message) {
@@ -369,7 +383,7 @@ describe('chat', function () {
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
 
         expect(toolNames($fake))->toBe(collect(app(\App\Services\Ai\ToolRegistry::class)->all())->keys()->sort()->values()->all())
-            ->and(toolNames($fake))->toHaveCount(52);
+            ->and(toolNames($fake))->toHaveCount(58);
     });
 
     test('a manager gets the manager workflow tools their role allows', function () {
@@ -586,8 +600,7 @@ describe('confirm cards', function () {
         aiSettings($workspace);
         $project = aiProject($workspace, $users['owner']);
         $task = aiTask($project, $users['owner'], 'API docs');
-        $bug = Bug::create(['project_id' => $project->id, 'bug_status_id' => BugStatus::where('workspace_id', $workspace->id)->value('id'),
-            'title' => 'Login button does nothing', 'priority' => 'high', 'severity' => 'major', 'reported_by' => $users['owner']->id]);
+        $bug = aiBug($project, $users['owner'], 'Login button does nothing');
 
         fakeAi([
             ['tool' => 'change_task_status', 'args' => ['task' => 'API docs', 'stage' => 'Done']],
@@ -806,23 +819,23 @@ describe('bugs', function () {
         asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.confirm', $card['id']), ['fields' => ['priority' => 'high', 'assignee' => 'none']])
             ->assertJsonPath('card.status', 'done');
 
-        $bug = Bug::where('title', 'Login button does nothing')->first();
-        expect($bug->reported_by)->toBe($users['manager']->id)->and($bug->severity)->toBe('critical')->and($bug->bugStatus->name)->toBe('New');
+        $bug = Task::bugs()->where('title', 'Login button does nothing')->first();
+        expect($bug->created_by)->toBe($users['manager']->id)->and($bug->severity)->toBe('critical')->and($bug->taskStage->name)->toBe('To Do');
     });
 
     test('change_bug_status can be undone', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
         $project = aiProject($workspace, $users['owner']);
-        $bug = Bug::create(['project_id' => $project->id, 'bug_status_id' => BugStatus::where('workspace_id', $workspace->id)->where('name', 'New')->value('id'),
-            'title' => 'Crash on save', 'priority' => 'high', 'severity' => 'major', 'reported_by' => $users['owner']->id]);
+        $bug = aiBug($project, $users['owner'], 'Crash on save');
 
+        // "Resolved" is a bug word for the done stage.
         $card = aiCall($this, $users['owner'], 'change_bug_status', ['bug' => 'Crash on save', 'status' => 'Resolved'])['card'];
         aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.can_undo', true);
-        expect($bug->fresh()->bugStatus->name)->toBe('Resolved')->and($bug->fresh()->resolved_by)->toBe($users['owner']->id);
+        expect($bug->fresh()->taskStage->name)->toBe('Done');
 
         asAi($this, $users['owner'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
-        expect($bug->fresh()->bugStatus->name)->toBe('New');
+        expect($bug->fresh()->taskStage->name)->toBe('To Do');
     });
 });
 
@@ -1079,9 +1092,9 @@ describe('history log and creators', function () {
         $note = \App\Models\Note::create(['workspace' => $workspace->id, 'title' => 'Minutes', 'text' => 'x', 'color' => '#ffffff']);
         expect($note->created_by)->toBe($users['manager']->id);
 
-        $bug = Bug::create(['project_id' => aiProject($workspace, $users['owner'])->id, 'bug_status_id' => BugStatus::where('workspace_id', $workspace->id)->value('id'),
-            'title' => 'No reporter given', 'priority' => 'low', 'severity' => 'minor']);
-        expect($bug->reported_by)->toBe($users['manager']->id);
+        $bug = Task::create(['project_id' => aiProject($workspace, $users['owner'])->id, 'type' => 'bug', 'task_stage_id' => TaskStage::where('workspace_id', $workspace->id)->value('id'),
+            'title' => 'No reporter given', 'priority' => 'low', 'severity' => 'minor', 'progress' => 0]);
+        expect($bug->created_by)->toBe($users['manager']->id);
     });
 
     test('a change with no signed-in user is no longer credited to user 1 in the project feed', function () {
@@ -1184,13 +1197,13 @@ describe('screens still work through the new shared actions', function () {
         $project = aiProject($workspace, $users['owner']);
         $owner = $users['owner'];
 
-        $this->actingAs($owner)->post(route('bugs.store'), ['project_id' => $project->id, 'title' => 'Form bug', 'priority' => 'low', 'severity' => 'minor'])->assertSessionHasNoErrors();
-        $bug = Bug::where('title', 'Form bug')->first();
-        expect($bug->reported_by)->toBe($owner->id);
+        $this->actingAs($owner)->post(route('tasks.store'), ['project_id' => $project->id, 'type' => 'bug', 'title' => 'Form bug', 'priority' => 'low', 'severity' => 'minor'])->assertSessionHasNoErrors();
+        $bug = Task::bugs()->where('title', 'Form bug')->first();
+        expect($bug->created_by)->toBe($owner->id)->and($bug->severity)->toBe('minor');
 
-        $resolved = BugStatus::where('workspace_id', $workspace->id)->where('name', 'Resolved')->first();
-        $this->actingAs($owner)->put(route('bugs.change-status', $bug), ['bug_status_id' => $resolved->id]);
-        expect($bug->fresh()->resolved_by)->toBe($owner->id);
+        $done = TaskStage::where('workspace_id', $workspace->id)->where('name', 'Done')->first();
+        $this->actingAs($owner)->put(route('tasks.change-stage', $bug), ['task_stage_id' => $done->id]);
+        expect($bug->fresh()->task_stage_id)->toBe($done->id);
 
         $expense = aiExpense($project, $users['member']);
         $this->actingAs($owner)->post(route('expense-approvals.approve', $expense), ['notes' => 'ok']);
@@ -2027,9 +2040,9 @@ describe('sheet imports', function () {
 
         aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done')->assertJsonPath('card.can_undo', true);
 
-        $bug = Bug::where('title', 'Login button does nothing')->first();
-        expect(Bug::count())->toBe(3)
-            ->and($bug->reported_by)->toBe($users['manager']->id)
+        $bug = Task::bugs()->where('title', 'Login button does nothing')->first();
+        expect(Task::bugs()->count())->toBe(3)
+            ->and($bug->created_by)->toBe($users['manager']->id)
             ->and($bug->assigned_to)->toBe($ravi->id)
             ->and($bug->severity)->toBe('blocker')
             ->and($bug->steps_to_reproduce)->toBe('Open login, click Sign in')
@@ -2037,7 +2050,7 @@ describe('sheet imports', function () {
             ->and($bug->description)->toContain('From QA bugs.xlsx, sheet Bugs, row 2')->toContain('ID: 1');
 
         asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
-        expect(Bug::count())->toBe(0);
+        expect(Task::bugs()->count())->toBe(0);
     });
 
     test('the card is edited in place with no AI call: project, columns, rows, assignees', function () {
@@ -2068,9 +2081,9 @@ describe('sheet imports', function () {
             ->and($card['view']['included'])->toBe(1);
 
         aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.status', 'done');
-        expect(Bug::pluck('title')->all())->toBe(['Open login, click Sign in'])
-            ->and(Bug::first()->project_id)->toBe($mobile->id)
-            ->and(Bug::first()->assigned_to)->toBe($users['owner']->id);
+        expect(Task::bugs()->pluck('title')->all())->toBe(['Open login, click Sign in'])
+            ->and(Task::bugs()->first()->project_id)->toBe($mobile->id)
+            ->and(Task::bugs()->first()->assigned_to)->toBe($users['owner']->id);
     });
 
     test('rows already in the project are unticked; more than 10 rows need CREATE N typed; at most 500 rows', function () {
@@ -2093,7 +2106,7 @@ describe('sheet imports', function () {
 
         aiConfirm($this, $users['owner'], $card['id'], 'yes')->assertUnprocessable();
         aiConfirm($this, $users['owner'], $card['id'], 'CREATE 11')->assertJsonPath('card.status', 'done');
-        expect(Bug::where('project_id', $project->id)->count())->toBe(12);
+        expect(Task::bugs()->where('project_id', $project->id)->count())->toBe(12);
     });
 
     test('a task sheet becomes tasks, with story, criteria, owner and due columns matched', function () {
@@ -3044,5 +3057,218 @@ describe('faster voice', function () {
 
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
         expect($fake->requests[0]->system)->not->toContain('<attached_file>')->not->toContain('import_bugs_from_sheet');
+    });
+});
+
+// ── Epics, sprint planning, meetings and project pages (19 Oct) ───────────────
+
+describe('epics, sprints and meetings', function () {
+    test('set_epic files items under an epic and can be undone; list_epics shows the progress', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $epic = \App\Models\Epic::create(['workspace_id' => $workspace->id, 'project_id' => $project->id, 'name' => 'Checkout']);
+        $done = TaskStage::where('workspace_id', $workspace->id)->where('name', 'Done')->first();
+        $cart = aiTask($project, $users['owner'], 'Cart totals');
+        $pay = aiBug($project, $users['owner'], 'Pay button dead', ['task_stage_id' => $done->id, 'progress' => 100]);
+
+        $card = aiCall($this, $users['manager'], 'set_epic', ['epic' => 'Checkout', 'items' => 'Cart totals; Pay button dead'])['card'];
+        expect($card['items'])->toHaveCount(2);
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done')->assertJsonPath('card.can_undo', true);
+        expect($cart->fresh()->epic_id)->toBe($epic->id)->and($pay->fresh()->epic_id)->toBe($epic->id);
+
+        $epics = aiData(aiCall($this, $users['manager'], 'list_epics', ['search' => 'Checkout']))['epics'];
+        expect($epics[0])->toMatchArray(['name' => 'Checkout', 'items' => 2, 'items_done' => 1, 'bugs' => 1])
+            ->and($epics[0]['items_list'])->toHaveCount(2);
+
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect($cart->fresh()->epic_id)->toBeNull()->and($pay->fresh()->epic_id)->toBeNull();
+    });
+
+    test('create_epic adds an epic; create_task can file the new task under it', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+
+        $card = aiCall($this, $users['manager'], 'create_epic', ['project' => 'Website Redesign', 'name' => 'Checkout and payments'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        $epic = \App\Models\Epic::where('name', 'Checkout and payments')->firstOrFail();
+        expect($epic->project_id)->toBe($project->id)->and($epic->status)->toBe('open')->and($epic->created_by)->toBe($users['manager']->id);
+
+        $card = aiCall($this, $users['manager'], 'create_task', ['project' => 'Website Redesign', 'title' => 'Coupon field', 'epic' => 'Checkout and payments'])['card'];
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.confirm', $card['id']), ['fields' => ['priority' => 'medium', 'assignee' => 'none']])
+            ->assertJsonPath('card.status', 'done');
+        expect(Task::where('title', 'Coupon field')->value('epic_id'))->toBe($epic->id);
+    });
+
+    test('remove_tasks_from_sprint sends items back to the backlog, and undo plans them again', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $sprint = \App\Models\Sprint::withoutGlobalScope('workspace')->create(['project_id' => $project->id, 'workspace_id' => $workspace->id, 'name' => 'Sprint 1', 'status' => 'planning', 'created_by' => $users['owner']->id]);
+        $task = aiTask($project, $users['owner'], 'Signup page');
+        $sprint->tasks()->attach($task->id);
+
+        $card = aiCall($this, $users['manager'], 'remove_tasks_from_sprint', ['sprint' => 'Sprint 1', 'tasks' => 'Signup page'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($sprint->tasks()->count())->toBe(0);
+
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect($sprint->tasks()->pluck('tasks.id')->all())->toBe([$task->id]);
+    });
+
+    test('list_meetings lists the meetings the user is in; schedule_meeting needs Zoom or Google Meet connected', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        \App\Models\ProjectMember::create(['project_id' => $project->id, 'user_id' => $users['manager']->id, 'role' => 'manager', 'assigned_by' => $users['owner']->id, 'assigned_at' => now()]);
+        $review = \App\Models\ZoomMeeting::withoutGlobalScopes()->create([
+            'title' => 'Sprint review', 'start_time' => now()->addDay(), 'end_time' => now()->addDay()->addHour(), 'duration' => 60,
+            'user_id' => $users['owner']->id, 'workspace_id' => $workspace->id, 'project_id' => $project->id, 'join_url' => 'https://zoom.test/j/9',
+        ]);
+        $review->members()->attach($users['manager']->id);
+        \App\Models\ZoomMeeting::withoutGlobalScopes()->create([
+            'title' => 'Owner only', 'start_time' => now()->addDay(), 'end_time' => now()->addDay()->addHour(), 'duration' => 60,
+            'user_id' => $users['owner']->id, 'workspace_id' => $workspace->id, 'project_id' => $project->id,
+        ]);
+
+        $list = aiData(aiCall($this, $users['manager'], 'list_meetings', []));
+        expect($list['meetings'])->toHaveCount(1)
+            ->and($list['meetings'][0])->toMatchArray(['title' => 'Sprint review', 'provider' => 'Zoom', 'join_url' => 'https://zoom.test/j/9']);
+
+        // Nothing is connected: no card, and the assistant is told why.
+        $refused = aiCall($this, $users['manager'], 'schedule_meeting', ['title' => 'Stand-up', 'project' => 'Website Redesign', 'start' => now()->addDay()->format('Y-m-d') . ' 10:00']);
+        expect($refused['card'])->toBeNull()->and($refused['result'])->toContain('not connected');
+
+        // Zoom connected: the card invites the people named, and confirming creates the meeting with its link.
+        $this->mock(\App\Services\ZoomService::class, function ($zoom) {
+            $zoom->shouldReceive('hasValidCredentials')->andReturn(true);
+            $zoom->shouldReceive('createMeeting')->andReturn(['success' => true, 'data' => ['id' => '123', 'start_url' => 'https://zoom.test/s/1', 'join_url' => 'https://zoom.test/j/1']]);
+        });
+        $card = aiCall($this, $users['manager'], 'schedule_meeting', ['title' => 'Stand-up', 'project' => 'Website Redesign', 'start' => now()->addDay()->format('Y-m-d') . ' 10:00', 'duration' => 15, 'attendees' => 'me'])['card'];
+        expect($card['items'])->toBe([$users['manager']->name]);
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+
+        $meeting = \App\Models\ZoomMeeting::withoutGlobalScopes()->where('title', 'Stand-up')->firstOrFail();
+        expect($meeting->join_url)->toBe('https://zoom.test/j/1')
+            ->and($meeting->duration)->toBe(15)
+            ->and($meeting->user_id)->toBe($users['manager']->id)
+            ->and($meeting->members()->pluck('users.id')->all())->toBe([$users['manager']->id]);
+    });
+
+    test('open_record opens a project page; list_tasks can list only bugs, with their severity and epic', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $epic = \App\Models\Epic::create(['workspace_id' => $workspace->id, 'project_id' => $project->id, 'name' => 'Checkout']);
+        aiTask($project, $users['owner'], 'Write docs');
+        aiBug($project, $users['owner'], 'Crash on pay', ['severity' => 'critical', 'epic_id' => $epic->id]);
+
+        fakeAi([['tool' => 'open_record', 'args' => ['type' => 'project', 'ref' => 'Website Redesign', 'tab' => 'board']], ['text' => 'Opened.']]);
+        $reply = asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'show the Website Redesign board'])->assertOk()->json('messages.1');
+        expect($reply['actions'][0]['url'])->toBe(route('projects.board', $project->id, false));
+
+        $tasks = aiData(aiCall($this, $users['owner'], 'list_tasks', ['type' => 'bug']))['tasks'];
+        expect($tasks)->toHaveCount(1)
+            ->and($tasks[0])->toMatchArray(['title' => 'Crash on pay', 'type' => 'bug', 'severity' => 'critical', 'epic' => 'Checkout']);
+    });
+});
+
+// ── Logging (19 Oct) ──────────────────────────────────────────────────────────
+
+describe('logging', function () {
+    test('each reply is one line in the AI log, with its request id, and never what was said', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiTask(aiProject($workspace, $users['owner']), $users['owner'], 'Fix login page');
+        fakeAi([['tool' => 'list_tasks', 'args' => []], ['text' => 'You have one task.']]);
+        $log = captureLog('ai');
+
+        $response = asAi($this, $users['manager'])->postJson(route('ai-assistant.send'), [
+            'content' => 'list my private tasks', 'voice' => true, 'page' => ['route' => 'tasks.index', 'url' => '/tasks'],
+        ])->assertOk();
+
+        $lines = loggedLines($log, 'ai.reply');
+        expect($lines)->toHaveCount(1)
+            ->and($lines[0])->toMatchArray([
+                'user_id' => $users['manager']->id,
+                'workspace_id' => $workspace->id,
+                'channel' => 'voice',
+                'page' => 'tasks.index',
+                'provider' => 'anthropic',
+                'model' => 'claude-sonnet-5-5',
+                'tool_calls' => ['list_tasks:done'],
+                'prompt_chars' => 21,
+            ])
+            ->and($lines[0]['input_tokens'])->toBeGreaterThan(0)
+            ->and($lines[0]['ms'])->toBeInt()
+            ->and(json_encode(collect($log->getRecords())->map->toArray()))->not->toContain('private tasks')->not->toContain('one task');
+
+        $record = collect($log->getRecords())->first(fn ($r) => $r['message'] === 'ai.reply');
+        expect($record['extra']['request_id'])->toBe($response->headers->get('X-Request-Id'));
+    });
+
+    test('a refused reply is logged with the reason', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['monthly_token_cap' => 1000]);
+        AiUsage::withoutGlobalScope('workspace')->create([
+            'workspace_id' => $workspace->id, 'user_id' => $users['owner']->id, 'provider' => 'anthropic',
+            'model' => 'claude-sonnet-5-5', 'input_tokens' => 900, 'output_tokens' => 200,
+        ]);
+        fakeAi([['text' => 'ok']]);
+        $log = captureLog('ai');
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertStatus(502);
+
+        expect(loggedLines($log, 'ai.reply.failed')[0])->toMatchArray(['user_id' => $users['owner']->id, 'channel' => 'chat'])
+            ->and(loggedLines($log, 'ai.reply.failed')[0]['error'])->toContain('monthly AI token cap');
+    });
+
+    test('confirming, undoing and cancelling cards are logged with the card and the record it changed', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $epic = \App\Models\Epic::create(['workspace_id' => $workspace->id, 'project_id' => $project->id, 'name' => 'Checkout']);
+        aiTask($project, $users['owner'], 'Cart totals');
+        $log = captureLog('ai');
+
+        $card = aiCall($this, $users['manager'], 'set_epic', ['epic' => 'Checkout', 'items' => 'Cart totals'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertOk();
+        $other = aiCall($this, $users['manager'], 'set_epic', ['epic' => 'Checkout', 'items' => 'Cart totals'])['card'];
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.cancel', $other['id']))->assertOk();
+
+        expect(loggedLines($log, 'ai.card.confirmed')[0])->toMatchArray([
+            'tool_call_id' => $card['id'], 'tool' => 'set_epic', 'user_id' => $users['manager']->id,
+            'workspace_id' => $workspace->id, 'subject' => "Epic#{$epic->id}", 'can_undo' => true,
+        ])
+            ->and(loggedLines($log, 'ai.card.undone')[0]['tool_call_id'])->toBe($card['id'])
+            ->and(loggedLines($log, 'ai.card.cancelled')[0]['tool_call_id'])->toBe($other['id'])
+            ->and(loggedLines($log, 'ai.reply'))->toHaveCount(2);
+    });
+
+    test('voice transcriptions and AI settings changes are logged, never the key or the words', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace, ['provider' => 'gemini', 'model' => 'gemini-2.5-flash', 'api_key' => 'gemini-test-12345678']);
+        fakeAi([['text' => 'open the login bug']]);
+        $log = captureLog('ai');
+
+        asAi($this, $users['owner'])->post(route('ai-assistant.voice.transcribe'), ['audio' => aiWav(), 'lang' => 'en-US'], ['Accept' => 'application/json'])->assertOk();
+        asAi($this, $users['owner'])->put(route('ai-assistant.settings.update'), [
+            'provider' => 'anthropic', 'model' => 'claude-sonnet-5-5', 'api_key' => 'sk-ant-secret-key-ABCD',
+            'managers_enabled' => true, 'retention_days' => 90,
+        ])->assertSessionHasNoErrors();
+
+        expect(loggedLines($log, 'ai.voice.transcribed')[0])->toMatchArray([
+            'user_id' => $users['owner']->id, 'provider' => 'gemini', 'model' => 'gemini-2.5-flash',
+            'mime' => 'audio/wav', 'language' => 'en', 'chars' => 18,
+        ])
+            ->and(loggedLines($log, 'ai.settings.saved')[0])->toMatchArray(['provider' => 'anthropic', 'model' => 'claude-sonnet-5-5', 'key_changed' => true])
+            ->and(json_encode(collect($log->getRecords())->map->toArray()))->not->toContain('sk-ant-secret')->not->toContain('login bug');
+
+        // The settings change is also in the history log, without the key.
+        $history = \Spatie\Activitylog\Models\Activity::where('subject_type', (new AiProviderSetting)->getMorphClass())->latest('id')->first();
+        expect($history->causer_id)->toBe($users['owner']->id)
+            ->and(json_encode($history->properties))->not->toContain('sk-ant-secret');
     });
 });

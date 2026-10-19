@@ -17,6 +17,14 @@ use Carbon\Carbon;
 
 class ZoomMeetingController extends Controller
 {
+    /** The workspace owner may change any meeting; anyone else only the ones they scheduled. */
+    private function canModifyMeeting(ZoomMeeting $meeting): bool
+    {
+        $user = auth()->user();
+
+        return $user->currentWorkspace?->getMemberRole($user) === 'owner' || (int) $meeting->user_id === (int) $user->id;
+    }
+
     use HasPermissionChecks;
 
     protected $zoomService;
@@ -145,75 +153,18 @@ class ZoomMeetingController extends Controller
 
         $startTime = Carbon::parse($request->start_time);
 
-        $meetingData = [
-            'title' => $request->title,
-            'description' => $request->description,
-            'start_time' => $startTime->toISOString(),
-            'duration' => $request->duration,
-            'timezone' => $request->timezone,
-            'password' => $request->password,
-        ];
-
         try {
-            // Check if Zoom credentials are configured
-            $hasCredentials = $this->zoomService->hasValidCredentials();
-            
-            if ($hasCredentials) {
-                // Create meeting via Zoom API
-                $zoomResponse = $this->zoomService->createMeeting($meetingData);
-
-                if ($zoomResponse['success']) {
-                    $zoomData = $zoomResponse['data'];
-                    $meetingId = $zoomData['id'];
-                    $startUrl = $zoomData['start_url'];
-                    $joinUrl = $zoomData['join_url'];
-                    $password = $zoomData['password'] ?? $request->password;
-                } else {
-                    // Fallback to local meeting if API fails
-                    $meetingId = 'local_' . time();
-                    $startUrl = null;
-                    $joinUrl = null;
-                    $password = $request->password;
-                }
-            } else {
-                // Create local meeting when no Zoom credentials
-                $meetingId = 'local_' . time();
-                $startUrl = null;
-                $joinUrl = null;
-                $password = $request->password;
-            }
-
-            $meeting = ZoomMeeting::create([
-                'title' => $request->title,
-                'description' => $request->description,
-                'workspace_id' => $workspace->id,
-                'zoom_meeting_id' => $meetingId,
-                'project_id' => $request->project_id,
+            // Shared with the AI assistant: creates it with Zoom (or keeps it without a link), invites, emails.
+            $meeting = app(\App\Actions\Meetings\ScheduleMeeting::class)->handle($user, 'zoom', [
+                ...$validated,
                 'start_time' => $startTime,
-                'end_time' => $startTime->copy()->addMinutes($request->duration),
-                'duration' => $request->duration,
-                'timezone' => $request->timezone,
-                'start_url' => $startUrl,
-                'password' => $password,
-                'join_url' => $joinUrl,
-                'status' => 'scheduled',
-                'user_id' => $user->id,
-                'is_googlecalendar_sync' => $request->is_googlecalendar_sync ?? false,
+                'is_googlecalendar_sync' => $request->boolean('is_googlecalendar_sync'),
             ]);
-
-            // Attach members to the meeting
-            if (!empty($request->member_ids)) {
-                $meeting->members()->attach($request->member_ids);
-            }
+            $startUrl = $meeting->start_url;
 
             // Sync with Google Calendar if enabled
             if ($request->is_googlecalendar_sync) {
                 $this->syncMeetingWithGoogleCalendar($meeting);
-            }
-
-            // Fire event for email notification
-            if (!config('app.is_demo', true)) {
-                event(new ZoomMeetingCreated($meeting));
             }
 
             $message = $startUrl ? __('Zoom meeting created successfully!') : __('Meeting created successfully! Zoom API failed - please check your app activation and scopes in Zoom Marketplace.');
@@ -282,6 +233,7 @@ class ZoomMeetingController extends Controller
         if (!$workspace || $zoomMeeting->workspace_id !== $workspace->id) {
             abort(403, 'Meeting not found in current workspace.');
         }
+        abort_unless($this->canModifyMeeting($zoomMeeting), 403, __('Only the person who scheduled this meeting, or the workspace owner, can change it.'));
 
         try {
             // Delete Google Calendar event
@@ -396,7 +348,11 @@ class ZoomMeetingController extends Controller
             'meeting' => $meetingData,
             'projects' => $projects,
             'members' => $members,
-            'permissions' => $this->getModuleCrudPermissions('zoom_meeting'),
+            'permissions' => [
+                ...$this->getModuleCrudPermissions('zoom_meeting'),
+                'update' => $this->checkPermission('zoom_meeting_update') && $this->canModifyMeeting($zoomMeeting),
+                'delete' => $this->checkPermission('zoom_meeting_delete') && $this->canModifyMeeting($zoomMeeting),
+            ],
             'googleCalendarEnabled' => $googleCalendarEnabled
         ]);
     }
@@ -411,6 +367,7 @@ class ZoomMeetingController extends Controller
         if (!$workspace || $zoomMeeting->workspace_id !== $workspace->id) {
             abort(403, 'Meeting not found in current workspace.');
         }
+        abort_unless($this->canModifyMeeting($zoomMeeting), 403, __('Only the person who scheduled this meeting, or the workspace owner, can change it.'));
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',

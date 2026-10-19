@@ -96,7 +96,7 @@ export default function Index({ ownedWorkspaces, memberWorkspaces, currentWorksp
 
     return (
         <PageTemplate 
-            title={t('Workspaces Management')} 
+            title={t('Workspaces')} 
             url="/workspaces"
             actions={pageActions}
             breadcrumbs={breadcrumbs}

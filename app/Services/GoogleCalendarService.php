@@ -6,7 +6,6 @@ use App\Models\Setting;
 use App\Models\Workspace;
 use Google\Client as GoogleClient;
 use Google\Service\Calendar;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Service-account based Google Calendar integration, matching the existing
@@ -107,14 +106,16 @@ class GoogleCalendarService
      */
     public function testConnection($userId, $workspaceId, $calendarId = null): array
     {
+        $started = hrtime(true);
         try {
             $client = $this->getClient($userId, $workspaceId);
             $service = new Calendar($client);
             $service->calendars->get($calendarId ?: $this->calendarId($userId, $workspaceId));
+            IntegrationLog::ok('google_calendar', 'connection.test', $started, ['workspace_id' => $workspaceId]);
 
             return ['success' => true];
         } catch (\Exception $e) {
-            Log::error('Google Calendar test connection failed: ' . $e->getMessage());
+            IntegrationLog::failed('google_calendar', 'connection.test', $e, $started, ['workspace_id' => $workspaceId]);
 
             return ['success' => false, 'error' => $this->friendlyError($e)];
         }
@@ -134,6 +135,7 @@ class GoogleCalendarService
 
     public function getEvents($userId, $maxResults = 100, $workspaceId = null): array
     {
+        $started = hrtime(true);
         try {
             $client = $this->getClient($userId, $workspaceId);
             $service = new Calendar($client);
@@ -144,6 +146,8 @@ class GoogleCalendarService
                 'singleEvents' => true,
                 'timeMin' => date('c'),
             ]);
+
+            IntegrationLog::ok('google_calendar', 'events.list', $started, ['workspace_id' => $workspaceId, 'count' => count($results->getItems())]);
 
             return array_map(function ($event) {
                 return [
@@ -156,7 +160,7 @@ class GoogleCalendarService
                 ];
             }, $results->getItems());
         } catch (\Exception $e) {
-            Log::error('Google Calendar getEvents error: ' . $e->getMessage());
+            IntegrationLog::failed('google_calendar', 'events.list', $e, $started, ['workspace_id' => $workspaceId]);
             return [];
         }
     }
@@ -186,45 +190,51 @@ class GoogleCalendarService
 
     public function createEvent($item, $userId, $workspaceId = null): ?string
     {
+        $started = hrtime(true);
         try {
             $client = $this->getClient($userId, $workspaceId);
             $service = new Calendar($client);
 
             $created = $service->events->insert($this->calendarId($userId, $workspaceId), $this->buildEventPayload($item));
+            IntegrationLog::ok('google_calendar', 'event.create', $started, ['workspace_id' => $workspaceId, 'event_id' => $created->getId()]);
 
             return $created->getId();
         } catch (\Exception $e) {
-            Log::error('Google Calendar createEvent error: ' . $e->getMessage());
+            IntegrationLog::failed('google_calendar', 'event.create', $e, $started, ['workspace_id' => $workspaceId]);
             return null;
         }
     }
 
     public function updateEvent($eventId, $item, $userId, $workspaceId = null): bool
     {
+        $started = hrtime(true);
         try {
             $client = $this->getClient($userId, $workspaceId);
             $service = new Calendar($client);
 
             $service->events->update($this->calendarId($userId, $workspaceId), $eventId, $this->buildEventPayload($item));
+            IntegrationLog::ok('google_calendar', 'event.update', $started, ['workspace_id' => $workspaceId, 'event_id' => $eventId]);
 
             return true;
         } catch (\Exception $e) {
-            Log::error('Google Calendar updateEvent error: ' . $e->getMessage());
+            IntegrationLog::failed('google_calendar', 'event.update', $e, $started, ['workspace_id' => $workspaceId, 'event_id' => $eventId]);
             return false;
         }
     }
 
     public function deleteEvent($eventId, $userId, $workspaceId = null): bool
     {
+        $started = hrtime(true);
         try {
             $client = $this->getClient($userId, $workspaceId);
             $service = new Calendar($client);
 
             $service->events->delete($this->calendarId($userId, $workspaceId), $eventId);
+            IntegrationLog::ok('google_calendar', 'event.delete', $started, ['workspace_id' => $workspaceId, 'event_id' => $eventId]);
 
             return true;
         } catch (\Exception $e) {
-            Log::error('Google Calendar deleteEvent error: ' . $e->getMessage());
+            IntegrationLog::failed('google_calendar', 'event.delete', $e, $started, ['workspace_id' => $workspaceId, 'event_id' => $eventId]);
             return false;
         }
     }
@@ -241,6 +251,7 @@ class GoogleCalendarService
 
     public function createGoogleMeetingEvent($meeting, $userId, $workspaceId = null): ?string
     {
+        $started = hrtime(true);
         try {
             $client = $this->getClient($userId, $workspaceId);
             $service = new Calendar($client);
@@ -254,10 +265,11 @@ class GoogleCalendarService
             ]);
 
             $created = $service->events->insert($this->calendarId($userId, $workspaceId), $event, ['conferenceDataVersion' => 1]);
+            IntegrationLog::ok('google_calendar', 'meet_event.create', $started, ['workspace_id' => $workspaceId, 'event_id' => $created->getId()]);
 
             return $created->getId();
         } catch (\Exception $e) {
-            Log::error('Google Calendar createGoogleMeetingEvent error: ' . $e->getMessage());
+            IntegrationLog::failed('google_calendar', 'meet_event.create', $e, $started, ['workspace_id' => $workspaceId]);
             return null;
         }
     }

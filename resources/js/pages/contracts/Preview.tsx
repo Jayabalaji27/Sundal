@@ -100,7 +100,7 @@ export default function ContractPreview() {
 
     return (
         <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh', padding: '32px' }}>
-             <Head title={`${contract.subject} - ${(usePage().props as any).globalSettings?.titleText || 'Taskly'}`} />
+             <Head title={`${contract.subject} - ${(usePage().props as any).globalSettings?.titleText || (usePage().props as any).name}`} />
             {/* Fixed Download Button */}
             <div style={{ position: 'fixed', top: '16px', right: '16px', zIndex: 10 }}>
                 <Button

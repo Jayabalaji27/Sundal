@@ -16,6 +16,14 @@ use Carbon\Carbon;
 
 class GoogleMeetingController extends Controller
 {
+    /** The workspace owner may change any meeting; anyone else only the ones they scheduled. */
+    private function canModifyMeeting(GoogleMeeting $meeting): bool
+    {
+        $user = auth()->user();
+
+        return $user->currentWorkspace?->getMemberRole($user) === 'owner' || (int) $meeting->user_id === (int) $user->id;
+    }
+
     use HasPermissionChecks;
 
     protected $googleMeetService;
@@ -175,53 +183,15 @@ class GoogleMeetingController extends Controller
         ]);
 
         $startTime = Carbon::parse($request->start_time);
-        
+
         // Preserve the user's timezone instead of converting to UTC
         if (!$startTime->getTimezone()) {
             $startTime->setTimezone(config('app.timezone', 'UTC'));
         }
 
-        $meetingData = [
-            'title' => $request->title,
-            'description' => $request->description,
-            'start_time' => $startTime->toISOString(),
-            'duration' => $request->duration,
-            'timezone' => $startTime->getTimezone()->getName(),
-        ];
-
         try {
-            // Create Google Meet through Google Calendar API
-            $googleResponse = $this->googleMeetService->createMeeting($meetingData);
-            
-            $googleData = $googleResponse['data'];
-            $meetingId = $googleData['id'];
-            $joinUrl = $googleData['hangoutLink'];
-            $startUrl = $googleData['hangoutLink'];
-
-            $meeting = GoogleMeeting::create([
-                'title' => $request->title,
-                'description' => $request->description,
-                'workspace_id' => $workspace->id,
-                'project_id' => $request->project_id,
-                'start_time' => $startTime,
-                'end_time' => $startTime->copy()->addMinutes($request->duration),
-                'duration' => $request->duration,
-                'join_url' => $joinUrl,
-                'start_url' => $startUrl,
-                'status' => 'scheduled',
-                'user_id' => $user->id,
-                'google_calendar_event_id' => $meetingId,
-            ]);
-
-            // Attach members to the meeting
-            if (!empty($request->member_ids)) {
-                $meeting->members()->attach($request->member_ids);
-            }
-
-            // Fire event for email notification
-            if (!config('app.is_demo', true)) {
-                event(new GoogleMeetingCreated($meeting));
-            }
+            // Shared with the AI assistant: creates the Google Meet event, invites, emails.
+            app(\App\Actions\Meetings\ScheduleMeeting::class)->handle($user, 'google', [...$validated, 'start_time' => $startTime]);
 
             return redirect()->route('google-meetings.index')
                 ->with('success', __('Google Meet meeting created successfully!'));
@@ -277,7 +247,11 @@ class GoogleMeetingController extends Controller
             'meeting' => $meetingData,
             'projects' => $projects,
             'members' => $members,
-            'permissions' => $this->getModuleCrudPermissions('google_meeting'),
+            'permissions' => [
+                ...$this->getModuleCrudPermissions('google_meeting'),
+                'update' => $this->checkPermission('google_meeting_update') && $this->canModifyMeeting($googleMeeting),
+                'delete' => $this->checkPermission('google_meeting_delete') && $this->canModifyMeeting($googleMeeting),
+            ],
             'googleCalendarEnabled' => $googleCalendarEnabled
         ]);
     }
@@ -338,6 +312,7 @@ class GoogleMeetingController extends Controller
         if (!$workspace || $googleMeeting->workspace_id !== $workspace->id) {
             abort(403, 'Meeting not found in current workspace.');
         }
+        abort_unless($this->canModifyMeeting($googleMeeting), 403, __('Only the person who scheduled this meeting, or the workspace owner, can change it.'));
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -403,6 +378,7 @@ class GoogleMeetingController extends Controller
         if (!$workspace || $googleMeeting->workspace_id !== $workspace->id) {
             abort(403, 'Meeting not found in current workspace.');
         }
+        abort_unless($this->canModifyMeeting($googleMeeting), 403, __('Only the person who scheduled this meeting, or the workspace owner, can change it.'));
 
         try {
             // Delete Google Calendar event if it exists

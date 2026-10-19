@@ -4,13 +4,13 @@ namespace App\Services\Ai\Tools;
 
 use App\Models\AiAttachment;
 use App\Models\BudgetCategory;
-use App\Models\Bug;
-use App\Models\BugStatus;
+use App\Models\Epic;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Project;
 use App\Models\ProjectBudget;
 use App\Models\ProjectExpense;
+use App\Models\Sprint;
 use App\Models\Task;
 use App\Models\TaskStage;
 use App\Models\Timesheet;
@@ -47,9 +47,46 @@ class RecordResolver
         return Task::query()->whereIn('project_id', $this->projects($user)->select('id'));
     }
 
+    /** Bugs are tasks of type bug. */
     public function bugs(User $user): Builder
     {
-        return Bug::query()->whereIn('project_id', $this->projects($user)->select('id'));
+        return $this->tasks($user)->where('type', 'bug');
+    }
+
+    /** Epics of the projects the user can see. */
+    public function epics(User $user): Builder
+    {
+        return Epic::query()->whereIn('project_id', $this->projects($user)->select('id'))->with('project:id,title');
+    }
+
+    public function epic(User $user, string $ref, ?string $projectRef = null): Epic
+    {
+        $query = $this->epics($user);
+        if ($projectRef) {
+            $query->where('project_id', $this->project($user, $projectRef)->id);
+        }
+
+        return $this->one($query, $ref, 'name', __('epic'));
+    }
+
+    /** Sprints of the projects the user can see. */
+    public function sprints(User $user): Builder
+    {
+        return Sprint::query()
+            ->where('workspace_id', $user->current_workspace_id)
+            ->whereIn('project_id', $this->projects($user)->select('id'))
+            ->with('project:id,title');
+    }
+
+    /** Sprint names repeat across projects ("Sprint 3"): a project narrows the search. */
+    public function sprint(User $user, string $ref, ?string $projectRef = null): Sprint
+    {
+        $query = $this->sprints($user);
+        if ($projectRef) {
+            $query->where('project_id', $this->project($user, $projectRef)->id);
+        }
+
+        return $this->one($query, $ref, 'name', __('sprint'));
     }
 
     /** Files the user gave the assistant in this workspace that were read (or wait for OCR). */
@@ -93,7 +130,7 @@ class RecordResolver
         return $this->one($query, $ref, 'title', __('task'));
     }
 
-    public function bug(User $user, string $ref, ?string $projectRef = null): Bug
+    public function bug(User $user, string $ref, ?string $projectRef = null): Task
     {
         $query = $this->bugs($user);
         if ($projectRef) {
@@ -233,9 +270,14 @@ class RecordResolver
         return $this->one(TaskStage::forWorkspace($user->current_workspace_id), $ref, 'name', __('task stage'));
     }
 
-    public function bugStatus(User $user, string $ref): BugStatus
+    /** A stage by name, or a bug word for one ("Resolved" means the done stage). */
+    public function bugStage(User $user, string $ref): TaskStage
     {
-        return $this->one(BugStatus::forWorkspace($user->current_workspace_id), $ref, 'name', __('bug status'));
+        try {
+            return $this->taskStage($user, $ref);
+        } catch (ToolInputException $e) {
+            return TaskStage::forBugStatus((int) $user->current_workspace_id, $ref) ?? throw $e;
+        }
     }
 
     /** A YYYY-MM-DD date, or null when empty. */

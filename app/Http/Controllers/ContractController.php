@@ -162,7 +162,8 @@ class ContractController extends Controller
             'contract_value' => 'nullable|numeric|min:0',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
-            'client_id' => 'nullable|exists:users,id',
+            // A contract needs someone to sign it.
+            'client_id' => 'required|exists:users,id',
             'file' => 'required|file|max:10240',
         ]);
 
@@ -174,7 +175,7 @@ class ContractController extends Controller
             'end_date' => $request->end_date,
             'client_id' => $request->client_id,
             'project_id' => $request->project_id,
-            'currency' => $request->currency ?? 'USD',
+            'currency' => $request->currency ?? (settings()['defaultCurrency'] ?? 'INR'),
             'workspace_id' => auth()->user()->current_workspace_id,
             'created_by' => auth()->id(),
         ]);
@@ -267,7 +268,8 @@ class ContractController extends Controller
             'contract_value' => 'nullable|numeric|min:0',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after:start_date',
-            'client_id' => 'nullable|exists:users,id',
+            // A contract needs someone to sign it.
+            'client_id' => 'required|exists:users,id',
         ]);
 
         $contract->update($request->only([

@@ -19,9 +19,11 @@ interface Props {
     projects: Project[];
     members: User[];
     googleCalendarEnabled?: boolean;
+    /** A new meeting starts in this project (e.g. scheduled from a project's Meetings tab). */
+    initialProjectId?: string;
 }
 
-export default function GoogleMeetingModal({ isOpen, onClose, meeting, projects, members, googleCalendarEnabled = false }: Props) {
+export default function GoogleMeetingModal({ isOpen, onClose, meeting, projects, members, googleCalendarEnabled = false, initialProjectId }: Props) {
        const { t } = useTranslation();
     const [formData, setFormData] = useState({
         title: '',
@@ -58,16 +60,16 @@ export default function GoogleMeetingModal({ isOpen, onClose, meeting, projects,
                     description: '',
                     start_time: '',
                     duration: 60,
-                    project_id: 'none',
+                    project_id: initialProjectId || 'none',
                     status: 'scheduled',
                     member_ids: []
                 });
-                setProjectMembers([]);
+                if (initialProjectId) loadProjectMembers(initialProjectId); else setProjectMembers([]);
             }
             setErrors({});
             setIsSubmitting(false);
         }
-    }, [isOpen, meeting]);
+    }, [isOpen, meeting, initialProjectId]);
 
     const loadProjectMembers = async (projectId: string) => {
         if (!projectId || projectId === 'none') {

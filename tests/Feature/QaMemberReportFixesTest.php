@@ -4,8 +4,6 @@
  */
 
 use App\Events\TaskCreated;
-use App\Models\Bug;
-use App\Models\BugStatus;
 use App\Models\Plan;
 use App\Models\Project;
 use App\Models\ProjectBudget;
@@ -226,14 +224,15 @@ describe('BUG-3 create without assigned_to', function () {
     test('a bug posted without assigned_to is created once and reports success', function () {
         [$owner, $ws, $manager, $member] = mbrWorkspace();
         $project = mbrProject($ws, $owner, [$member]);
-        BugStatus::create(['workspace_id' => $ws->id, 'name' => 'Open', 'color' => '#f00', 'is_default' => true]);
+        TaskStage::create(['workspace_id' => $ws->id, 'name' => 'To Do', 'color' => '#999', 'order' => 1]);
 
-        $this->actingAs($member)->post(route('bugs.store'), [
+        $this->actingAs($member)->post(route('tasks.store'), [
+            'type' => 'bug',
             'project_id' => $project->id, 'title' => 'QA-bug', 'priority' => 'low', 'severity' => 'minor',
         ])->assertSessionHas('success');
 
-        expect(Bug::where('title', 'QA-bug')->count())->toBe(1)
-            ->and(Bug::where('title', 'QA-bug')->first()->assigned_to)->toBeNull();
+        expect(Task::bugs()->where('title', 'QA-bug')->count())->toBe(1)
+            ->and(Task::bugs()->where('title', 'QA-bug')->first()->assigned_to)->toBeNull();
     });
 });
 

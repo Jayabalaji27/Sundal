@@ -50,11 +50,13 @@ class MailConfigService
 
     private static function getMailSettings($userId = null, $workspaceId = null)
     {
-        // Try to get user/workspace specific settings first
+        // Try to get user/workspace specific settings first. A workspace that never
+        // set up its own mail server (still the placeholder values) sends through
+        // the platform's settings, so owners don't have to configure SMTP.
         if ($userId) {
             $userSettings = Setting::getUserSettings($userId, $workspaceId);
             if (!empty($userSettings['email_host'])) {
-                return [
+                $workspaceMail = [
                     'driver' => $userSettings['email_driver'] ?? 'smtp',
                     'host' => $userSettings['email_host'],
                     'port' => $userSettings['email_port'] ?? '587',
@@ -64,9 +66,12 @@ class MailConfigService
                     'fromAddress' => $userSettings['email_from_address'] ?? $userSettings['email_username'] ?? 'noreply@example.com',
                     'fromName' => $userSettings['email_from_name'] ?? config('app.name')
                 ];
+                if (self::isValidMailConfig($workspaceMail)) {
+                    return $workspaceMail;
+                }
             }
         }
-        
+
         // Fallback to global settings
         return [
             'driver' => getSetting('email_driver', 'smtp'),

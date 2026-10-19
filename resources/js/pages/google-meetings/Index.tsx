@@ -13,11 +13,15 @@ import { toast } from '@/components/custom-toast';
 import { hasPermission } from '@/utils/authorization';
 import { useTranslation } from 'react-i18next';
 import GoogleMeetingModal from './GoogleMeetingModal';
+import { consumeCreateIntent } from '@/utils/create-intent';
+import { MeetingSetupNotice } from '@/components/meetings/setup-notice';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function GoogleMeetingIndex() {
     const { t } = useTranslation();
-    const { auth, meetings, projects, members, hasGoogleMeetConfig, filters: pageFilters = {}, permissions, flash, googleCalendarEnabled } = usePage().props as any;
+    const { auth, meetings, projects, members, hasGoogleMeetConfig, filters: pageFilters = {}, permissions, flash, googleCalendarEnabled, is_demo } = usePage().props as any;
+    // The demo works without a Google connection.
+    const googleReady = hasGoogleMeetConfig || !!is_demo;
     
     const formatText = (text: string) => {
         return text.replace(/_/g, ' ').split(' ').map(word => 
@@ -30,6 +34,13 @@ export default function GoogleMeetingIndex() {
     const [selectedProject, setSelectedProject] = useState(pageFilters.project_id || 'all');
     const [showFilters, setShowFilters] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    // The workspace owner changes any meeting; anyone else the ones they scheduled.
+    const canModify = (meeting: any) => auth?.user?.workspace_role === 'owner' || meeting?.user_id === auth?.user?.id;
+    // "Schedule meeting" on a project's Meetings tab lands here with ?action=create&project_id=.
+    useEffect(() => {
+        // Only once Google Meet is connected: that is what gives a meeting its join link.
+        if (consumeCreateIntent() && googleReady) setIsCreateModalOpen(true);
+    }, []);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [currentMeeting, setCurrentMeeting] = useState<any>(null);
@@ -152,42 +163,9 @@ export default function GoogleMeetingIndex() {
         { title: t('Google Meetings') }
     ];
 
-    // Show configuration message when Google Meet is not configured (skip in demo mode)
-    const { is_demo } = usePage().props as any;
-    if (!hasGoogleMeetConfig && !is_demo) {
-        const canConfigureGoogleMeet = hasPermission(auth?.permissions, 'settings_google_meet');
-        
-        return (
-            <PageTemplate title={t('Google Meetings')} breadcrumbs={breadcrumbs} url="/google-meetings">
-                <Card>
-                    <CardContent className="p-6 text-center">
-                        <Video className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">
-                            {t('Google Meet Integration Not Configured')}
-                        </h3>
-                        <p className="text-gray-500 mb-4">
-                            {canConfigureGoogleMeet 
-                                ? t('Please configure your Google Meet API credentials in Settings to use this feature.')
-                                : t('Google Meet integration has not been configured yet. Ask your workspace owner to configure Google Meet.')
-                            }
-                        </p>
-                        <div className="flex items-center justify-center gap-2">
-                            {canConfigureGoogleMeet && (
-                                <Button onClick={() => router.get(route('settings') + '#google-meet-settings')}>
-                                    {t('Configure Google Meet Settings')}
-                                </Button>
-                            )}
-                            {hasPermission(auth?.permissions, 'zoom_meeting_view_any') && (
-                                <Button variant="outline" onClick={() => router.get(route('zoom-meetings.index'))}>
-                                    {t('Switch to Zoom Meetings')}
-                                </Button>
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
-            </PageTemplate>
-        );
-    }
+    // Until Google Meet is connected the list still shows (with a notice), but nothing new can be scheduled.
+    const canConfigureGoogleMeet = hasPermission(auth?.permissions, 'settings_google_meet');
+    const canSchedule = googleReady && hasPermission(auth?.permissions, 'google_meeting_create');
 
     const pageActions = [];
 
@@ -200,7 +178,7 @@ export default function GoogleMeetingIndex() {
         });
     }
 
-    if (hasPermission(auth?.permissions, 'google_meeting_create')) {
+    if (canSchedule) {
         pageActions.push({
             label: t('Create Meeting'),
             icon: <Plus className="h-4 w-4 mr-2" />,
@@ -328,14 +306,14 @@ export default function GoogleMeetingIndex() {
             icon: 'Edit',
             action: 'edit',
             className: 'text-amber-500 hover:text-amber-700',
-            condition: () => hasPermission(auth?.permissions, 'google_meeting_update')
+            condition: (row: any) => hasPermission(auth?.permissions, 'google_meeting_update') && canModify(row)
         },
         {
             label: t('Delete'),
             icon: 'Trash2',
             action: 'delete',
             className: 'text-red-500 hover:text-red-700',
-            condition: () => hasPermission(auth?.permissions, 'google_meeting_delete')
+            condition: (row: any) => hasPermission(auth?.permissions, 'google_meeting_delete') && canModify(row)
         }
     ];
 
@@ -347,6 +325,12 @@ export default function GoogleMeetingIndex() {
             breadcrumbs={breadcrumbs}
             noPadding
         >
+            {!googleReady && (
+                <MeetingSetupNotice
+                    providers={['google']}
+                    canConnect={canConfigureGoogleMeet}
+                />
+            )}
             {/* Search and filters section */}
             <div className="bg-white rounded-lg shadow mb-4">
                 <div className="p-4">
@@ -507,7 +491,7 @@ export default function GoogleMeetingIndex() {
                     <p className="text-gray-500 mb-4">
                         {t('Get started by creating your first Google Meet meeting.')}
                     </p>
-                    {hasPermission(auth?.permissions, 'google_meeting_create') && (
+                    {canSchedule && (
                         <Button onClick={() => setIsCreateModalOpen(true)}>
                             <Plus className="h-4 w-4 mr-2" />
                             {t('Create Meeting')}
@@ -549,6 +533,7 @@ export default function GoogleMeetingIndex() {
             <GoogleMeetingModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
+                initialProjectId={selectedProject !== 'all' ? String(selectedProject) : undefined}
                 projects={projects || []}
                 members={members || []}
                 googleCalendarEnabled={googleCalendarEnabled}

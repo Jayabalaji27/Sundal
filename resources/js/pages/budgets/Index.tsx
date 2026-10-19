@@ -217,7 +217,7 @@ export default function BudgetIndex() {
 
     return (
         <PageTemplate
-            title={t('Budget')}
+            title={t('Budgets')}
             url="/budgets"
             actions={pageActions}
             breadcrumbs={breadcrumbs}
@@ -399,21 +399,21 @@ export default function BudgetIndex() {
 
                             <CardContent className="py-2 flex-1">
                                 <div className="space-y-3">
-                                    {/* Amounts */}
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <div className="text-center">
-                                            <p className="text-xs text-muted-foreground">{t('Total')}</p>
-                                            <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">{formatCurrency(budget.total_budget)}</p>
+                                    {/* Amounts: one row each, so a figure is never cut off */}
+                                    <div className="space-y-1 text-sm">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-muted-foreground">{t('Total')}</span>
+                                            <span className="font-semibold text-gray-900 dark:text-white whitespace-nowrap">{formatCurrency(budget.total_budget)}</span>
                                         </div>
-                                        <div className="text-center border-x border-gray-100 dark:border-gray-700">
-                                            <p className="text-xs text-muted-foreground">{t('Spent')}</p>
-                                            <p className="text-xs font-semibold text-orange-600 truncate">{formatCurrency(budget.total_spent)}</p>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-muted-foreground">{t('Spent')}</span>
+                                            <span className="font-semibold text-orange-600 whitespace-nowrap">{formatCurrency(budget.total_spent)}</span>
                                         </div>
-                                        <div className="text-center">
-                                            <p className="text-xs text-muted-foreground">{t('Left')}</p>
-                                            <p className={`text-xs font-semibold truncate ${(budget.remaining_budget || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-muted-foreground">{t('Left')}</span>
+                                            <span className={`font-semibold whitespace-nowrap ${(budget.remaining_budget || 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
                                                 {formatCurrency(budget.remaining_budget)}
-                                            </p>
+                                            </span>
                                         </div>
                                     </div>
 

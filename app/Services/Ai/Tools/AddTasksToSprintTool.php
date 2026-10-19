@@ -8,8 +8,8 @@ use App\Models\Task;
 use App\Models\User;
 
 /**
- * Sprints themselves are not created in Sundal any more (the sprints.store
- * route was removed on purpose), so the assistant can only fill existing ones.
+ * The assistant fills existing sprints only; people create, start and complete
+ * sprints on the project's Sprints page (sprints.index).
  */
 class AddTasksToSprintTool extends AiTool
 {
@@ -25,7 +25,7 @@ class AddTasksToSprintTool extends AiTool
 
     public function description(): string
     {
-        return 'Add one or more tasks of a project to one of its existing sprints. Sundal does not create new sprints. Shows a confirmation card listing every task.';
+        return 'Add one or more tasks of a project to one of its existing sprints (a task moves out of any other open sprint). New sprints are created by the user on the project\'s Sprints page, not by this tool. Shows a confirmation card listing every task.';
     }
 
     public function permissions(): array
@@ -112,7 +112,7 @@ class AddTasksToSprintTool extends AiTool
         return match (true) {
             $exact->count() === 1 => $exact->first(),
             $matches->count() === 1 => $matches->first(),
-            $matches->isEmpty() => throw new ToolInputException(__('No sprint matches ":ref". Sundal does not create new sprints; ask the user for an existing one.', ['ref' => $ref])),
+            $matches->isEmpty() => throw new ToolInputException(__('No sprint matches ":ref". Ask the user for an existing sprint; new sprints are created on the project Sprints page.', ['ref' => $ref])),
             default => throw new ToolInputException(__('Several sprints match ":ref": :list. Ask the user which one; do not guess.', [
                 'ref' => $ref,
                 'list' => $matches->map(fn (Sprint $s) => "{$s->name} in {$s->project?->title} (#{$s->id})")->implode('; '),

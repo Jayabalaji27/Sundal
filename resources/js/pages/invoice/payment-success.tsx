@@ -13,7 +13,7 @@ export default function PaymentSuccess() {
 
     return (
         <>
-            <Head title={`Payment Success - ${company?.name || 'Taskly SaaS'}`}>
+            <Head title={`Payment Success - ${company?.name || appName}`}>
                 {favicon && (
                     <link rel="icon" type="image/x-icon" href={favicon} />
                 )}

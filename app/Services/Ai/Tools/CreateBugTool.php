@@ -50,6 +50,7 @@ class CreateBugTool extends AiTool implements HasForm
             'actual_behavior' => ['type' => 'string', 'description' => 'What happens instead.'],
             'environment' => ['type' => 'string', 'description' => 'Browser, device or environment.'],
             'assignee' => ['type' => 'string', 'description' => '"me" or a person\'s name or email.'],
+            'epic' => ['type' => 'string', 'description' => 'Epic of the same project to file the bug under (name or id).'],
             'due_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD.'],
         ];
     }
@@ -76,6 +77,7 @@ class CreateBugTool extends AiTool implements HasForm
     public function prepare(array $args, User $user): PreparedAction
     {
         $project = $this->resolver->project($user, (string) ($args['project'] ?? ''));
+        $epic = !empty($args['epic']) ? $this->resolver->epic($user, (string) $args['epic'], '#' . $project->id) : null;
 
         $title = trim((string) ($args['title'] ?? ''));
         if ($title === '' || mb_strlen($title) > 255) {
@@ -108,9 +110,11 @@ class CreateBugTool extends AiTool implements HasForm
                 __('Priority') => ucfirst($priority),
                 __('Assignee') => $assignee?->name ?? __('Unassigned'),
                 __('Due') => $due,
+                __('Epic') => $epic?->name,
             ]),
             payload: [
                 'project_id' => $project->id,
+                'epic_id' => $epic?->id,
                 'title' => $title,
                 'description' => $text('description'),
                 'priority' => $priority,
@@ -131,13 +135,16 @@ class CreateBugTool extends AiTool implements HasForm
         if (!empty($payload['assigned_to'])) {
             $this->resolver->byId($this->resolver->members($user), (int) $payload['assigned_to'], __('person'));
         }
+        if (!empty($payload['epic_id'])) {
+            $this->resolver->byId($this->resolver->epics($user)->where('project_id', $project->id), (int) $payload['epic_id'], __('epic'));
+        }
 
         $bug = $this->createBug->handle($user, [...$payload, 'project_id' => $project->id]);
 
         return new ToolOutcome(
             __('Reported bug ":title" in :project.', ['title' => $bug->title, 'project' => $project->title]),
             $bug,
-            route('bugs.show', $bug->id, false),
+            route('tasks.show', $bug->id, false),
         );
     }
 }

@@ -97,24 +97,42 @@ POST   /f/{token}  → forms.submit
 
 ---
 
-### 5. Sprints
-**Purpose:** Agile sprint planning — create sprints, assign tasks, start/complete cycles  
+### 5. Sprints, Backlog and Board
+**Purpose:** Agile planning inside a project, Jira/Zoho style. Every project page shares one header
+with tabs (`components/projects/project-shell.tsx`): Summary · **Backlog** · **Sprints** · **Board** · Timeline ·
+Bugs · Milestones · More — the agile flow left to right (what we could do → what we committed to → doing it).
+The **Backlog** (projects.backlog) holds only unplanned work, most urgent first, with the open sprints beside
+it as drop targets. **Sprints** (sprints.index) lists the active, planned and completed sprints; managers
+create, start and complete them there, and tasks can move between sprints or back to the backlog. The
+**Board** shows the active sprint's tasks by stage. One sprint per project is active
+at a time; a task sits in one open sprint at a time. Completing a sprint moves its unfinished tasks to the
+backlog, a planned sprint or a new sprint, and freezes its committed/completed totals (sprint report and
+velocity). Tasks carry optional **story points** (`tasks.story_points`).
+
+**Who does what:** `sprint_create` (Owner, Manager) creates; `sprint_update` edits, starts and completes;
+`sprint_delete` deletes; `sprint_manage_tasks` (also Members) moves tasks. Clients have no Backlog/Board.
+
 **Files:**
-- `app/Http/Controllers/SprintController.php`
+- `app/Http/Controllers/SprintController.php`, `app/Http/Controllers/ProjectBoardController.php`
+- `app/Traits/PresentsAgileBoard.php` (task card / sprint summary shapes), `app/Actions/Sprints/AddTasksToSprint.php`
 - `app/Models/Sprint.php`
-- `resources/js/pages/sprints/Index.tsx`, `sprints/Show.tsx`
+- `resources/js/pages/projects/Backlog.tsx`, `sprints/Index.tsx` (Sprints), `sprints/Show.tsx` (sprint report), `projects/Board.tsx`
+- `resources/js/components/sprints/` (sprint form, movable task row)
+- `resources/js/components/tasks/kanban-board.tsx`, `agile-bits.tsx`, `use-task-detail.tsx`
 
 **Routes:**
 ```
-GET    /projects/{project}/sprints → sprints.index
-POST   /projects/{project}/sprints → sprints.store
-GET    /sprints/{sprint}           → sprints.show
-PUT    /sprints/{sprint}           → sprints.update
-DELETE /sprints/{sprint}           → sprints.destroy
-POST   /sprints/{sprint}/tasks     → sprints.add-task
-DELETE /sprints/{sprint}/tasks     → sprints.remove-task
-POST   /sprints/{sprint}/start     → sprints.start
-POST   /sprints/{sprint}/complete  → sprints.complete
+GET    /projects/{project}/backlog → projects.backlog  (sprint_view_any)  Backlog (unplanned work)
+GET    /projects/{project}/sprints → sprints.index     (sprint_view_any)  Sprints
+POST   /projects/{project}/sprints → sprints.store     (sprint_create)
+GET    /projects/{project}/board   → projects.board    (task_view_any)    Board
+GET    /sprints/{sprint}           → sprints.show      (sprint_view)      Sprint report
+PUT    /sprints/{sprint}           → sprints.update    (sprint_update)
+DELETE /sprints/{sprint}           → sprints.destroy   (sprint_delete)
+POST   /sprints/{sprint}/tasks     → sprints.add-task  (sprint_manage_tasks)
+DELETE /sprints/{sprint}/tasks     → sprints.remove-task (sprint_manage_tasks)
+POST   /sprints/{sprint}/start     → sprints.start     (sprint_update)
+POST   /sprints/{sprint}/complete  → sprints.complete  (sprint_update; move_to = backlog | new | sprint id)
 ```
 
 ---

@@ -6,8 +6,6 @@
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TaskStage;
-use App\Models\Bug;
-use App\Models\BugStatus;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
@@ -50,11 +48,12 @@ function stage(int $wsId): TaskStage {
 function tsk(int $pid,int $sid,int $uid,array $e=[]): Task {
     return Task::create(array_merge(['project_id'=>$pid,'task_stage_id'=>$sid,'title'=>'T'.uniqid(),'priority'=>'medium','progress'=>0,'created_by'=>$uid],$e));
 }
-function bug(int $pid,int $bsid,int $uid,array $e=[]): Bug {
-    return Bug::create(array_merge(['project_id'=>$pid,'bug_status_id'=>$bsid,'title'=>'B'.uniqid(),'priority'=>'critical','severity'=>'blocker','reported_by'=>$uid],$e));
+// Bugs are tasks of type bug, in a task stage.
+function bug(int $pid,int $sid,int $uid,array $e=[]): Task {
+    return Task::create(array_merge(['project_id'=>$pid,'type'=>'bug','task_stage_id'=>$sid,'title'=>'B'.uniqid(),'priority'=>'critical','severity'=>'blocker','progress'=>0,'created_by'=>$uid],$e));
 }
-function bs(int $wsId): BugStatus {
-    return BugStatus::create(['workspace_id'=>$wsId,'name'=>'Open','color'=>'#f00','is_default'=>true]);
+function bs(int $wsId, bool $done = false): TaskStage {
+    return TaskStage::create(['workspace_id'=>$wsId,'name'=>$done ? 'Fixed' : 'Open','color'=>'#f00','order'=>$done ? 9 : 0,'is_completed'=>$done]);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -175,8 +174,8 @@ describe('Bugs — Health Impact', function () {
     test('resolved bug does not affect score', function () {
         [$owner,$w] = ws();
         $p = proj($w->id,$owner->id);
-        $bst = bs($w->id);
-        bug($p->id,$bst->id,$owner->id,['resolved_by'=>$owner->id]);
+        $done = bs($w->id, true);
+        bug($p->id,$done->id,$owner->id);
         expect((new ProjectHealthService())->calculate($p)['metrics']['critical_bugs'])->toBe(0);
     });
 
@@ -185,7 +184,7 @@ describe('Bugs — Health Impact', function () {
         $p = proj($w->id,$owner->id);
         $bst = bs($w->id);
         $b = bug($p->id,$bst->id,$owner->id,['severity'=>'blocker']);
-        $this->assertDatabaseHas('bugs',['id'=>$b->id,'severity'=>'blocker']);
+        $this->assertDatabaseHas('tasks',['id'=>$b->id,'type'=>'bug','severity'=>'blocker']);
     });
 });
 

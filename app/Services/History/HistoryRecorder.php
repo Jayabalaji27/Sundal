@@ -25,9 +25,8 @@ class HistoryRecorder
         Models\ProjectMilestone::class,
         Models\Task::class,
         Models\TaskComment::class,
-        Models\Bug::class,
-        Models\BugComment::class,
         Models\Sprint::class,
+        Models\Epic::class,
         Models\Timesheet::class,
         Models\TimesheetEntry::class,
         Models\TimesheetApproval::class,
@@ -42,10 +41,13 @@ class HistoryRecorder
         Models\KbArticle::class,
         Models\WorkspaceInvitation::class,
         Models\WorkspaceMember::class,
+        Models\ZoomMeeting::class,
+        Models\GoogleMeeting::class,
+        Models\AiProviderSetting::class,
     ];
 
-    /** Never written to the log, whatever the model. */
-    private const SECRET = ['password', 'remember_token', 'token', 'payment_token', 'api_key', 'two_factor_secret'];
+    /** Never written to the log, whatever the model. start_url lets anyone start a Zoom meeting as its host. */
+    private const SECRET = ['password', 'remember_token', 'token', 'payment_token', 'api_key', 'two_factor_secret', 'start_url'];
 
     /** Bookkeeping columns that change on every save. */
     private const NOISE = ['updated_at', 'created_at'];
@@ -60,6 +62,10 @@ class HistoryRecorder
             $class::updated(fn (Model $model) => self::record($model, 'updated'));
             $class::deleted(fn (Model $model) => self::record($model, 'deleted'));
         }
+
+        // Planning a task into a sprint, or taking it out, is told on the task.
+        Models\SprintTask::created(fn (Models\SprintTask $row) => self::sprintMove($row, 'added_to_sprint'));
+        Models\SprintTask::deleted(fn (Models\SprintTask $row) => self::sprintMove($row, 'removed_from_sprint'));
     }
 
     public static function record(Model $model, string $event): void
@@ -69,6 +75,20 @@ class HistoryRecorder
             return;
         }
 
+        self::write($model, $event, $changes);
+    }
+
+    private static function sprintMove(Models\SprintTask $row, string $event): void
+    {
+        $task = Models\Task::withoutGlobalScopes()->find($row->task_id);
+        if ($task) {
+            $sprint = Models\Sprint::withoutGlobalScopes()->find($row->sprint_id);
+            self::write($task, $event, ['attributes' => ['sprint_id' => (int) $row->sprint_id, 'sprint' => $sprint?->name]]);
+        }
+    }
+
+    private static function write(Model $model, string $event, array $changes): void
+    {
         try {
             $logger = activity(Str::snake(class_basename($model)))->performedOn($model);
             if (auth()->check()) {
