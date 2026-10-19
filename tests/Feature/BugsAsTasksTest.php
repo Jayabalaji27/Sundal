@@ -137,6 +137,32 @@ describe('one list, one board', function () {
             ->assertInertia(fn (Assert $page) => $page->has('tasks.data', 1)->where('tasks.data.0.title', 'Blocker bug'));
     });
 
+    test('the Tasks page has the Board views: cards by stage across projects, or the sheet; the last view picked is kept', function () {
+        [$owner, , $project] = batSetup();
+        batItem($project, $owner, ['title' => 'A task']);
+        batItem($project, $owner, ['title' => 'A bug', 'type' => 'bug', 'severity' => 'critical']);
+
+        $this->actingAs($owner)->get(route('tasks.index', ['view' => 'detail']))
+            ->assertInertia(fn (Assert $page) => $page->where('filters.view', 'detail')->where('tasks', null)
+                ->has('board.cards', 2)->where('board.total', 2)
+                ->where('board.cards', fn ($cards) => collect($cards)->contains(fn ($card) => $card['title'] === 'A bug' && $card['type'] === 'bug'
+                    && $card['severity'] === 'critical' && $card['project']['title'] === $project->title && $card['task_stage_id'] !== null)));
+
+        // Filters narrow the board too.
+        $this->actingAs($owner)->get(route('tasks.index', ['view' => 'plain', 'type' => 'task']))
+            ->assertInertia(fn (Assert $page) => $page->has('board.cards', 1)->where('board.cards.0.title', 'A task'));
+
+        // Older links: kanban is the board, list the table.
+        $this->actingAs($owner)->get(route('tasks.index', ['view' => 'kanban']))->assertInertia(fn (Assert $page) => $page->where('filters.view', 'detail'));
+        $this->actingAs($owner)->get(route('tasks.index', ['view' => 'list']))->assertInertia(fn (Assert $page) => $page->where('filters.view', 'sheet'));
+
+        // The menu link (no ?view) opens on the sheet, or on the view kept in the cookie.
+        $this->actingAs($owner)->get(route('tasks.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('filters.view', 'sheet')->where('board', null)->has('tasks.data', 2));
+        $this->actingAs($owner)->withUnencryptedCookie('sundal_tasks_view', 'plain')->get(route('tasks.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('filters.view', 'plain')->has('board.cards', 2));
+    });
+
     test('the Board holds both, each card saying what it is; Bugs narrows it', function () {
         [$owner, , $project] = batSetup();
         batItem($project, $owner, ['title' => 'A task']);

@@ -943,6 +943,13 @@ Each role was checked from the business side. The full findings and fix status a
   - The history log now also covers epics, meetings, AI settings and sprint moves
     (`SprintTask` pivot).
 
+- **Tasks page views** (follow-up): the Board's view menu (`BoardViewMenu`, shared with the Board).
+  - **Sheet** is the paginated list. Stages change in place, and Title, Priority and Due sort on
+    the server.
+  - **Detail** and **Plain** show cards by stage across projects, at most 300 (`?view=`; older
+    `kanban` and `list` links still work).
+  - The last view picked is kept in the `sundal_tasks_view` cookie, which is not encrypted.
+
 Deploy: `php artisan migrate`, then `php artisan db:seed --class=RoleSeeder --force` (manager
 permissions changed). Delete the removed bug-module files on the server.
 

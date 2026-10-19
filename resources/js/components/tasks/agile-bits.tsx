@@ -23,6 +23,8 @@ export interface AgileTask {
     assignee: { id: number; name: string; avatar: string | null } | null;
     /** The epic it is filed under, if any. */
     epic?: { id: number; name: string; color: string } | null;
+    /** Sent on the Tasks page, where one board shows every project. */
+    project?: { id: number; title: string } | null;
 }
 
 /** A sprint summary (PresentsAgileBoard::sprintSummary). */

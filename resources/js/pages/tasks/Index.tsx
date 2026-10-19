@@ -21,8 +21,15 @@ import { Task, Project, TaskStage, User, PaginatedData } from '@/types';
 import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
 import { consumeCreateIntent } from '@/utils/create-intent';
-import { SEVERITY_OPTIONS, SeverityBadge, TypeIcon } from '@/components/tasks/agile-bits';
+import { AgileTask, SEVERITY_OPTIONS, SeverityBadge, TypeIcon } from '@/components/tasks/agile-bits';
+import { KanbanBoard } from '@/components/tasks/kanban-board';
+import { BOARD_VIEWS, BoardView, BoardViewMenu } from '@/components/tasks/board-view-menu';
+import { hasPermission } from '@/utils/authorization';
+import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+/** Remembers the view picked here, so the menu link opens on it (read by TaskController). */
+const VIEW_COOKIE = 'sundal_tasks_view';
 
 declare global {
     interface Window {
@@ -31,7 +38,10 @@ declare global {
 }
 
 interface Props {
-    tasks: PaginatedData<Task>;
+    /** The Sheet view's page of rows; null in the Detail and Plain views. */
+    tasks: PaginatedData<Task> | null;
+    /** The Detail and Plain views' cards (at most `limit` of `total`); null in the Sheet view. */
+    board?: { cards: AgileTask[]; total: number; limit: number } | null;
     projects: Project[];
     stages: TaskStage[];
     members: User[];
@@ -45,15 +55,18 @@ interface Props {
         severity?: string;
         search?: string;
         view?: string;
+        sort_field?: string;
+        sort_direction?: string;
     };
     project_name?: string;
     userWorkspaceRole?: string;
     permissions?: any;
 }
 
-export default function TasksIndex({ tasks, projects, stages, members, filters, project_name, userWorkspaceRole, permissions }: Props) {
+export default function TasksIndex({ tasks, board = null, projects, stages, members, filters, project_name, userWorkspaceRole, permissions }: Props) {
     const { t } = useTranslation();
-    const { flash, permissions: pagePermissions } = usePage().props as any;
+    const { flash, permissions: pagePermissions, auth } = usePage().props as any;
+    const canMove = hasPermission(auth?.permissions || [], 'task_change_status');
     const taskPermissions = permissions || pagePermissions;
     const [searchTerm, setSearchTerm] = useState(filters.search || '');
     const [selectedProject, setSelectedProject] = useState(filters.project_id || 'all');
@@ -68,8 +81,24 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [editingTask, setEditingTask] = useState<Task | null>(null);
-    // One list here: the Kanban board lives on each project's Board tab.
-    const viewMode = 'table' as const;
+    // The Board's three views: Detail and Plain cards by stage, or the Sheet (this table).
+    const view: BoardView = BOARD_VIEWS.includes(filters.view as BoardView) ? (filters.view as BoardView) : 'sheet';
+    const chooseView = (next: BoardView) => {
+        document.cookie = `${VIEW_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+        reload({ view: next });
+    };
+    // Cards move at once; the server's answer (or a refusal) resets them from props.
+    const [cards, setCards] = useState<AgileTask[]>(board?.cards || []);
+    useEffect(() => setCards(board?.cards || []), [board]);
+    const changeStage = (taskId: number, stageId: number) =>
+        router.put(route('tasks.change-stage', taskId), { task_stage_id: stageId }, { preserveScroll: true, preserveState: true });
+    const moveCard = (taskId: number, stageId: number) => {
+        const stage = stages.find(item => item.id === stageId);
+        setCards(prev => prev.map(card => card.id === taskId
+            ? { ...card, task_stage_id: stageId, stage: stage ? { id: stage.id, name: stage.name, color: stage.color } : card.stage, is_completed: !!stage?.is_completed }
+            : card));
+        changeStage(taskId, stageId);
+    };
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
@@ -93,11 +122,14 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
             assigned_to: selectedAssignee,
             type: selectedType,
             severity: selectedSeverity,
+            sort_field: filters.sort_field,
+            sort_direction: filters.sort_direction,
+            view,
             ...changes,
         };
         // Severity only narrows bugs.
         if (values.type !== 'bug') values.severity = 'all';
-        const params: any = { page: 1, view: viewMode };
+        const params: any = { page: 1 };
         Object.entries(values).forEach(([key, value]) => {
             if (value !== undefined && value !== null && value !== '' && value !== 'all') params[key] = value;
         });
@@ -145,7 +177,7 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
                 });
                 break;
             case 'delete':
-                const task = (Array.isArray(tasks) ? tasks : tasks?.data || []).find(t => t.id === taskId);
+                const task = (tasks?.data || []).find((item: Task) => item.id === taskId);
                 if (task) {
                     setTaskToDelete(task);
                     setIsDeleteModalOpen(true);
@@ -216,7 +248,7 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
         setSelectedSeverity('all');
         setSearchTerm('');
         setShowFilters(false);
-        router.get(route('tasks.index'), { page: 1, view: viewMode, ...(selectedType !== 'all' ? { type: selectedType } : {}) }, { preserveState: true, preserveScroll: true });
+        router.get(route('tasks.index'), { page: 1, view, ...(selectedType !== 'all' ? { type: selectedType } : {}) }, { preserveState: true, preserveScroll: true });
     };
 
     const handleDeleteConfirm = () => {
@@ -258,6 +290,25 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
             critical: 'bg-red-100 text-red-800'
         };
         return colors[priority as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+    };
+
+    // Sorting runs on the server, so it covers every page, not just this one.
+    const sortHeader = (field: string, label: string) => {
+        const active = filters.sort_field === field;
+        const direction = filters.sort_direction === 'asc' ? 'asc' : 'desc';
+        const Icon = !active ? ChevronsUpDown : direction === 'asc' ? ArrowUp : ArrowDown;
+        return (
+            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                <button
+                    type="button"
+                    className={cn('inline-flex items-center gap-1 whitespace-nowrap uppercase tracking-wider hover:text-foreground', active && 'text-foreground')}
+                    onClick={() => reload({ sort_field: field, sort_direction: active && direction === 'asc' ? 'desc' : 'asc' })}
+                >
+                    {label}
+                    <Icon className={cn('h-3 w-3', !active && 'opacity-40')} />
+                </button>
+            </th>
+        );
     };
 
     const pageActions = [];
@@ -354,20 +405,25 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                            <Label className="text-xs text-muted-foreground">{t('Per Page')}:</Label>
-                                <Select
-                                    value={tasks?.per_page?.toString() || "20"}
-                                    onValueChange={(value) => reload({ per_page: parseInt(value) })}
-                                >
-                                    <SelectTrigger className="w-16 h-8">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="20">20</SelectItem>
-                                        <SelectItem value="50">50</SelectItem>
-                                        <SelectItem value="100">100</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                            {view === 'sheet' && (
+                                <>
+                                    <Label className="text-xs text-muted-foreground">{t('Per Page')}:</Label>
+                                    <Select
+                                        value={tasks?.per_page?.toString() || "20"}
+                                        onValueChange={(value) => reload({ per_page: parseInt(value) })}
+                                    >
+                                        <SelectTrigger className="w-16 h-8">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="20">20</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                            <SelectItem value="100">100</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </>
+                            )}
+                            <BoardViewMenu view={view} onChange={chooseView} />
                         </div>
                     </div>
 
@@ -473,18 +529,39 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
                 </div>
             </div>
 
-            {/* Tasks Content */}
+            {/* Detail and Plain views: every matching item by stage, across projects. */}
+            {view !== 'sheet' && cards.length > 0 && (
+                <div className="space-y-2">
+                    {board && board.total > board.cards.length && (
+                        <p className="text-sm text-muted-foreground">
+                            {t('Showing the :shown most recent of :total items. Use the filters to narrow them down.').replace(':shown', String(board.cards.length)).replace(':total', String(board.total))}
+                        </p>
+                    )}
+                    <KanbanBoard
+                        stages={stages as any}
+                        tasks={cards}
+                        canMove={canMove}
+                        onMove={moveCard}
+                        onOpen={(taskId) => handleAction('view', taskId)}
+                        variant={view}
+                        showProject={!project_name && selectedProject === 'all'}
+                    />
+                </div>
+            )}
+
+            {/* Sheet view: this table, page by page. */}
+            {view === 'sheet' && (tasks?.data?.length ?? 0) > 0 && (
             <div className="bg-white rounded-lg shadow">
                 {(
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('Title')}</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assignee</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
+                                    {sortHeader('title', t('Title'))}
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('Stage')}</th>
+                                    {sortHeader('priority', t('Priority'))}
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('Assignee')}</th>
+                                    {sortHeader('end_date', t('Due Date'))}
                                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('Actions')}</th>
                                 </tr>
                             </thead>
@@ -510,12 +587,31 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
                                             </div>
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap">
-                                            <Badge
-                                                variant="outline"
-                                                style={{ backgroundColor: task.task_stage?.color + '20', borderColor: task.task_stage?.color }}
-                                            >
-                                                {task.task_stage?.name}
-                                            </Badge>
+                                            {/* Changed in place, the same move as dragging a card on the board. */}
+                                            {canMove && task.task_stage_id ? (
+                                                <Select value={String(task.task_stage_id)} onValueChange={(value) => changeStage(task.id, Number(value))}>
+                                                    <SelectTrigger className="h-8 w-40 text-xs" aria-label={t('Stage of :title').replace(':title', task.title)}>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {stages.map(stage => (
+                                                            <SelectItem key={stage.id} value={String(stage.id)}>
+                                                                <span className="inline-flex items-center gap-2">
+                                                                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: stage.color || '#6366f1' }} />
+                                                                    {stage.name}
+                                                                </span>
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : (
+                                                <Badge
+                                                    variant="outline"
+                                                    style={{ backgroundColor: task.task_stage?.color + '20', borderColor: task.task_stage?.color }}
+                                                >
+                                                    {task.task_stage?.name}
+                                                </Badge>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap">
                                             <Badge className={getPriorityColor(task.priority)} variant="outline">
@@ -575,9 +671,10 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
                     </div>
                 )}
             </div>
+            )}
 
             {/* Empty State */}
-            {tasks?.data?.length === 0 && (
+            {(view === 'sheet' ? (tasks?.data?.length ?? 0) : cards.length) === 0 && (
                 <div className="bg-white rounded-lg shadow p-8 text-center">
                     <CheckSquare className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                     <h3 className="text-lg font-semibold mb-2">{showingBugs ? t('No Bugs Found') : t('No Tasks Found')}</h3>
@@ -595,7 +692,7 @@ export default function TasksIndex({ tasks, projects, stages, members, filters, 
             )}
 
             {/* Pagination */}
-            {tasks?.links && !Array.isArray(tasks) && (
+            {view === 'sheet' && tasks?.links && (
                 <div className="mt-6 bg-white p-4 rounded-lg shadow flex flex-wrap items-center justify-between gap-3">
                     <div className="text-sm text-muted-foreground">
                         {t('Showing')} <span className="font-medium">{tasks?.from || 0}</span> {t('to')} <span className="font-medium">{tasks?.to || 0}</span> {t('of')} <span className="font-medium">{tasks?.total || 0}</span> {showingBugs ? t('bugs') : t('items')}

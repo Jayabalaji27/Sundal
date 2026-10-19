@@ -17,15 +17,18 @@ export interface KanbanStage {
  * on another column, onOpen when a card is clicked.
  *
  * "detail" cards show priority, severity, points and the due date; "plain"
- * cards only the type, title and owner, so more fit on screen.
+ * cards only the type, title and owner, so more fit on screen. With
+ * showProject (the Tasks page, many projects at once) detail cards also name
+ * the project.
  */
-export function KanbanBoard({ stages, tasks, canMove, onMove, onOpen, variant = 'detail' }: {
+export function KanbanBoard({ stages, tasks, canMove, onMove, onOpen, variant = 'detail', showProject = false }: {
     stages: KanbanStage[];
     tasks: AgileTask[];
     canMove: boolean;
     onMove: (taskId: number, stageId: number) => void;
     onOpen: (taskId: number) => void;
     variant?: 'detail' | 'plain';
+    showProject?: boolean;
 }) {
     const { t } = useTranslation();
     const [dragging, setDragging] = useState<number | null>(null);
@@ -88,6 +91,7 @@ export function KanbanBoard({ stages, tasks, canMove, onMove, onOpen, variant = 
                                     ) : (<>
                                     {task.epic && <EpicChip epic={task.epic} className="mb-1.5" />}
                                     <p className={cn('line-clamp-3 leading-snug', task.is_completed && 'text-muted-foreground line-through')}>{task.title}</p>
+                                    {showProject && task.project && <p className="mt-1 truncate text-xs text-muted-foreground">{task.project.title}</p>}
                                     <div className="mt-2.5 flex items-center gap-2">
                                         <TypeIcon type={task.type} />
                                         <PriorityIcon priority={task.priority} />
