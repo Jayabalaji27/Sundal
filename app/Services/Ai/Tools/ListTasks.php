@@ -31,6 +31,8 @@ class ListTasks extends AiTool
             'assignee' => ['type' => 'string', 'description' => '"me", a person\'s name or email, or "unassigned".'],
             'stage' => ['type' => 'string', 'description' => 'Task stage name, e.g. To Do, In Progress, Done.'],
             'search' => ['type' => 'string', 'description' => 'Part of the task title.'],
+            'type' => ['type' => 'enum', 'options' => ['task', 'bug'], 'description' => 'Bugs are tasks of type bug. Leave out for both.'],
+            'epic' => ['type' => 'string', 'description' => 'Epic name or id: only its items.'],
             'overdue' => ['type' => 'boolean', 'description' => 'Only open tasks past their due date.'],
             'due_within_days' => ['type' => 'number', 'description' => 'Only open tasks due between today and this many days from now.'],
         ];
@@ -38,7 +40,13 @@ class ListTasks extends AiTool
 
     public function run(array $args, User $user): array
     {
-        $query = $this->resolver->tasks($user)->with(['project:id,title', 'taskStage:id,name,is_completed', 'assignedTo:id,name']);
+        $query = $this->resolver->tasks($user)->with(['project:id,title', 'taskStage:id,name,is_completed', 'assignedTo:id,name', 'epic:id,name']);
+        if (in_array($args['type'] ?? null, ['task', 'bug'], true)) {
+            $query->where('type', $args['type']);
+        }
+        if (!empty($args['epic'])) {
+            $query->where('epic_id', $this->resolver->epic($user, (string) $args['epic'], $args['project'] ?? null)->id);
+        }
 
         if (!empty($args['project'])) {
             $query->where('project_id', $this->resolver->project($user, $args['project'])->id);
@@ -68,16 +76,19 @@ class ListTasks extends AiTool
         $tasks = $query->orderByRaw('end_date IS NULL, end_date')->limit(25)->get();
 
         return [
-            'tasks' => $tasks->map(fn (Task $t) => [
+            'tasks' => $tasks->map(fn (Task $t) => array_filter([
                 'id' => $t->id,
                 'title' => $t->title,
+                'type' => $t->type,
+                'severity' => $t->type === 'bug' ? $t->severity : null,
+                'epic' => $t->epic?->name,
                 'project' => $t->project?->title,
                 'stage' => $t->taskStage?->name,
                 'assignee' => $t->assignedTo?->name,
                 'priority' => $t->priority,
                 'due_date' => $t->end_date?->format('Y-m-d'),
                 'link' => route('tasks.show', $t->id, false),
-            ])->all(),
+            ], fn ($v) => $v !== null))->all(),
             'shown' => $tasks->count(),
             'total_matching' => $total,
         ];

@@ -192,11 +192,17 @@ class ProjectExpenseController extends Controller
             'amount' => 'required|numeric|min:0',
             'expense_date' => 'required|date|before_or_equal:today',
             'title' => 'required|string|max:255',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
+            // Receipts go in with the claim, so the approver sees the proof straight away.
+            'receipts' => 'nullable|array|max:5',
+            'receipts.*' => 'file|mimes:jpg,jpeg,png,pdf|max:5120',
         ]);
 
         // Shared with the AI assistant.
-        app(\App\Actions\Expenses\CreateExpense::class)->handle(auth()->user(), $validated);
+        $expense = app(\App\Actions\Expenses\CreateExpense::class)->handle(auth()->user(), \Illuminate\Support\Arr::except($validated, 'receipts'));
+        foreach ($request->file('receipts', []) as $file) {
+            \App\Models\ExpenseAttachment::storeUpload($expense, $file, 'receipt', auth()->id());
+        }
 
         return redirect()->route('expenses.index')->with('success', __('Expense created successfully!'));
     }

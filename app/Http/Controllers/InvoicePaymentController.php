@@ -31,7 +31,7 @@ class InvoicePaymentController extends Controller
             ->toArray();
             
         $favicon = $settings['favicon'] ?? null;
-        $appName = $settings['app_name'] ?? 'Taskly SaaS';
+        $appName = $settings['app_name'] ?? config('app.name');
         $enabledGateways = $this->getEnabledPaymentGateways($invoice->created_by, $invoice->workspace_id);
         
         $paymentSettings = PaymentSetting::where('user_id', $invoice->created_by)
@@ -47,7 +47,7 @@ class InvoicePaymentController extends Controller
             ->toArray();
 
         // Resolve currency symbol from Currency model using defaultCurrency code
-        $currencyCode = $invoiceSettings['defaultCurrency'] ?? 'USD';
+        $currencyCode = $invoiceSettings['defaultCurrency'] ?? 'INR';
         $currency = \App\Models\Currency::where('code', $currencyCode)->first();
         $invoiceSettings['currencySymbol'] = $currency ? $currency->symbol : '$';
             
@@ -89,7 +89,7 @@ class InvoicePaymentController extends Controller
             ->toArray();
 
         // Resolve currency symbol from Currency model using defaultCurrency code
-        $currencyCode = $invoiceSettings['defaultCurrency'] ?? 'USD';
+        $currencyCode = $invoiceSettings['defaultCurrency'] ?? 'INR';
         $currency = \App\Models\Currency::where('code', $currencyCode)->first();
         $invoiceSettings['currencySymbol'] = $currency ? $currency->symbol : '$';
 

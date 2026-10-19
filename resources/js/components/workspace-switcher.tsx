@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Building2, Check, LogOut } from 'lucide-react';
+import { Building2, Check, ChevronsUpDown, LogOut } from 'lucide-react';
 import { usePage, router } from '@inertiajs/react';
 import { hasPermission } from '@/utils/permissions';
 import { LeaveWorkspaceModal } from '@/components/LeaveWorkspaceModal';
 import { toast } from '@/components/custom-toast';
 
-export const WorkspaceSwitcher: React.FC = () => {
+/** In the sidebar (under the logo) it spans the width, like most apps' workspace pickers. */
+export const WorkspaceSwitcher: React.FC<{ variant?: 'header' | 'sidebar' }> = ({ variant = 'header' }) => {
     const { auth } = usePage().props as any;
     const currentWorkspaceId = auth?.user?.current_workspace_id;
     const ownedWorkspaces = auth?.user?.ownedWorkspaces || [];
@@ -32,14 +33,28 @@ export const WorkspaceSwitcher: React.FC = () => {
         <>
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2 h-8 max-w-40">
-                    <Building2 className="h-4 w-4 flex-shrink-0" />
-                    <span className="text-sm hidden md:inline-block truncate">
-                        {currentWorkspace?.name || 'Select Workspace'}
-                    </span>
-                </Button>
+                {variant === 'sidebar' ? (
+                    <Button
+                        variant="outline"
+                        className="h-9 w-full justify-start gap-2 px-2.5 group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+                        title={currentWorkspace?.name}
+                    >
+                        <Building2 className="h-4 w-4 flex-shrink-0" />
+                        <span className="min-w-0 flex-1 truncate text-left text-sm group-data-[collapsible=icon]:hidden">
+                            {currentWorkspace?.name || 'Select Workspace'}
+                        </span>
+                        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-60 group-data-[collapsible=icon]:hidden" />
+                    </Button>
+                ) : (
+                    <Button variant="ghost" className="flex items-center gap-2 h-8 max-w-40">
+                        <Building2 className="h-4 w-4 flex-shrink-0" />
+                        <span className="text-sm hidden md:inline-block truncate">
+                            {currentWorkspace?.name || 'Select Workspace'}
+                        </span>
+                    </Button>
+                )}
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-64" align="end">
+            <DropdownMenuContent className="w-64" align={variant === 'sidebar' ? 'start' : 'end'}>
                 {allWorkspaces.map((workspace) => (
                     <DropdownMenuItem
                         key={workspace.id}

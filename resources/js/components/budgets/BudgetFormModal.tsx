@@ -88,7 +88,9 @@ export default function BudgetFormModal({ isOpen, onClose, budget, mode, current
                 color: cat.color,
                 description: cat.description || ''
             })));
-        } else if (mode === 'create') {
+        } else if (mode === 'create' && isOpen) {
+            // Only when the form is open: the page itself shouldn't fetch create-form data
+            // (members can see budgets but not manage their categories).
             resetForm();
             if (currentProject) {
                 setFormData(prev => ({ ...prev, project_id: currentProject.id.toString() }));

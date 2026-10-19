@@ -39,7 +39,7 @@ export default function NotificationTemplateSidebar({ className }: Props) {
       id: '1',
       name: 'Welcome Email',
       type: 'email',
-      subject: 'Welcome to Taskly',
+      subject: 'Welcome to Sundal',
       content: 'Welcome to our platform! We\'re excited to have you.',
       isActive: true,
       createdAt: '2024-01-15'

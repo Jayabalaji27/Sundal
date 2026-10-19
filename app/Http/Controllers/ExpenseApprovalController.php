@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ExpenseApproval;
 use App\Models\ProjectExpense;
+use App\Services\ApprovalQueue;
 use App\Services\BudgetService;
 use App\Traits\HasPermissionChecks;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ class ExpenseApprovalController extends Controller
     
     protected BudgetService $budgetService;
     
-    public function __construct(BudgetService $budgetService)
+    public function __construct(BudgetService $budgetService, private ApprovalQueue $queue)
     {
         $this->budgetService = $budgetService;
     }
@@ -27,6 +28,7 @@ class ExpenseApprovalController extends Controller
         if ($this->isOwnExpense($expense)) {
             return back()->with('error', __('You cannot approve or reject your own expense. The workspace owner reviews it.'));
         }
+        abort_unless($this->queue->inExpenseQueue(auth()->user(), $expense), 403);
         
         $validated = $request->validate([
             'notes' => 'nullable|string'
@@ -45,6 +47,7 @@ class ExpenseApprovalController extends Controller
         if ($this->isOwnExpense($expense)) {
             return back()->with('error', __('You cannot approve or reject your own expense. The workspace owner reviews it.'));
         }
+        abort_unless($this->queue->inExpenseQueue(auth()->user(), $expense), 403);
         
         // The submitter needs to know what to fix, as with timesheet rejection.
         // Validated outside the try so a missing reason is a field error, not
@@ -71,6 +74,7 @@ class ExpenseApprovalController extends Controller
     public function requestInfo(Request $request, ProjectExpense $expense)
     {
         $this->authorizePermission('expense_approval_request_info');
+        abort_unless($this->queue->inExpenseQueue(auth()->user(), $expense), 403);
         
         $validated = $request->validate([
             'notes' => 'required|string'
@@ -106,8 +110,8 @@ class ExpenseApprovalController extends Controller
             'notes' => 'nullable|string'
         ]);
 
-        $expenses = ProjectExpense::whereIn('id', $validated['expense_ids'])
-            ->where('status', 'pending')
+        $expenses = $this->visibleQueue()->whereIn('project_expenses.id', $validated['expense_ids'])
+            ->where('project_expenses.status', 'pending')
             ->get()
             ->reject(fn (ProjectExpense $expense) => $this->isOwnExpense($expense));
 
@@ -141,14 +145,16 @@ class ExpenseApprovalController extends Controller
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
         
-        $query = $this->reviewableExpenses()
+        // The inbox opens on what's waiting for a decision; "history" shows decided expenses.
+        $statusFilter = in_array($request->status, ['pending', 'requires_info', 'history'], true) ? $request->status : 'pending';
+        $statuses = match ($statusFilter) {
+            'history' => ['approved', 'rejected'],
+            'requires_info' => ['requires_info'],
+            default => ApprovalQueue::WAITING_EXPENSE_STATUSES,
+        };
+        $query = $this->visibleQueue()
             ->with(['project:id,title', 'budgetCategory:id,name,color', 'submitter:id,name,avatar'])
-            ->whereIn('project_expenses.status', ['pending', 'requires_info']);
-            
-        // Apply filters
-        if ($request->status && $request->status !== 'all') {
-            $query->where('project_expenses.status', $request->status);
-        }
+            ->whereIn('project_expenses.status', $statuses);
         
         if ($request->project_id && $request->project_id !== 'all') {
             $query->where('project_id', $request->project_id);
@@ -193,27 +199,29 @@ class ExpenseApprovalController extends Controller
         $perPage = $request->get('per_page', 12);
         $pendingExpenses = $query->paginate($perPage);
         
-        // Get filter options
+        // Filter options: only projects the reviewer can see
         $projects = \App\Models\Project::forWorkspace($workspace->id)
+            ->visibleTo($user)
             ->select('id', 'title')
             ->get();
         
         // Get overview stats
         $stats = [
-            'pending_count' => $this->reviewableExpenses()->where('project_expenses.status', 'pending')->count(),
+            'pending_count' => $this->visibleQueue()->where('project_expenses.status', 'pending')->count(),
             
-            'requires_info_count' => $this->reviewableExpenses()->where('project_expenses.status', 'requires_info')->count(),
+            'requires_info_count' => $this->visibleQueue()->where('project_expenses.status', 'requires_info')->count(),
             
-            'approved_today' => $this->reviewableExpenses()->where('project_expenses.status', 'approved')->whereDate('project_expenses.updated_at', today())->count(),
+            'approved_today' => $this->visibleQueue()->where('project_expenses.status', 'approved')->whereDate('project_expenses.updated_at', today())->count(),
             
-            'pending_amount' => $this->reviewableExpenses()->where('project_expenses.status', 'pending')->sum('project_expenses.amount')
+            'pending_amount' => $this->visibleQueue()->where('project_expenses.status', 'pending')->sum('project_expenses.amount')
         ];
 
         return Inertia::render('expenses/Approvals', [
             'expenses' => $pendingExpenses,
             'stats' => $stats,
             'projects' => $projects,
-            'filters' => $request->only(['status', 'project_id', 'search', 'per_page', 'sort_by', 'sort_order', 'view']),
+            'filters' => ['status' => $statusFilter] + $request->only(['project_id', 'search', 'per_page', 'sort_by', 'sort_order']),
+            'approvalCounts' => $this->queue->counts($user),
             'permissions' => [
                 'approve' => $this->checkPermission('expense_approval_approve'),
                 'reject' => $this->checkPermission('expense_approval_reject'),
@@ -226,7 +234,7 @@ class ExpenseApprovalController extends Controller
 
     public function pendingApprovals()
     {
-        $pendingExpenses = $this->reviewableExpenses()
+        $pendingExpenses = $this->visibleQueue()
             ->with(['project', 'budgetCategory', 'submitter'])
             ->where('project_expenses.status', 'pending')
             ->latest('project_expenses.created_at')
@@ -257,43 +265,27 @@ class ExpenseApprovalController extends Controller
     public function getApprovalStats()
     {
         $stats = [
-            'pending_count' => $this->reviewableExpenses()->where('project_expenses.status', 'pending')->count(),
+            'pending_count' => $this->visibleQueue()->where('project_expenses.status', 'pending')->count(),
             
-            'approved_today' => $this->reviewableExpenses()->where('project_expenses.status', 'approved')
+            'approved_today' => $this->visibleQueue()->where('project_expenses.status', 'approved')
               ->whereDate('project_expenses.updated_at', today())->count(),
               
-            'total_approved_amount' => $this->reviewableExpenses()->where('project_expenses.status', 'approved')->sum('project_expenses.amount'),
+            'total_approved_amount' => $this->visibleQueue()->where('project_expenses.status', 'approved')->sum('project_expenses.amount'),
             
-            'pending_amount' => $this->reviewableExpenses()->where('project_expenses.status', 'pending')->sum('project_expenses.amount')
+            'pending_amount' => $this->visibleQueue()->where('project_expenses.status', 'pending')->sum('project_expenses.amount')
         ];
         
         return response()->json($stats);
     }
 
     /**
-     * Expenses in the reviewer's queue: the whole workspace for the owner, only
-     * assigned/created projects for a manager (same scope as the Expenses page).
-     * The list and its stats both use this so the numbers match what's shown.
+     * Expenses in the reviewer's queue (see ApprovalQueue): the whole workspace for
+     * the owner, only assigned/created projects for a manager. The list, its stats
+     * and the dashboard all use the same queue so the numbers match what's shown.
      */
-    private function reviewableExpenses()
+    private function visibleQueue()
     {
-        $user = auth()->user();
-        $workspace = $user->currentWorkspace;
-
-        $query = ProjectExpense::whereHas('project', function ($q) use ($workspace) {
-            $q->where('workspace_id', $workspace->id);
-        });
-
-        if (!$workspace->isOwner($user) && $workspace->getMemberRole($user) === 'manager') {
-            $query->whereHas('project', function ($q) use ($user) {
-                $q->where(function ($projectQuery) use ($user) {
-                    $projectQuery->whereHas('members', fn ($memberQuery) => $memberQuery->where('user_id', $user->id))
-                        ->orWhere('created_by', $user->id);
-                });
-            });
-        }
-
-        return $query;
+        return $this->queue->expenses(auth()->user());
     }
 
     /**

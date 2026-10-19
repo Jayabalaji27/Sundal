@@ -59,7 +59,7 @@ export default function HeroSection({ settings, sectionData, brandColor = '#3b82
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 dark:text-white leading-tight" role="banner" aria-label="Main heading">
               {sectionData.title || (
                 <>
-                  Streamline Your <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Team's Workflow</span> with Taskly
+                  Streamline Your <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Team's Workflow</span> with Sundal
                 </>
               )}
             </h1>
@@ -148,7 +148,7 @@ export default function HeroSection({ settings, sectionData, brandColor = '#3b82
               <div className="relative">
                 <img 
                   src={heroImage} 
-                  alt="Taskly Dashboard Preview" 
+                  alt="Sundal Dashboard Preview" 
                   className="w-full h-auto rounded-2xl shadow-2xl border border-gray-200"
                 />
                 {/* Floating Elements */}
@@ -182,7 +182,7 @@ export default function HeroSection({ settings, sectionData, brandColor = '#3b82
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: brandColor }}>
                           <span className="text-white text-sm font-bold">T</span>
                         </div>
-                        <span className="font-semibold text-gray-900">{t('Taskly Dashboard')}</span>
+                        <span className="font-semibold text-gray-900">{t('Sundal Dashboard')}</span>
                       </div>
                       <div className="flex gap-2">
                         <div className="w-3 h-3 bg-red-400 rounded-full"></div>

@@ -35,7 +35,7 @@ class TimesheetReportController extends Controller
             $member->avatar = check_file($member->avatar) ? get_file($member->avatar) : get_file('avatars/avatar.png');
         });
 
-        $projects = Project::forWorkspace($workspace->id)->get();
+        $projects = Project::forWorkspace($workspace->id)->visibleTo($user)->get();
 
         // Set default date range (last 30 days)
         $endDate = Carbon::now()->format('Y-m-d');
@@ -47,7 +47,7 @@ class TimesheetReportController extends Controller
         }
 
         // Generate default latest report (summary for last 30 days)
-        $defaultQuery = TimesheetEntry::with(['timesheet', 'project', 'task', 'user'])
+        $defaultQuery = $this->visibleEntries($user)
             ->whereHas('timesheet', function($q) use ($workspace) {
                 $q->where('workspace_id', $workspace->id)->whereIn('status', self::STATUS_FILTERS['counted']);
             })
@@ -94,7 +94,7 @@ class TimesheetReportController extends Controller
         $user = auth()->user();
         $workspace = $user->currentWorkspace;
         
-        $query = TimesheetEntry::with(['timesheet', 'project', 'task', 'user'])
+        $query = $this->visibleEntries($user)
             ->whereHas('timesheet', function($q) use ($workspace, $statuses) {
                 $q->where('workspace_id', $workspace->id)
                     ->when($statuses, fn ($q) => $q->whereIn('status', $statuses));
@@ -153,6 +153,17 @@ class TimesheetReportController extends Controller
             'billable_hours' => $billableHours,
             'pending_approvals' => $pendingApprovals
         ]);
+    }
+
+    /**
+     * Time entries on projects the user can see - the same rule as the Projects
+     * page - so a private project's hours and amounts never reach someone who
+     * isn't on it. Owners see every project.
+     */
+    private function visibleEntries(User $user)
+    {
+        return TimesheetEntry::with(['timesheet', 'project', 'task', 'user'])
+            ->when(!$user->currentWorkspace?->isOwner($user), fn ($q) => $q->whereHas('project', fn ($p) => $p->visibleTo($user)));
     }
 
     private function generateSummaryReport($entries)

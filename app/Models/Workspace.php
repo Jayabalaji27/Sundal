@@ -62,11 +62,6 @@ class Workspace extends Model
         return $this->hasMany(\App\Models\TaskStage::class);
     }
 
-    public function bugStatuses(): HasMany
-    {
-        return $this->hasMany(\App\Models\BugStatus::class);
-    }
-
     public function contractTypes(): HasMany
     {
         return $this->hasMany(\App\Models\ContractType::class);

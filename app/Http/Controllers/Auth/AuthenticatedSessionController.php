@@ -24,7 +24,35 @@ class AuthenticatedSessionController extends Controller
             'canResetPassword' => Route::has('password.request'),
             'status' => $request->session()->get('status'),
             'settings' => settings(),
+            'demoLogins' => $this->demoLogins(),
         ]);
+    }
+
+    /**
+     * The demo accounts listed on the login page (config/demo.php), only while
+     * DEMO_LOGIN_PANEL is on. Names come from the users table.
+     */
+    private function demoLogins(): ?array
+    {
+        if (!config('demo.login_panel')) {
+            return null;
+        }
+
+        $accounts = collect(config('demo.accounts', []));
+        $names = \App\Models\User::whereIn('email', $accounts->pluck('email'))->pluck('name', 'email');
+
+        return [
+            'password' => (string) config('demo.password'),
+            'accounts' => $accounts
+                ->filter(fn (array $account) => $names->has($account['email']))
+                ->map(fn (array $account) => [
+                    'role' => $account['role'],
+                    'name' => $names[$account['email']],
+                    'email' => $account['email'],
+                ])
+                ->values()
+                ->all(),
+        ];
     }
 
     /**

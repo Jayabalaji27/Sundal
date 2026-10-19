@@ -1,8 +1,9 @@
 <?php
 namespace App\Http\Controllers;
 
-use App\Models\Bug;
 use App\Models\Project;
+use App\Models\Task;
+use App\Models\TaskStage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -54,18 +55,20 @@ class ClientPortalController extends Controller
             ->limit(15)
             ->get();
 
-        // Tasks summary (no details — just counts per stage)
+        // Tasks summary (no details — just counts per stage); bugs are counted below
         $taskStats = \DB::table('tasks')
             ->join('task_stages','tasks.task_stage_id','=','task_stages.id')
             ->where('tasks.project_id', $project->id)
+            ->where('tasks.type', 'task')
             ->select('task_stages.name as stage', \DB::raw('count(*) as count'))
             ->groupBy('task_stages.name')
             ->get();
 
         // Bugs summary
+        $bugs = Task::bugs()->where('project_id', $project->id);
         $bugStats = [
-            'total'  => Bug::where('project_id', $project->id)->count(),
-            'open'   => Bug::where('project_id', $project->id)->whereHas('bugStatus', fn($q) => $q->where('name','not like','%close%')->where('name','not like','%resolve%'))->count(),
+            'total'  => (clone $bugs)->count(),
+            'open'   => (clone $bugs)->whereDoesntHave('taskStage', fn ($q) => $q->where('is_completed', true))->count(),
         ];
 
         // Invoices (public-safe fields only)
@@ -97,17 +100,20 @@ class ClientPortalController extends Controller
             'priority'    => 'in:low,medium,high,urgent',
         ]);
 
-        $defaultStatus = \App\Models\BugStatus::where('workspace_id', $project->workspace_id)->first();
+        // A bug task in the first stage, so the team sees it on the Board.
+        // Portal reports are anonymous, so the project's creator owns them.
+        $firstStage = TaskStage::withoutGlobalScope('workspace')->forWorkspace($project->workspace_id)->ordered()->first();
 
-        Bug::create([
-            'project_id'   => $project->id,
-            'workspace_id' => $project->workspace_id,
-            'title'        => $request->title,
-            'description'  => $request->description,
-            'priority'     => $request->priority ?? 'medium',
-            'bug_status_id'=> $defaultStatus?->id,
-            'reported_by'  => null, // anonymous from portal
-            'created_by'   => $project->created_by,
+        Task::create([
+            'project_id'    => $project->id,
+            'type'          => 'bug',
+            'severity'      => 'major',
+            'title'         => $request->title,
+            'description'   => $request->description,
+            'priority'      => in_array($request->priority, ['low', 'medium', 'high'], true) ? $request->priority : ($request->priority === 'urgent' ? 'critical' : 'medium'),
+            'task_stage_id' => $firstStage?->id,
+            'created_by'    => $project->created_by,
+            'progress'      => 0,
         ]);
 
         return back()->with('success', 'Your report has been submitted. We\'ll look into it!');

@@ -4,7 +4,6 @@ namespace App\Services;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
-use Illuminate\Support\Facades\Log;
 use App\Models\Setting;
 
 class ZoomService
@@ -111,7 +110,7 @@ class ZoomService
             $tokenData = json_decode($response->getBody(), true);
             return $tokenData['access_token'];
         } catch (RequestException $e) {
-            Log::error('Zoom OAuth Error: ' . $e->getMessage());
+            IntegrationLog::failed('zoom', 'oauth.token', $e, null, ['status' => $e->getResponse()?->getStatusCode()]);
             throw new \Exception('Failed to get Zoom access token');
         }
     }
@@ -121,6 +120,7 @@ class ZoomService
      */
     public function createMeeting($meetingData)
     {
+        $started = hrtime(true);
         try {
             $credentials = $this->getZoomCredentials();
 
@@ -161,6 +161,7 @@ class ZoomService
             ]);
 
             $data = json_decode($response->getBody(), true);
+            IntegrationLog::ok('zoom', 'meeting.create', $started, ['zoom_meeting_id' => $data['id'] ?? null]);
 
             return [
                 'success' => true,
@@ -168,13 +169,13 @@ class ZoomService
             ];
 
         } catch (RequestException $e) {
-            Log::error('Zoom Create Meeting Error: ' . $e->getMessage());
+            IntegrationLog::failed('zoom', 'meeting.create', $e, $started, ['status' => $e->getResponse()?->getStatusCode()]);
             return [
                 'success' => false,
                 'error' => 'Failed to create Zoom meeting: ' . $e->getMessage()
             ];
         } catch (\Exception $e) {
-            Log::error('Zoom Service Error: ' . $e->getMessage());
+            IntegrationLog::failed('zoom', 'meeting.create', $e, $started);
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -188,6 +189,7 @@ class ZoomService
      */
     public function updateMeeting($meetingId, $meetingData)
     {
+        $started = hrtime(true);
         try {
             $accessToken = $this->getAccessToken();
 
@@ -206,15 +208,17 @@ class ZoomService
                 ]
             ]);
 
+            IntegrationLog::ok('zoom', 'meeting.update', $started, ['zoom_meeting_id' => $meetingId]);
+
             return ['success' => true];
         } catch (RequestException $e) {
-            Log::error('Zoom Update Meeting Error: ' . $e->getMessage());
+            IntegrationLog::failed('zoom', 'meeting.update', $e, $started, ['zoom_meeting_id' => $meetingId, 'status' => $e->getResponse()?->getStatusCode()]);
             return [
                 'success' => false,
                 'error' => 'Failed to update Zoom meeting: ' . $e->getMessage()
             ];
         } catch (\Exception $e) {
-            Log::error('Zoom Service Error: ' . $e->getMessage());
+            IntegrationLog::failed('zoom', 'meeting.update', $e, $started, ['zoom_meeting_id' => $meetingId]);
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -227,6 +231,7 @@ class ZoomService
      */
     public function deleteMeeting($meetingId)
     {
+        $started = hrtime(true);
         try {
             $accessToken = $this->getAccessToken();
 
@@ -236,15 +241,17 @@ class ZoomService
                 ]
             ]);
 
+            IntegrationLog::ok('zoom', 'meeting.delete', $started, ['zoom_meeting_id' => $meetingId]);
+
             return ['success' => true];
         } catch (RequestException $e) {
-            Log::error('Zoom Delete Meeting Error: ' . $e->getMessage());
+            IntegrationLog::failed('zoom', 'meeting.delete', $e, $started, ['zoom_meeting_id' => $meetingId, 'status' => $e->getResponse()?->getStatusCode()]);
             return [
                 'success' => false,
                 'error' => 'Failed to delete Zoom meeting: ' . $e->getMessage()
             ];
         } catch (\Exception $e) {
-            Log::error('Zoom Service Error: ' . $e->getMessage());
+            IntegrationLog::failed('zoom', 'meeting.delete', $e, $started, ['zoom_meeting_id' => $meetingId]);
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -257,6 +264,7 @@ class ZoomService
      */
     public function getMeeting($meetingId)
     {
+        $started = hrtime(true);
         try {
             $accessToken = $this->getAccessToken();
 
@@ -267,19 +275,20 @@ class ZoomService
             ]);
 
             $data = json_decode($response->getBody(), true);
+            IntegrationLog::ok('zoom', 'meeting.get', $started, ['zoom_meeting_id' => $meetingId]);
 
             return [
                 'success' => true,
                 'data' => $data
             ];
         } catch (RequestException $e) {
-            Log::error('Zoom Get Meeting Error: ' . $e->getMessage());
+            IntegrationLog::failed('zoom', 'meeting.get', $e, $started, ['zoom_meeting_id' => $meetingId, 'status' => $e->getResponse()?->getStatusCode()]);
             return [
                 'success' => false,
                 'error' => 'Failed to get Zoom meeting: ' . $e->getMessage()
             ];
         } catch (\Exception $e) {
-            Log::error('Zoom Service Error: ' . $e->getMessage());
+            IntegrationLog::failed('zoom', 'meeting.get', $e, $started, ['zoom_meeting_id' => $meetingId]);
             return [
                 'success' => false,
                 'error' => $e->getMessage()

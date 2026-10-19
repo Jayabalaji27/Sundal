@@ -1,14 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { router, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
+import { ProjectCard } from '@/components/projects/project-card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Plus, Search, Filter, Eye, Edit, Trash2, LayoutGrid, List, FileText, Clock, CalendarDays, FileDown, Users, CheckCircle, AlertTriangle, Sparkles } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Plus, Search, Eye, Edit, Trash2, LayoutGrid, List, CalendarDays, FileDown, Globe, MoreHorizontal, Sparkles } from 'lucide-react';
+import { StatStrip } from '@/components/stat-strip';
+import { FilterPopover } from '@/components/filter-popover';
+import { consumeCreateIntent } from '@/utils/create-intent';
 import { AiProjectModal } from '@/components/AiProjectModal';
 import { EmptyState, EMPTY_STATES } from '@/components/EmptyState';
 import { PageTemplate } from '@/components/page-template';
@@ -22,7 +27,7 @@ import { useTranslation } from 'react-i18next';
 
 export default function ProjectIndex() {
     const { t } = useTranslation();
-    const { auth, projects, members, clients, filters: pageFilters = {}, errors, flash } = usePage().props as any;
+    const { auth, projects, stats = {}, members, clients, filters: pageFilters = {}, errors, flash } = usePage().props as any;
     const permissions = auth?.permissions || [];
     
     const formatText = (text: string) => {
@@ -47,7 +52,7 @@ export default function ProjectIndex() {
     const [searchTerm, setSearchTerm] = useState(pageFilters.search || '');
     const [selectedStatus, setSelectedStatus] = useState(pageFilters.status || 'all');
     const [selectedPriority, setSelectedPriority] = useState(pageFilters.priority || 'all');
-    const [showFilters, setShowFilters] = useState(false);
+    const overdueOnly = ['1', 'true', 1, true].includes(pageFilters.overdue);
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deleteSummary, setDeleteSummary] = useState<{ counts: Record<string, number>; blocked: boolean } | null>(null);
@@ -61,19 +66,27 @@ export default function ProjectIndex() {
         if (flash?.error) toast.error(flash.error);
     }, [flash]);
 
+    // Opened from a "Create > Project" link.
+    useEffect(() => {
+        if (consumeCreateIntent() && hasPermission(permissions, 'project_create')) handleAddNew();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const buildParams = (
         overrides: Record<string, any> = {},
-        opts: { search?: string; status?: string; priority?: string; view?: string } = {}
+        opts: { search?: string; status?: string; priority?: string; view?: string; overdue?: boolean } = {}
     ) => {
         const search = opts.search !== undefined ? opts.search : searchTerm;
         const status = opts.status !== undefined ? opts.status : selectedStatus;
         const priority = opts.priority !== undefined ? opts.priority : selectedPriority;
         const view = opts.view !== undefined ? opts.view : activeView;
+        const overdue = opts.overdue !== undefined ? opts.overdue : overdueOnly;
 
         const params: any = { page: 1, view };
         if (search) params.search = search;
         if (status !== 'all') params.status = status;
         if (priority !== 'all') params.priority = priority;
+        if (overdue) params.overdue = 1;
         if (pageFilters.per_page) params.per_page = pageFilters.per_page;
         if (pageFilters.sort_field) params.sort_field = pageFilters.sort_field;
         if (pageFilters.sort_direction) params.sort_direction = pageFilters.sort_direction;
@@ -88,7 +101,31 @@ export default function ProjectIndex() {
         navigate(buildParams({ page: 1 }));
     };
 
-    const applyFilters = () => navigate(buildParams({ page: 1 }));
+    // Search as you type. preserveState keeps the input (and its focus) while
+    // the list reloads underneath it.
+    const isFirstSearchRender = useRef(true);
+    useEffect(() => {
+        if (isFirstSearchRender.current) {
+            isFirstSearchRender.current = false;
+            return;
+        }
+        if (searchTerm === (pageFilters.search || '')) return;
+        const timeout = setTimeout(() => {
+            router.get(route('projects.index'), buildParams({ page: 1 }), { preserveState: true, preserveScroll: true, replace: true });
+        }, 400);
+        return () => clearTimeout(timeout);
+    }, [searchTerm]);
+
+    // Status shortcuts from the stat strip; picking the applied one again clears it.
+    const showStatus = (status: string) => {
+        const next = !overdueOnly && selectedStatus === status ? 'all' : status;
+        setSelectedStatus(next);
+        navigate(buildParams({ page: 1 }, { status: next, overdue: false }));
+    };
+    const showOverdue = () => {
+        setSelectedStatus('all');
+        navigate(buildParams({ page: 1 }, { status: 'all', overdue: !overdueOnly }));
+    };
 
     const handleSort = (field: string) => {
         const direction = pageFilters.sort_field === field && pageFilters.sort_direction === 'asc' ? 'desc' : 'asc';
@@ -215,20 +252,17 @@ export default function ProjectIndex() {
         });
     };
     
-    const hasActiveFilters = () => {
-        return selectedStatus !== 'all' || selectedPriority !== 'all' || searchTerm !== '';
-    };
-    
+    // The search box shows its own value, so only the hidden (popover) filters count here.
     const activeFilterCount = () => {
-        return (selectedStatus !== 'all' ? 1 : 0) + (selectedPriority !== 'all' ? 1 : 0) + (searchTerm ? 1 : 0);
+        return (selectedStatus !== 'all' ? 1 : 0) + (selectedPriority !== 'all' ? 1 : 0) + (overdueOnly ? 1 : 0);
     };
-    
+    const hasActiveFilters = () => activeFilterCount() > 0;
+
     const handleResetFilters = () => {
         setSelectedStatus('all');
         setSelectedPriority('all');
-        setSearchTerm('');
-        setShowFilters(false);
         const params: any = { page: 1, view: activeView };
+        if (searchTerm) params.search = searchTerm;
         if (pageFilters.per_page) params.per_page = pageFilters.per_page;
         navigate(params);
     };
@@ -254,13 +288,23 @@ export default function ProjectIndex() {
         return colors[priority as keyof typeof colors] || 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20';
     };
 
+    // A missing date used to render as 1970-01-01 (new Date(null)).
+    const formatDate = (value?: string | null) => value ? window.appSettings.formatDateTime(new Date(value), false) : '';
+
+    const isOverdue = (project: any) => {
+        if (!project.deadline || ['completed', 'cancelled'].includes(project.status)) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return new Date(project.deadline) < today;
+    };
+
     const pageActions = [];
-    
+
     // Get user workspace role from props
     const userWorkspaceRole = (usePage().props as any).userWorkspaceRole;
     
-    // Export - only for users with view permission and not clients
-    if (hasPermission(permissions, 'project_view_any') && userWorkspaceRole !== 'client') {
+    // Export - for owners and managers (members and clients don't report on the portfolio)
+    if (hasPermission(permissions, 'project_view_any') && !['client', 'member'].includes(userWorkspaceRole)) {
         pageActions.push({
             label: t('Export'),
             icon: <FileDown className="h-4 w-4 mr-2" />,
@@ -359,21 +403,10 @@ export default function ProjectIndex() {
         {
             key: 'status',
             label: t('Status'),
-            render: (value: string, row: any) => (
-                <div className="flex gap-1">
-                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getStatusColor(value)}`}>
-                        {formatText(value)}
-                    </span>
-                    {row.is_public ? (
-                        <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">
-                            {t('Public')}
-                        </span>
-                    ) : (
-                        <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20">
-                            {t('Private')}
-                        </span>
-                    )}
-                </div>
+            render: (value: string) => (
+                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getStatusColor(value)}`}>
+                    {formatText(value)}
+                </span>
             )
         },
         {
@@ -437,7 +470,9 @@ export default function ProjectIndex() {
             key: 'deadline',
             label: t('Deadline'),
             sortable: true,
-            render: (value: string) => window.appSettings.formatDateTime(new Date(value),false)
+            render: (value: string, row: any) => value ? (
+                <span className={isOverdue(row) ? 'font-medium text-red-600' : ''}>{formatDate(value)}</span>
+            ) : <span className="text-muted-foreground">—</span>
         }
     ];
 
@@ -473,185 +508,86 @@ export default function ProjectIndex() {
             breadcrumbs={breadcrumbs}
             noPadding
         >
-            {/* Overview Row */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
-                <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
-                    <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0">
-                        <FileText className="h-5 w-5 text-blue-600 dark:text-blue-100" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('Total Projects')}</p>
-                        <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{projects?.total || 0}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{t('All Projects')}</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
-                    <div className="h-10 w-10 rounded-lg bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center shrink-0">
-                        <Users className="h-5 w-5 text-emerald-600 dark:text-emerald-100" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('Active')}</p>
-                        <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{projects?.data?.filter((p: any) => p.status === 'active').length || 0}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{t('In Progress')}</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
-                    <div className="h-10 w-10 rounded-lg bg-violet-100 dark:bg-violet-900 flex items-center justify-center shrink-0">
-                        <CheckCircle className="h-5 w-5 text-violet-600 dark:text-violet-100" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('Completed')}</p>
-                        <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{projects?.data?.filter((p: any) => p.status === 'completed').length || 0}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{t('Done')}</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
-                    <div className="h-10 w-10 rounded-lg bg-amber-100 dark:bg-amber-900 flex items-center justify-center shrink-0">
-                        <Clock className="h-5 w-5 text-amber-600 dark:text-amber-100" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('On Hold')}</p>
-                        <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{projects?.data?.filter((p: any) => p.status === 'on_hold').length || 0}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{t('Paused')}</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
-                    <div className="h-10 w-10 rounded-lg bg-red-100 dark:bg-red-900 flex items-center justify-center shrink-0">
-                        <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-100" />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('High Priority')}</p>
-                        <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{projects?.data?.filter((p: any) => p.priority === 'high' || p.priority === 'urgent').length || 0}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{t('Urgent & High')}</p>
-                    </div>
-                </div>
-            </div>
+            {/* Headline numbers - each one filters the list */}
+            <StatStrip
+                className="mb-4"
+                items={[
+                    { key: 'all', label: t('All projects'), value: stats.total ?? 0, active: selectedStatus === 'all' && !overdueOnly, onClick: () => showStatus('all') },
+                    { key: 'planning', label: t('Planning'), value: stats.planning ?? 0, tone: 'info', active: selectedStatus === 'planning' && !overdueOnly, onClick: () => showStatus('planning') },
+                    { key: 'active', label: t('Active'), value: stats.active ?? 0, tone: 'success', active: selectedStatus === 'active' && !overdueOnly, onClick: () => showStatus('active') },
+                    { key: 'completed', label: t('Completed'), value: stats.completed ?? 0, tone: 'violet', active: selectedStatus === 'completed' && !overdueOnly, onClick: () => showStatus('completed') },
+                    { key: 'overdue', label: t('Overdue'), value: stats.overdue ?? 0, tone: 'danger', active: overdueOnly, onClick: showOverdue },
+                ]}
+            />
 
-            {/* Search and filters section */}
-            <div className="bg-white rounded-lg border shadow mb-4">
-                <div className="p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <form onSubmit={handleSearch} className="flex gap-2">
-                                <div className="relative w-full sm:w-64">
-                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        placeholder={t('Search projects...')}
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="w-full pl-9"
-                                    />
-                                </div>
-                                <Button type="submit" size="sm">
-                                    <Search className="h-4 w-4 mr-1.5" />
-                                    {t('Search')}
-                                </Button>
-                            </form>
-                            
-                            <div className="ml-2">
-                                <Button 
-                                    variant={hasActiveFilters() ? "default" : "outline"}
-                                    size="sm" 
-                                    className="h-8 px-2 py-1"
-                                    onClick={() => setShowFilters(!showFilters)}
-                                >
-                                    <Filter className="h-3.5 w-3.5 mr-1.5" />
-                                    {showFilters ? t('Hide Filters') : t('Filters')}
-                                    {hasActiveFilters() && (
-                                        <span className="ml-1 bg-primary-foreground text-primary rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                                            {activeFilterCount()}
-                                        </span>
-                                    )}
-                                </Button>
-                            </div>
-                        </div>
-                        
-                        <div className="flex flex-wrap items-center gap-2">
-                            <div className="border rounded-md p-0.5 mr-2">
-                                <Button
-                                    size="sm"
-                                    variant={activeView === 'list' ? "default" : "ghost"}
-                                    className="h-7 px-2"
-                                    onClick={() => handleViewChange('list')}
-                                >
-                                    <List className="h-4 w-4" />
-                                </Button>
-                                <Button 
-                                    size="sm" 
-                                    variant={activeView === 'grid' ? "default" : "ghost"}
-                                    className="h-7 px-2"
-                                    onClick={() => handleViewChange('grid')}
-                                >
-                                    <LayoutGrid className="h-4 w-4" />
-                                </Button>
-                            </div>
-                            
-                            <Label className="text-xs text-muted-foreground">{t('Per Page')}:</Label>
-                            <Select 
-                                value={pageFilters.per_page?.toString() || "12"} 
-                                onValueChange={(value) => navigate(buildParams({ page: 1, per_page: parseInt(value) }))}
-                            >
-                                <SelectTrigger className="w-16 h-8">
-                                    <SelectValue />
+            {/* Toolbar: search, the rest of the filters behind one button, view switch */}
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+                <form onSubmit={handleSearch} className="relative w-full sm:w-72">
+                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        type="search"
+                        placeholder={t('Search projects...')}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="h-9 w-full pl-9"
+                    />
+                </form>
+
+                <FilterPopover activeCount={activeFilterCount()} onReset={handleResetFilters}>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">{t('Status')}</Label>
+                            <Select value={selectedStatus} onValueChange={handleStatusFilter}>
+                                <SelectTrigger className="h-9 w-full">
+                                    <SelectValue placeholder={t('All Status')} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="12">12</SelectItem>
-                                    <SelectItem value="24">24</SelectItem>
-                                    <SelectItem value="48">48</SelectItem>
-                                    <SelectItem value="100">100</SelectItem>
+                                    <SelectItem value="all">{t('All Status')}</SelectItem>
+                                    <SelectItem value="planning">{t('Planning')}</SelectItem>
+                                    <SelectItem value="active">{t('Active')}</SelectItem>
+                                    <SelectItem value="on_hold">{t('On Hold')}</SelectItem>
+                                    <SelectItem value="completed">{t('Completed')}</SelectItem>
+                                    <SelectItem value="cancelled">{t('Cancelled')}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-                    </div>
-                    
-                    {showFilters && (
-                        <div className="w-full mt-3 p-4 bg-gray-50 border rounded-md">
-                            <div className="flex flex-wrap gap-4 items-end">
-                                <div className="space-y-2">
-                                    <Label>{t('Status')}</Label>
-                                    <Select value={selectedStatus} onValueChange={handleStatusFilter}>
-                                        <SelectTrigger className="w-40">
-                                            <SelectValue placeholder={t('All Status')} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">{t('All Status')}</SelectItem>
-                                            <SelectItem value="planning">{t('Planning')}</SelectItem>
-                                            <SelectItem value="active">{t('Active')}</SelectItem>
-                                            <SelectItem value="on_hold">{t('On Hold')}</SelectItem>
-                                            <SelectItem value="completed">{t('Completed')}</SelectItem>
-                                            <SelectItem value="cancelled">{t('Cancelled')}</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                
-                                <div className="space-y-2">
-                                    <Label>{t('Priority')}</Label>
-                                    <Select value={selectedPriority} onValueChange={handlePriorityFilter}>
-                                        <SelectTrigger className="w-40">
-                                            <SelectValue placeholder={t('All Priority')} />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">{t('All Priority')}</SelectItem>
-                                            <SelectItem value="low">{t('Low')}</SelectItem>
-                                            <SelectItem value="medium">{t('Medium')}</SelectItem>
-                                            <SelectItem value="high">{t('High')}</SelectItem>
-                                            <SelectItem value="urgent">{t('Urgent')}</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                
-                                <Button 
-                                    variant="outline" 
-                                    size="sm"
-                                    className="h-9"
-                                    onClick={handleResetFilters}
-                                    disabled={!hasActiveFilters()}
-                                >
-                                    {t('Reset Filters')}
-                                </Button>
-                            </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs">{t('Priority')}</Label>
+                            <Select value={selectedPriority} onValueChange={handlePriorityFilter}>
+                                <SelectTrigger className="h-9 w-full">
+                                    <SelectValue placeholder={t('All Priority')} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">{t('All Priority')}</SelectItem>
+                                    <SelectItem value="low">{t('Low')}</SelectItem>
+                                    <SelectItem value="medium">{t('Medium')}</SelectItem>
+                                    <SelectItem value="high">{t('High')}</SelectItem>
+                                    <SelectItem value="urgent">{t('Urgent')}</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
-                    )}
+                </FilterPopover>
+
+                <div className="ml-auto flex rounded-md border p-0.5">
+                    <Button
+                        size="sm"
+                        variant={activeView === 'grid' ? 'secondary' : 'ghost'}
+                        className="h-7 px-2"
+                        onClick={() => handleViewChange('grid')}
+                        aria-label={t('Grid view')}
+                        title={t('Grid view')}
+                    >
+                        <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant={activeView === 'list' ? 'secondary' : 'ghost'}
+                        className="h-7 px-2"
+                        onClick={() => handleViewChange('list')}
+                        aria-label={t('List view')}
+                        title={t('List view')}
+                    >
+                        <List className="h-4 w-4" />
+                    </Button>
                 </div>
             </div>
 
@@ -668,150 +604,21 @@ export default function ProjectIndex() {
                 />
             )}
             {(activeView === 'grid' || !activeView) && (projects?.data?.length ?? 0) > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {projects?.data?.map((project: any) => (
-                    <Card key={project.id} className="overflow-hidden hover:shadow-md transition-shadow">
-                        <CardHeader className="p-3 pb-2">
-                            <div className="flex justify-between items-start gap-2">
-                                <CardTitle 
-                                    className="text-sm font-semibold line-clamp-1 cursor-pointer hover:text-blue-600 transition-colors"
-                                    onClick={() => router.get(route('projects.show', project.id))}
-                                >
-                                    {project.title}
-                                </CardTitle>
-                                <div className="flex gap-1 shrink-0">
-                                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getStatusColor(project.status)}`}>
-                                        {formatText(project.status)}
-                                    </span>
-                                    {project.is_public ? (
-                                        <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">
-                                            {t('Public')}
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20">
-                                            {t('Private')}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                            {project.description && (
-                                <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{project.description}</p>
-                            )}
-                        </CardHeader>
-                        
-                        <CardContent className="p-3 pt-0">
-                            <div className="space-y-2">
-                                <div className="space-y-1">
-                                    <div className="flex justify-between text-xs">
-                                        <span className="text-muted-foreground">{t('Progress')}</span>
-                                        <span className="font-medium">{project.progress}%</span>
-                                    </div>
-                                    <Progress value={project.progress} className="h-1" />
-                                </div>
-                                
-                                <div className="flex justify-between items-center text-xs">
-                                    {project.start_date ? (
-                                        <div className="flex items-center gap-1 text-muted-foreground">
-                                            <CalendarDays className="h-3 w-3" />
-                                            <span>{window.appSettings.formatDateTime(new Date(project.start_date),false)}</span>
-                                        </div>
-                                    ) : <span />}
-                                    <div className="flex items-center gap-1 text-muted-foreground">
-                                            <CalendarDays className="h-3 w-3" />
-                                            <span>{window.appSettings.formatDateTime(new Date(project.deadline),false)}</span>
-                                        </div>
-                                </div>
-
-                                <div className="flex justify-between text-xs text-muted-foreground">
-                                    <span className={`inline-flex items-center capitalize rounded-md px-2 py-1 text-xs font-medium ${getPriorityColor(project.priority)}`}>
-                                        {project.priority}
-                                    </span>
-                                    {project.estimated_hours ? (
-                                        <div className="flex items-center gap-1">
-                                            <Clock className="h-3 w-3" />
-                                            <span>{project.estimated_hours}h</span>
-                                        </div>
-                                    ) : <span />}
-                                </div>
-                                
-                                <div className="flex items-center justify-between pt-1 border-t">
-                                    <div className="flex -space-x-1">
-                                        {project.members?.slice(0, 3).map((member: any, index: number) => (
-                                            <Tooltip key={index}>
-                                                <TooltipTrigger asChild>
-                                                    <Avatar className="h-6 w-6 border-2 border-white cursor-pointer">
-                                                        <AvatarImage src={member.user?.avatar} />
-                                                        <AvatarFallback className="text-xs">
-                                                            {member.user?.name?.charAt(0)}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    {member.user?.name}
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        ))}
-                                        {project.members?.length > 3 && (
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <div className="h-6 w-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs cursor-pointer">
-                                                        +{project.members.length - 3}
-                                                    </div>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    {project.members.slice(3).map((m: any) => m.user?.name).join(', ')}
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-2">
-                                        {project.clients?.length > 0 && (
-                                            <span className="text-xs text-muted-foreground">
-                                                {project.clients.length} client{project.clients.length > 1 ? 's' : ''}
-                                            </span>
-                                        )}
-                                        {hasPermission(permissions, 'project_view') && (
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleAction('view', project)} className="text-blue-500 hover:text-blue-700 h-7 w-7">
-                                                        <Eye className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>{t('View')}</TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                        {hasPermission(permissions, 'project_update') && (
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleAction('edit', project)} className="text-amber-500 hover:text-amber-700 h-7 w-7">
-                                                        <Edit className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>{t('Edit')}</TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                        {hasPermission(permissions, 'project_delete') && (
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button variant="ghost" size="icon" onClick={() => handleAction('delete', project)} className="text-red-500 hover:text-red-700 h-7 w-7">
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>{t('Delete')}</TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                        
-
-                    </Card>
+                    <ProjectCard
+                        key={project.id}
+                        project={project}
+                        canView={hasPermission(permissions, 'project_view')}
+                        canEdit={hasPermission(permissions, 'project_update')}
+                        canDelete={hasPermission(permissions, 'project_delete')}
+                        showClient={userWorkspaceRole !== 'client'}
+                        onAction={handleAction}
+                    />
                 ))}
                 </div>
-            ) : (
-                <div className="bg-white rounded-lg shadow overflow-hidden">
+            ) : (projects?.data?.length ?? 0) > 0 && (
+                <div className="overflow-hidden rounded-lg border bg-card">
                     <CrudTable
                         columns={columns}
                         actions={actions}
@@ -823,74 +630,59 @@ export default function ProjectIndex() {
                         onSort={handleSort}
                         permissions={permissions}
                     />
-                    {/* Pagination */}
-                        {projects?.links && (
-                    <div className="p-4 border-t flex items-center justify-between bg-[#F0F0F1] dark:bg-gray-800">
-                                <div className="text-sm text-muted-foreground">
-                                    {t('Showing')} <span className="font-medium">{projects?.from || 0}</span> {t('to')} <span className="font-medium">{projects?.to || 0}</span> {t('of')} <span className="font-medium">{projects?.total || 0}</span> {t('projects')}
-                                </div>
-                                
-                                <div className="flex gap-1">
-                                    {projects?.links?.map((link: any, i: number) => {
-                                        const isTextLink = link.label === "&laquo; Previous" || link.label === "Next &raquo;";
-                                        const label = link.label.replace("&laquo; ", "").replace(" &raquo;", "");
-                                        
-                                        return (
-                                            <Button
-                                                key={i}
-                                                variant={link.active ? 'default' : 'outline'}
-                                                size={isTextLink ? "sm" : "icon"}
-                                                className={isTextLink ? "px-3" : "h-8 w-8"}
-                                                disabled={!link.url}
-                                                onClick={() => {
-                                                    if (!link.url) return;
-                                                    const pageNum = new URL(link.url).searchParams.get('page');
-                                                    navigate(buildParams({ page: pageNum ? parseInt(pageNum) : 1 }));
-                                                }}
-                                            >
-                                                {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
-                                            </Button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
                 </div>
             )}
-            
-            {/* Pagination */}
-            {activeView === 'grid' && projects?.links && (
-                <div className="mt-6 bg-[#F0F0F1] dark:bg-gray-800 p-4 rounded-lg shadow flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm text-muted-foreground">
-                        {t('Showing')} <span className="font-medium">{projects?.from || 0}</span> {t('to')} <span className="font-medium">{projects?.to || 0}</span> {t('of')} <span className="font-medium">{projects?.total || 0}</span> {t('projects')}
+
+            {/* Pagination - only once there is more than one page's worth of projects */}
+            {(projects?.total ?? 0) > 12 && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+                    <div className="flex items-center gap-3 text-muted-foreground">
+                        <span>
+                            {t('Showing')} {projects?.from || 0}–{projects?.to || 0} {t('of')} {projects?.total || 0}
+                        </span>
+                        <Select
+                            value={pageFilters.per_page?.toString() || '12'}
+                            onValueChange={(value) => navigate(buildParams({ page: 1, per_page: parseInt(value) }))}
+                        >
+                            <SelectTrigger className="h-8 w-[4.5rem]" aria-label={t('Per Page')}>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="12">12</SelectItem>
+                                <SelectItem value="24">24</SelectItem>
+                                <SelectItem value="48">48</SelectItem>
+                                <SelectItem value="100">100</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
 
-                    <div className="flex flex-wrap gap-1">
-                        {projects?.links?.map((link: any, i: number) => {
-                            const isTextLink = link.label === "&laquo; Previous" || link.label === "Next &raquo;";
-                            const label = link.label.replace("&laquo; ", "").replace(" &raquo;", "");
-                            
-                            return (
-                                <Button
-                                    key={i}
-                                    variant={link.active ? 'default' : 'outline'}
-                                    size={isTextLink ? "sm" : "icon"}
-                                    className={isTextLink ? "px-3" : "h-8 w-8"}
-                                    disabled={!link.url}
-                                    onClick={() => {
-                                        if (!link.url) return;
-                                        const pageNum = new URL(link.url).searchParams.get('page');
-                                        navigate(buildParams({ page: pageNum ? parseInt(pageNum) : 1 }));
-                                    }}
-                                >
-                                    {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
-                                </Button>
-                            );
-                        })}
-                    </div>
+                    {(projects?.last_page ?? 1) > 1 && (
+                        <div className="flex flex-wrap gap-1">
+                            {projects?.links?.map((link: any, i: number) => {
+                                const isTextLink = link.label === "&laquo; Previous" || link.label === "Next &raquo;";
+                                const label = link.label.replace("&laquo; ", "").replace(" &raquo;", "");
+
+                                return (
+                                    <Button
+                                        key={i}
+                                        variant={link.active ? 'default' : 'outline'}
+                                        size={isTextLink ? "sm" : "icon"}
+                                        className={isTextLink ? "px-3" : "h-8 w-8"}
+                                        disabled={!link.url}
+                                        onClick={() => {
+                                            if (!link.url) return;
+                                            const pageNum = new URL(link.url).searchParams.get('page');
+                                            navigate(buildParams({ page: pageNum ? parseInt(pageNum) : 1 }));
+                                        }}
+                                    >
+                                        {isTextLink ? t(label) : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
+                                    </Button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
-            
             {/* Form Modal */}
             <CrudFormModal
                 isOpen={isFormModalOpen}
@@ -911,8 +703,7 @@ export default function ProjectIndex() {
                                 { value: 'on_hold', label: 'On Hold' },
                                 { value: 'completed', label: 'Completed' },
                                 { value: 'cancelled', label: 'Cancelled' }
-                            ],
-                            required: true
+                            ]
                         },
                         { 
                             name: 'priority', 
@@ -923,11 +714,10 @@ export default function ProjectIndex() {
                                 { value: 'medium', label: 'Medium' },
                                 { value: 'high', label: 'High' },
                                 { value: 'urgent', label: 'Urgent' }
-                            ],
-                            required: true
+                            ]
                         },
-                        { name: 'start_date', label: t('Start Date'), type: 'date', required: true },
-                        { name: 'deadline', label: t('Deadline'), type: 'date', required: true },
+                        { name: 'start_date', label: t('Start Date'), type: 'date' },
+                        { name: 'deadline', label: t('Deadline'), type: 'date' },
                         { name: 'estimated_hours', label: t('Estimated Hours'), type: 'number', min: 0, placeholder: t('e.g. 40') },
                         { name: 'is_public', label: '', type: 'checkbox', placeholder: t('Make project public') }
                     ],

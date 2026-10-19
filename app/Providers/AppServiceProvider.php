@@ -37,7 +37,20 @@ class AppServiceProvider extends ServiceProvider
         // One history log for every business module (who changed what, from
         // a screen or the AI assistant).
         \App\Services\History\HistoryRecorder::register();
-        
+
+        // Every email that leaves the app, in the integrations log (recipients
+        // masked); failed sends are logged where they are caught.
+        $this->app['events']->listen(\Illuminate\Mail\Events\MessageSent::class, function (\Illuminate\Mail\Events\MessageSent $event) {
+            $message = $event->sent->getOriginalMessage();
+            if ($message instanceof \Symfony\Component\Mime\Email) {
+                \App\Services\IntegrationLog::ok('mail', 'send', null, [
+                    'to' => array_map(fn ($address) => \App\Services\IntegrationLog::maskEmail($address->getAddress()), $message->getTo()),
+                    'subject' => mb_substr((string) $message->getSubject(), 0, 120),
+                    'mailer' => config('mail.default'),
+                ]);
+            }
+        });
+
 
 
         // Configure dynamic storage disks

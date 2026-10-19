@@ -66,7 +66,7 @@ export default function GoogleMeetingShow() {
     const pageActions = [];
 
     // Add Edit button if user has update permission
-    if (permissions?.google_meeting_update) {
+    if (permissions?.update) {
         pageActions.push({
             label: t('Edit'),
             icon: <Edit className="h-4 w-4 mr-2" />,
@@ -76,7 +76,7 @@ export default function GoogleMeetingShow() {
     }
 
     // Add Delete button if user has delete permission
-    if (permissions?.google_meeting_delete) {
+    if (permissions?.delete) {
         pageActions.push({
             label: t('Delete'),
             icon: <Trash2 className="h-4 w-4 mr-2" />,

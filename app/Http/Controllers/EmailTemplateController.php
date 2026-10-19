@@ -80,19 +80,6 @@ class EmailTemplateController extends Controller
                 '{end_date}' => 'Task end date',
                 '{company_name}' => 'Company name'
             ];
-        } elseif ($template->name === 'Bug Assignment') {
-            $variables = [
-                '{bug_title}' => 'Title of the bug',
-                '{project_name}' => 'Name of the project',
-                '{assigned_user_name}' => 'Name of the assigned user',
-                '{assigned_by_name}' => 'Name of the person who assigned',
-                '{bug_description}' => 'Bug description',
-                '{bug_priority}' => 'Bug priority level',
-                '{bug_severity}' => 'Bug severity level',
-                '{start_date}' => 'Bug creation date',
-                '{end_date}' => 'Bug due date',
-                '{company_name}' => 'Company name'
-            ];
         } elseif ($template->name === 'Expense Notification') {
             $variables = [
                 '{expense_title}' => 'Title of the expense',

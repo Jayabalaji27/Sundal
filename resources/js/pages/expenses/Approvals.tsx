@@ -1,651 +1,171 @@
-import React, { useState, useEffect } from 'react';
-import { PageTemplate } from '@/components/page-template';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Check, X, AlertCircle, Clock, Search, Filter, LayoutGrid, List, Receipt, CheckCircle, XCircle, DollarSign } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { router, usePage } from '@inertiajs/react';
-import { formatCurrency } from '@/utils/currency';
-import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
-import { CrudTable } from '@/components/CrudTable';
-import { hasPermission } from '@/utils/authorization';
+import { Clock } from 'lucide-react';
+import { toast } from '@/components/custom-toast';
+import { PageTemplate } from '@/components/page-template';
+import { SimplePagination } from '@/components/SimplePagination';
+import { ApprovalsHeader, type ApprovalCounts, type ApprovalStatus } from '@/components/approvals/approvals-header';
+import { RejectDialog } from '@/components/approvals/reject-dialog';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { formatCurrency } from '@/utils/currency';
 
 interface Props {
-    expenses: any;
-    stats: any;
-    projects: any[];
-    filters: any;
-    permissions?: any;
+    expenses: { data: any[]; current_page?: number; last_page?: number };
+    stats: { pending_amount?: number };
+    filters: { status?: string; search?: string };
+    permissions?: { approve?: boolean; reject?: boolean; request_info?: boolean; review_own?: boolean };
+    approvalCounts: ApprovalCounts;
 }
 
-export default function Approvals({ expenses, stats, projects, filters, permissions }: Props) {
+const STATUS_STYLES: Record<string, string> = {
+    pending: 'bg-yellow-50 text-yellow-700 ring-yellow-600/20',
+    requires_info: 'bg-blue-50 text-blue-700 ring-blue-600/20',
+    approved: 'bg-green-50 text-green-700 ring-green-600/20',
+    rejected: 'bg-red-50 text-red-700 ring-red-600/20',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+    pending: 'Pending',
+    requires_info: 'Waiting for info',
+    approved: 'Approved',
+    rejected: 'Rejected',
+};
+
+export default function ExpenseApprovals({ expenses, stats, filters, permissions, approvalCounts }: Props) {
     const { t } = useTranslation();
-    const { flash, auth, permissions: pagePermissions } = usePage().props as any;
-    const approvalPermissions = permissions || pagePermissions;
-    // Only the workspace owner reviews their own expenses (the server enforces this too)
-    const canReview = (expense: any) => approvalPermissions?.review_own || expense.submitted_by !== auth?.user?.id;
-    const [searchTerm, setSearchTerm] = useState(filters?.search || '');
-    const [selectedStatus, setSelectedStatus] = useState(filters?.status || 'all');
-    const [selectedProject, setSelectedProject] = useState(filters?.project_id || 'all');
-    const [showFilters, setShowFilters] = useState(false);
-    const [viewMode, setViewMode] = useState(filters?.view || 'cards');
-    
-    const formatText = (text: string) => {
-        return text.replace(/_/g, ' ').split(' ').map(word => 
-            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-        ).join(' ');
-    };
+    const { flash, auth } = usePage().props as any;
+    const status: ApprovalStatus = filters.status === 'history' ? 'history' : 'pending';
+    const [rejecting, setRejecting] = useState<number | null>(null);
 
-    // Show flash messages
     useEffect(() => {
-        if (flash?.success) {
-            toast.success(flash.success);
-        }
-        if (flash?.error) {
-            toast.error(flash.error);
-        }
+        if (flash?.success) toast.success(flash.success);
+        if (flash?.error) toast.error(flash.error);
     }, [flash]);
-    
-    // Central param builder
-    const buildParams = (
-        overrides: Record<string, any> = {},
-        stateOverrides: { search?: string; status?: string; project?: string; view?: string } = {}
-    ) => {
-        const view    = stateOverrides.view    !== undefined ? stateOverrides.view    : viewMode;
-        const search  = stateOverrides.search  !== undefined ? stateOverrides.search  : searchTerm;
-        const status  = stateOverrides.status  !== undefined ? stateOverrides.status  : selectedStatus;
-        const project = stateOverrides.project !== undefined ? stateOverrides.project : selectedProject;
 
-        const params: any = { page: 1, view };
-        if (search) params.search = search;
-        if (status !== 'all') params.status = status;
-        if (project !== 'all') params.project_id = project;
-        if (filters?.per_page) params.per_page = filters.per_page;
-        if (filters?.sort_by) params.sort_by = filters.sort_by;
-        if (filters?.sort_order) params.sort_order = filters.sort_order;
-        return { ...params, ...overrides };
+    // Only the workspace owner reviews their own expenses (the server enforces this too).
+    const isOwn = (expense: any) => !permissions?.review_own && expense.submitted_by === auth?.user?.id;
+    const isWaiting = (expense: any) => ['pending', 'requires_info'].includes(expense.status);
+    const canReview = (expense: any) => isWaiting(expense) && !isOwn(expense);
+
+    const navigate = (params: { status?: ApprovalStatus; search?: string; page?: number }) => {
+        const next = { status, search: filters.search || '', page: 1, ...params };
+        router.get(route('expense-approvals.index'), {
+            ...(next.status === 'history' ? { status: 'history' } : {}),
+            ...(next.search ? { search: next.search } : {}),
+            ...(next.page > 1 ? { page: next.page } : {}),
+        }, { preserveScroll: true });
     };
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        router.get(route('expense-approvals.index'), buildParams({ page: 1 }), { preserveState: false });
+    const decide = (id: number, action: 'approve' | 'reject' | 'request-info', notes = '') => {
+        router.post(route(`expense-approvals.${action}`, id), { notes }, { preserveScroll: true });
     };
-    
-    const applyFilters = () => {
-        router.get(route('expense-approvals.index'), buildParams({ page: 1 }), { preserveState: false });
-    };
-    
-    // Add sorting functionality
-    const handleSort = (field: string) => {
-        const direction = filters?.sort_by === field && filters?.sort_order === 'asc' ? 'desc' : 'asc';
-        router.get(route('expense-approvals.index'), buildParams({ sort_by: field, sort_order: direction, page: 1 }), { preserveState: false });
-    };
-    
-    const resetFilters = () => {
-        setSearchTerm('');
-        setSelectedStatus('all');
-        setSelectedProject('all');
-        const params: any = { page: 1, view: viewMode };
-        if (filters?.per_page) params.per_page = filters.per_page;
-        router.get(route('expense-approvals.index'), params, { preserveState: false });
-    };
-    
-    const hasActiveFilters = () => {
-        return searchTerm || selectedStatus !== 'all' || selectedProject !== 'all';
-    };
-    // Handle actions for CrudTable
-    const handleAction = (action: string, expenseId: number) => {
-        processApproval(expenseId, action);
-    };
-    
-    // Rejecting asks for a reason first, like timesheet rejection.
-    const [rejectingExpenseId, setRejectingExpenseId] = useState<number | null>(null);
-    const [rejectReason, setRejectReason] = useState('');
-
-    const processApproval = (expenseId: number, action: string, reason?: string) => {
-        if (action === 'reject' && reason === undefined) {
-            setRejectReason('');
-            setRejectingExpenseId(expenseId);
-            return;
-        }
-        const actionText = action === 'approve' ? 'Approving' : action === 'reject' ? 'Rejecting' : 'Processing';
-        toast.loading(`${actionText} expense...`);
-        
-        const routeName = action === 'approve' ? 'expense-approvals.approve' : 
-                         action === 'reject' ? 'expense-approvals.reject' : 
-                         'expense-approvals.request-info';
-        
-        const data: any = {};
-        
-        if (action === 'reject') {
-            data.notes = reason;
-        } else if (action === 'request_info') {
-            data.notes = 'Additional information required';
-        } else {
-            data.notes = '';
-        }
-        
-        router.post(route(routeName, expenseId), data, {
-            onSuccess: () => {
-                toast.dismiss();
-            },
-            onError: (errors) => {
-                toast.dismiss();
-                console.error('Expense approval error:', errors);
-                
-                // Show specific error message if available
-                const errorMessage = errors?.message || `Failed to ${action} expense`;
-                toast.error(errorMessage);
-            }
-        });
-    };
-
-
-
-    const breadcrumbs = [
-        { title: 'Dashboard', href: route('dashboard') },
-        { title: t('Budget & Expenses'), href: route('budgets.dashboard') },
-        { title: 'Expense Approvals' }
-    ];
 
     return (
-        <PageTemplate title={t('Expense Approvals')} breadcrumbs={breadcrumbs} noPadding>
-            <div className="space-y-6">
-                {/* Overview Row */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* Pending Approval */}
-                    <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
-                        <div className="h-10 w-10 rounded-lg bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center shrink-0">
-                            <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-100" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Pending Approval</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{stats.pending_count}</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500">Awaiting Review</p>
-                        </div>
-                    </div>
+        <PageTemplate
+            title={t('Approvals')}
+            breadcrumbs={[{ title: t('Dashboard'), href: route('dashboard') }, { title: t('Approvals') }, { title: t('Expenses') }]}
+            noPadding
+        >
+            <div className="space-y-4">
+                <ApprovalsHeader active="expenses" counts={approvalCounts} status={status} search={filters.search || ''} onChange={navigate} />
 
-                    {/* Requires Info */}
-                    <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
-                        <div className="h-10 w-10 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0">
-                            <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-100" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Requires Info</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{stats.requires_info_count}</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500">Needs Attention</p>
-                        </div>
-                    </div>
+                {status === 'pending' && !!stats?.pending_amount && (
+                    <p className="text-sm text-muted-foreground">
+                        {t('Waiting for a decision')}: <span className="font-semibold text-foreground">{formatCurrency(stats.pending_amount)}</span>
+                    </p>
+                )}
 
-                    {/* Approved Today */}
-                    <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
-                        <div className="h-10 w-10 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center shrink-0">
-                            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-100" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Approved Today</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{stats.approved_today}</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500">Processed</p>
-                        </div>
+                {expenses.data.length === 0 ? (
+                    <div className="rounded-lg border bg-white py-16 text-center dark:bg-gray-900">
+                        <Clock className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                        <p className="font-medium">{status === 'pending' ? t('Nothing waiting for your approval') : t('No decided expenses yet')}</p>
                     </div>
-
-                    {/* Pending Amount */}
-                    <div className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-shadow duration-200 p-4">
-                        <div className="h-10 w-10 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center shrink-0">
-                            <DollarSign className="h-5 w-5 text-indigo-600 dark:text-indigo-100" />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Pending Amount</p>
-                            <p className="text-xl font-bold text-gray-900 dark:text-white leading-tight">{formatCurrency(stats.pending_amount || 0)}</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500">Total Value</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Filters Row */}
-                <div className="bg-white rounded-lg border shadow">
-                    <div className="p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                                <form onSubmit={handleSearch} className="flex gap-2">
-                                    <div className="relative w-full sm:w-64">
-                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-                                        <Input
-                                            placeholder="Search expenses..."
-                                            value={searchTerm}
-                                            onChange={(e) => {
-                                                setSearchTerm(e.target.value);
-                                                clearTimeout(window.searchTimeout);
-                                                window.searchTimeout = setTimeout(() => {
-                                                    router.get(route('expense-approvals.index'), buildParams({ page: 1 }, { search: e.target.value }), { preserveState: false });
-                                                }, 500);
-                                            }}
-                                            className="pl-9"
-                                        />
-                                    </div>
-                                    <Button type="submit" size="sm">
-                                        <Search className="h-4 w-4 mr-1.5" />
-                                        Search
-                                    </Button>
-                                </form>
-                                
-                                <Button 
-                                    variant={hasActiveFilters() ? "default" : "outline"}
-                                    size="sm"
-                                    onClick={() => setShowFilters(!showFilters)}
-                                >
-                                    <Filter className="h-4 w-4 mr-1.5" />
-                                    Filters
-                                    {hasActiveFilters() && (
-                                        <span className="ml-1 bg-primary-foreground text-primary rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                                            {(searchTerm ? 1 : 0) + (selectedStatus !== 'all' ? 1 : 0) + (selectedProject !== 'all' ? 1 : 0)}
-                                        </span>
-                                    )}
-                                </Button>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                                <div className="border rounded-md p-0.5">
-                                    <Button 
-                                        size="sm" 
-                                        variant={viewMode === 'cards' ? "default" : "ghost"}
-                                        className="h-7 px-2"
-                                        onClick={() => { setViewMode('cards'); router.get(route('expense-approvals.index'), buildParams({ page: 1, view: 'cards' }, { view: 'cards' }), { preserveState: false }); }}
-                                    >
-                                        <LayoutGrid className="h-4 w-4" />
-                                    </Button>
-                                    <Button 
-                                        size="sm" 
-                                        variant={viewMode === 'table' ? "default" : "ghost"}
-                                        className="h-7 px-2"
-                                        onClick={() => { setViewMode('table'); router.get(route('expense-approvals.index'), buildParams({ page: 1, view: 'table' }, { view: 'table' }), { preserveState: false }); }}
-                                    >
-                                        <List className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                                <Label className="text-xs text-muted-foreground">Per Page:</Label>
-                                <Select value={expenses.per_page?.toString() || filters?.per_page?.toString() || "12"} onValueChange={(value) => {
-                                    router.get(route('expense-approvals.index'), buildParams({ page: 1, per_page: parseInt(value) }), { preserveState: false });
-                                }}>
-                                    <SelectTrigger className="w-16 h-8">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="12">12</SelectItem>
-                                        <SelectItem value="24">24</SelectItem>
-                                        <SelectItem value="48">48</SelectItem>
-                                        <SelectItem value="100">100</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                
-                            </div>
-                        </div>
-                        
-                        {showFilters && (
-                            <div className="p-4 bg-gray-50 rounded-md">
-                                <div className="flex gap-4 items-end">
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Status</label>
-                                        <Select value={selectedStatus} onValueChange={(value) => {
-                                            setSelectedStatus(value);
-                                            router.get(route('expense-approvals.index'), buildParams({ page: 1 }, { status: value }), { preserveState: false });
-                                        }}>
-                                            <SelectTrigger className="w-40">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All</SelectItem>
-                                                <SelectItem value="pending">Pending</SelectItem>
-                                                <SelectItem value="approved">Approved</SelectItem>
-                                                <SelectItem value="rejected">Rejected</SelectItem>
-                                                <SelectItem value="requires_info">Requires Info</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium">Project</label>
-                                        <Select value={selectedProject} onValueChange={(value) => {
-                                            setSelectedProject(value);
-                                            router.get(route('expense-approvals.index'), buildParams({ page: 1 }, { project: value }), { preserveState: false });
-                                        }}>
-                                            <SelectTrigger className="w-48">
-                                                <SelectValue placeholder="All Projects" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All</SelectItem>
-                                                {projects?.map((project: any) => (
-                                                    <SelectItem key={project.id} value={project.id.toString()}>
-                                                        {project.title}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    
-                                    <Button variant="outline" size="sm" onClick={resetFilters} disabled={!hasActiveFilters()}>
-                                        Reset Filters
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-                
-                {expenses && expenses.data && expenses.data.length > 0 ? (
-                    viewMode === 'cards' ? (
-                        <div className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                {expenses.data.map((expense: any) => (
-                                    <Card key={expense.id} className="hover:shadow-lg transition-shadow flex flex-col">
-                                        <CardHeader className="pb-4">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <CardTitle
-                                                        className="text-lg mb-2 cursor-pointer hover:text-blue-600 transition-colors"
-                                                        onClick={() => router.get(route('expenses.show', expense.id))}
-                                                    >
-                                                        {expense.title}
-                                                    </CardTitle>
-                                                    <div className="text-sm text-gray-500 mb-2">
-                                                        <span className="font-medium">{expense.project?.title}</span>
-                                                    </div>
-                                                    <div className="text-xs text-gray-400">
-                                                        Submitted by {expense.submitter?.name} • {window.appSettings.formatDateTime(new Date(expense.expense_date),false)}
-                                                    </div>
-                                                </div>
-                                                <div className="text-right ml-4">
-                                                    <div className="text-lg font-bold text-gray-900 mb-2">
-                                                        {formatCurrency(expense.amount)}
-                                                    </div>
-                                                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
-                                                        expense.status === 'requires_info' ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20' : 'bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20'
-                                                    }`}>
-                                                        {formatText(expense.status)}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </CardHeader>
-                                        
-                                        <CardContent className="pt-0 space-y-4 flex-1 flex flex-col">
-                                            <div className="flex-1">
-                                                {expense.description && (
-                                                    <div>
-                                                        <p className="text-sm text-gray-600 line-clamp-2">{expense.description}</p>
-                                                    </div>
-                                                )}
-                                                
-                                                {expense.budget_category && (
-                                                    <div className="mt-2">
-                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                                            {expense.budget_category.name}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="flex gap-1 mt-auto">
-                                                {canReview(expense) && approvalPermissions?.approve && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                size="icon"
-                                                                variant="ghost"
-                                                                onClick={() => processApproval(expense.id, 'approve')}
-                                                                aria-label={t('Approve')}
-                                                                className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                                            >
-                                                                <Check className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>Approve</TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                                {canReview(expense) && approvalPermissions?.reject && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                size="icon"
-                                                                variant="ghost"
-                                                                onClick={() => processApproval(expense.id, 'reject')}
-                                                                aria-label={t('Reject')}
-                                                                className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
-                                                            >
-                                                                <X className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>Reject</TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                                {canReview(expense) && approvalPermissions?.request_info && expense.status === 'pending' && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                size="icon"
-                                                                variant="ghost"
-                                                                onClick={() => processApproval(expense.id, 'request_info')}
-                                                                aria-label={t('Request Info')}
-                                                                className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                                            >
-                                                                <AlertCircle className="h-4 w-4" />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>Request additional information</TooltipContent>
-                                                    </Tooltip>
-                                                )}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                            
-                            {/* Pagination for cards */}
-                            <div className="bg-[#F0F0F1] dark:bg-gray-800 rounded-lg shadow p-4 flex items-center justify-between">
-                                <div className="text-sm text-gray-600">
-                                    Showing {expenses.from} to {expenses.to} of {expenses.total} expenses
-                                </div>
-                                
-                                <div className="flex gap-1">
-                                    {expenses.links?.map((link: any, i: number) => {
-                                        const isTextLink = link.label === "&laquo; Previous" || link.label === "Next &raquo;";
-                                        const label = link.label.replace("&laquo; ", "").replace(" &raquo;", "");
-                                        
-                                        return (
-                                            <Button
-                                                key={i}
-                                                variant={link.active ? 'default' : 'outline'}
-                                                size={isTextLink ? "sm" : "icon"}
-                                                className={isTextLink ? "px-3" : "h-8 w-8"}
-                                                disabled={!link.url}
-                                                onClick={() => {
-                                                if (!link.url) return;
-                                                const pageNum = new URL(link.url).searchParams.get('page');
-                                                router.get(route('expense-approvals.index'), buildParams({ page: pageNum ? parseInt(pageNum) : 1 }), { preserveState: false });
-                                            }}
-                                            >
-                                                {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
-                                            </Button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-lg shadow overflow-hidden">
-                            <CrudTable
-                            columns={[
-                                {
-                                    key: 'title',
-                                    label: t('Expense'),
-                                    sortable: true,
-                                    render: (value: string, row: any) => (
-                                        <div>
-                                            <div
-                                                className="text-sm font-medium text-gray-900 cursor-pointer hover:text-blue-600 hover:underline"
-                                                onClick={() => router.get(route('expenses.show', row.id))}
-                                            >
-                                                {value}
-                                            </div>
-                                            <div className="text-sm text-gray-500">by {row.submitter?.name}</div>
-                                        </div>
-                                    )
-                                },
-                                {
-                                    key: 'project.title',
-                                    label: t('Project & Category'),
-                                    sortable: true,
-                                    render: (value: string, row: any) => (
-                                        <div>
-                                            <div className="text-sm font-medium text-gray-900">{value}</div>
-                                            {row.budget_category && (
-                                                <div className="flex items-center gap-1 mt-1">
-                                                    <span className="text-xs text-gray-500">{row.budget_category.name}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )
-                                },
-                                {
-                                    key: 'amount',
-                                    label: t('Amount'),
-                                    sortable: true,
-                                    render: (value: number) => (
-                                        <span className="text-sm font-medium text-gray-900">
-                                            {formatCurrency(value)}
-                                        </span>
-                                    )
-                                },
-                                {
-                                    key: 'status',
-                                    label: t('Status'),
-                                    sortable: true,
-                                    render: (value: string) => (
-                                        <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
-                                            value === 'requires_info' ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20' : 'bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20'
-                                        }`}>
-                                            {formatText(value)}
-                                        </span>
-                                    )
-                                },
-                                {
-                                    key: 'expense_date',
-                                    label: t('Date'),
-                                    sortable: true,
-                                    render: (value: string) => (
-                                        <span className="text-sm text-gray-500">
-                                            {window.appSettings.formatDateTime(new Date(value),false)}
-                                        </span>
-                                    )
-                                }
-                            ]}
-                            actions={[
-                                {
-                                    label: t('Approve'),
-                                    icon: 'Check',
-                                    action: 'approve',
-                                    className: 'text-green-600 hover:text-green-700',
-                                    condition: (row: any) => canReview(row) && approvalPermissions?.approve
-                                },
-                                {
-                                    label: t('Reject'),
-                                    icon: 'X',
-                                    action: 'reject',
-                                    className: 'text-red-600 hover:text-red-700',
-                                    condition: (row: any) => canReview(row) && approvalPermissions?.reject
-                                },
-                                {
-                                    label: t('Request Info'),
-                                    icon: 'AlertCircle',
-                                    action: 'request_info',
-                                    className: 'text-blue-600 hover:text-blue-700',
-                                    condition: (row: any) => canReview(row) && approvalPermissions?.request_info && row.status === 'pending'
-                                }
-                            ]}
-                            data={expenses.data || []}
-                            from={expenses.from || 1}
-                            onAction={handleAction}
-                            sortField={filters?.sort_by}
-                            sortDirection={filters?.sort_order}
-                            onSort={handleSort}
-                            permissions={[]}
-                        />
-                        {expenses?.links && expenses.data?.length > 0 && (
-                            <div className="p-4 border-t flex items-center justify-between bg-[#F0F0F1] dark:bg-gray-800">
-                                <div className="text-sm text-gray-600">
-                                    Showing {expenses.from} to {expenses.to} of {expenses.total} expenses
-                                </div>
-                                <div className="flex gap-1">
-                                    {expenses.links?.map((link: any, i: number) => {
-                                        const isTextLink = link.label === "&laquo; Previous" || link.label === "Next &raquo;";
-                                        const label = link.label.replace("&laquo; ", "").replace(" &raquo;", "");
-                                        return (
-                                            <Button
-                                                key={i}
-                                                variant={link.active ? 'default' : 'outline'}
-                                                size={isTextLink ? "sm" : "icon"}
-                                                className={isTextLink ? "px-3" : "h-8 w-8"}
-                                                disabled={!link.url}
-                                                onClick={() => {
-                                                    if (!link.url) return;
-                                                    const pageNum = new URL(link.url).searchParams.get('page');
-                                                    router.get(route('expense-approvals.index'), buildParams({ page: pageNum ? parseInt(pageNum) : 1 }), { preserveState: false });
-                                                }}
-                                            >
-                                                {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
-                                            </Button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-                        </div>
-                    )
                 ) : (
-                    <div className="bg-white rounded-lg shadow p-8 text-center">
-                        <Clock className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                        <p className="text-gray-500 mb-4">No pending approvals</p>
-                        <p className="text-sm text-gray-400">All expenses have been processed</p>
+                    <div className="overflow-x-auto rounded-lg border bg-white dark:bg-gray-900">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>{t('Expense')}</TableHead>
+                                    <TableHead>{t('Project')}</TableHead>
+                                    <TableHead>{t('Date')}</TableHead>
+                                    <TableHead className="text-right">{t('Amount')}</TableHead>
+                                    <TableHead>{t('Status')}</TableHead>
+                                    <TableHead className="text-right">{t('Actions')}</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {expenses.data.map(expense => (
+                                    <TableRow key={expense.id}>
+                                        <TableCell>
+                                            <button
+                                                type="button"
+                                                className="text-left font-medium hover:text-primary hover:underline"
+                                                onClick={() => router.get(route('expenses.show', expense.id))}
+                                            >
+                                                {expense.title}
+                                            </button>
+                                            <div className="text-xs text-muted-foreground">{expense.submitter?.name}</div>
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                            {expense.project?.title}
+                                            {expense.budget_category && <div className="text-xs text-muted-foreground">{expense.budget_category.name}</div>}
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap text-sm">
+                                            {window.appSettings.formatDateTime(new Date(expense.expense_date), false)}
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap text-right font-medium">{formatCurrency(expense.amount)}</TableCell>
+                                        <TableCell>
+                                            <span className={`inline-flex whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${STATUS_STYLES[expense.status] || ''}`}>
+                                                {t(STATUS_LABELS[expense.status] || expense.status)}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex justify-end gap-2">
+                                                {canReview(expense) && (
+                                                    <>
+                                                        {permissions?.request_info && expense.status === 'pending' && (
+                                                            <Button size="sm" variant="ghost" onClick={() => decide(expense.id, 'request-info', t('Additional information required'))}>
+                                                                {t('Ask for info')}
+                                                            </Button>
+                                                        )}
+                                                        {permissions?.reject && (
+                                                            <Button size="sm" variant="outline" onClick={() => setRejecting(expense.id)}>{t('Reject')}</Button>
+                                                        )}
+                                                        {permissions?.approve && (
+                                                            <Button size="sm" onClick={() => decide(expense.id, 'approve')}>{t('Approve')}</Button>
+                                                        )}
+                                                    </>
+                                                )}
+                                                {isWaiting(expense) && isOwn(expense) && (
+                                                    <span className="text-xs text-muted-foreground">{t('The owner reviews this')}</span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     </div>
                 )}
+
+                <SimplePagination
+                    currentPage={expenses.current_page || 1}
+                    totalPages={expenses.last_page || 1}
+                    onPageChange={page => navigate({ page })}
+                />
             </div>
-            <Dialog open={rejectingExpenseId !== null} onOpenChange={(open) => { if (!open) setRejectingExpenseId(null); }}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>{t('Reject Expense')}</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-2">
-                        <Label htmlFor="reject-reason">{t('Reason for rejection')} <span className="text-red-500">*</span></Label>
-                        <Textarea
-                            id="reject-reason"
-                            value={rejectReason}
-                            onChange={(e) => setRejectReason(e.target.value)}
-                            placeholder={t('Tell the submitter what to fix...')}
-                            rows={3}
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setRejectingExpenseId(null)}>{t('Cancel')}</Button>
-                        <Button
-                            variant="destructive"
-                            disabled={!rejectReason.trim()}
-                            onClick={() => {
-                                const id = rejectingExpenseId;
-                                setRejectingExpenseId(null);
-                                if (id !== null) processApproval(id, 'reject', rejectReason.trim());
-                            }}
-                        >
-                            {t('Reject')}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+
+            <RejectDialog
+                open={rejecting !== null}
+                title={t('Reject expense')}
+                onCancel={() => setRejecting(null)}
+                onConfirm={reason => {
+                    if (rejecting !== null) decide(rejecting, 'reject', reason);
+                    setRejecting(null);
+                }}
+            />
         </PageTemplate>
     );
 }

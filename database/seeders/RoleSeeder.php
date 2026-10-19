@@ -180,13 +180,20 @@ class RoleSeeder extends Seeder
                 // user_view_logs removed: managers do not need access to login history
                 'settings_view',
                 // settings_zoom / settings_google_meet removed: workspace integration
-                // credentials are owner-only. Managers still use the meetings.
+                // credentials are owner-only. Managers run stand-ups, reviews and client
+                // calls, so they schedule, edit and cancel meetings on both (the
+                // controllers limit edits to the meetings they scheduled).
                 'zoom_meeting_view_any',
                 'zoom_meeting_view',
+                'zoom_meeting_create',
+                'zoom_meeting_update',
+                'zoom_meeting_delete',
                 'zoom_meeting_join',
                 'google_meeting_view_any',
                 'google_meeting_view',
                 'google_meeting_create',
+                'google_meeting_update',
+                'google_meeting_delete',
                 'google_meeting_join',
                 'project_view_any',
                 'project_view',
@@ -236,7 +243,10 @@ class RoleSeeder extends Seeder
                 // create/edit already load Tax::orderBy(...) directly with no permission
                 // check, so the Invoice tax dropdown works for Manager without this grant.
             ])
-            ->get();
+            ->get()
+            // Invoices: create, edit and send, but deleting one is the owner's call
+            // (role-capabilities-plan.md: "invoices view/create, not delete").
+            ->reject(fn ($permission) => $permission->name === 'invoice_delete');
         $managerRole->syncPermissions($managerPermissions);
 
         // Create member role (company child)

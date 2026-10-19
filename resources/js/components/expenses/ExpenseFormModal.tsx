@@ -34,6 +34,7 @@ export default function ExpenseFormModal({ isOpen, onClose, expense, projects, m
 
     const [availableCategories, setAvailableCategories] = useState<any[]>([]);
     const [availableTasks, setAvailableTasks] = useState<any[]>([]);
+    const [receipts, setReceipts] = useState<File[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -54,6 +55,7 @@ export default function ExpenseFormModal({ isOpen, onClose, expense, projects, m
             });
             loadProjectData(expense.project_id);
         } else if (mode === 'create' && isOpen) {
+            setReceipts([]);
             const projectId = currentProject ? currentProject.id.toString() : '';
             setFormData({
                 project_id: projectId,
@@ -134,7 +136,9 @@ export default function ExpenseFormModal({ isOpen, onClose, expense, projects, m
             amount: parseFloat(formData.amount),
             expense_date: formData.expense_date,
             title: formData.title,
-            description: formData.description
+            description: formData.description,
+            // Sent with the claim so the approver sees the proof straight away (create only).
+            ...(mode === 'create' && receipts.length > 0 ? { receipts } : {})
         };
 
         // Client-side validation for required fields
@@ -143,9 +147,6 @@ export default function ExpenseFormModal({ isOpen, onClose, expense, projects, m
         if (!formData.title) newErrors.title = t('Title is required');
         if (!formData.amount) newErrors.amount = t('Amount is required');
         if (!formData.expense_date) newErrors.expense_date = t('Date is required');
-        if (formData.budget_category_id === 'none' || !formData.budget_category_id) {
-            newErrors.budget_category_id = t('Budget category is required');
-        }
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
@@ -223,7 +224,7 @@ export default function ExpenseFormModal({ isOpen, onClose, expense, projects, m
                     </div>
 
                     <div>
-                        <Label required htmlFor="budget_category_id">{t('Budget Category')}</Label>
+                        <Label htmlFor="budget_category_id">{t('Budget Category')}</Label>
                         <Select
                             value={formData.budget_category_id}
                             onValueChange={(value) => {
@@ -242,15 +243,12 @@ export default function ExpenseFormModal({ isOpen, onClose, expense, projects, m
                                 <SelectValue placeholder={!formData.project_id ? t('Select project first') : t('Select category')} />
                             </SelectTrigger>
                             <SelectContent searchable className="z-[60]">
-                                {availableCategories.length === 0 ? (
-                                    <SelectItem value="none" disabled>{t('No category')}</SelectItem>
-                                ) : (
-                                    availableCategories.map((category) => (
-                                        <SelectItem key={category.id} value={category.id.toString()}>
-                                            {category.name}
-                                        </SelectItem>
-                                    ))
-                                )}
+                                <SelectItem value="none">{t('No category')}</SelectItem>
+                                {availableCategories.map((category) => (
+                                    <SelectItem key={category.id} value={category.id.toString()}>
+                                        {category.name}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                         {errors.budget_category_id && <p className="text-sm text-red-600 mt-1">{errors.budget_category_id}</p>}
@@ -325,6 +323,7 @@ export default function ExpenseFormModal({ isOpen, onClose, expense, projects, m
                         </div>
                     </div>
 
+                    <div className="grid grid-cols-2 gap-4">
                     <div>
                         <Label htmlFor="expense_date" required>{t('Date')}</Label>
                         <Input
@@ -345,6 +344,24 @@ export default function ExpenseFormModal({ isOpen, onClose, expense, projects, m
                             className={errors.expense_date ? 'border-red-500' : ''}
                         />
                         {errors.expense_date && <p className="text-sm text-red-600 mt-1">{errors.expense_date}</p>}
+                    </div>
+
+                    {mode === 'create' && (
+                        <div>
+                            <Label htmlFor="receipts">{t('Receipt')}</Label>
+                            <Input
+                                id="receipts"
+                                type="file"
+                                multiple
+                                accept=".jpg,.jpeg,.png,.pdf"
+                                onChange={(e) => setReceipts(Array.from(e.target.files || []).slice(0, 5))}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">{t('JPG, PNG or PDF, up to 5 MB each')}</p>
+                            {Object.entries(errors).filter(([key]) => key.startsWith('receipts')).map(([key, message]) => (
+                                <p key={key} className="text-sm text-red-600 mt-1">{message}</p>
+                            ))}
+                        </div>
+                    )}
                     </div>
 
                     <div>

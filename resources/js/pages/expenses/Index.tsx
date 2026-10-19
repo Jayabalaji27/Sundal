@@ -245,7 +245,6 @@ export default function ExpenseIndex() {
 
     const breadcrumbs = [
         { title: t('Dashboard'), href: route('dashboard') },
-        { title: t('Budget & Expenses'), href: route('budgets.dashboard') },
         ...(currentProjectName ? [
             { title: t('Projects'), href: route('projects.index') },
             { title: t('Budgets'), href: route('budgets.index') }
@@ -502,13 +501,7 @@ export default function ExpenseIndex() {
                     expenses?.data?.length === 0 ? (
                 <div className="bg-white rounded-lg shadow p-8 text-center">
                     <Receipt className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p className="text-gray-500 mb-4">{t('No expenses found')}</p>
-                    {expensePermissions?.create && (
-                        <Button onClick={handleAddNew}>
-                            <Plus className="h-4 w-4 mr-2" />
-                            {t('Add your first expense')}
-                        </Button>
-                    )}
+                    <p className="text-gray-500">{t('No expenses found')}</p>
                 </div>
             ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

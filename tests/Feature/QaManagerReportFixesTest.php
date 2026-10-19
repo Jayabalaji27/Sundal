@@ -289,8 +289,9 @@ describe('BUG-21 dashboard task stats', function () {
                 'priority' => 'medium', 'progress' => 100, 'created_by' => $owner->id, 'assigned_to' => $manager->id]);
         }
 
+        // The Tasks page is a paginated list (the Kanban board lives on each project's Board).
         $this->actingAs($manager)->get(route('tasks.index'))
-            ->assertInertia(fn (Assert $page) => $page->has('tasks', 1));
+            ->assertInertia(fn (Assert $page) => $page->has('tasks.data', 1));
         $this->actingAs($manager)->get(route('dashboard'))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('dashboardData.tasks.total', 1)

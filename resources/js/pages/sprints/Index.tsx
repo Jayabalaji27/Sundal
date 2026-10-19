@@ -1,194 +1,398 @@
-import { useState, useEffect } from 'react';
-import { router, usePage } from '@inertiajs/react';
-import { PageTemplate } from '@/components/page-template';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Play, CheckCircle2, Inbox, Eye, Pencil, Trash2, ArrowRight } from 'lucide-react';
-import { toast } from '@/components/custom-toast';
+import { useEffect, useState, type DragEvent } from 'react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
+import { BarChart3, CheckCircle2, ChevronDown, ChevronRight, Columns3, Inbox, MoreHorizontal, Pencil, Play, Plus, Rocket, Trash2 } from 'lucide-react';
+import { ProjectShell, daysLeftLabel } from '@/components/projects/project-shell';
+import { Bucket, MovableTaskRow, moveTask, readDroppedTask } from '@/components/sprints/movable-task-row';
+import { SprintFields, SprintFormDialog, SprintFormValues, addDays, newSprintValues, sprintDateRange, toIsoDate } from '@/components/sprints/sprint-form';
+import { AgileSprint, AgileTask } from '@/components/tasks/agile-bits';
+import { useTaskDetail } from '@/components/tasks/use-task-detail';
 import { EnhancedDeleteModal } from '@/components/EnhancedDeleteModal';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { hasPermission } from '@/utils/authorization';
+import { cn } from '@/lib/utils';
 
-const STATUS_COLOR: Record<string, string> = {
-    planning:  'bg-blue-100 text-blue-700',
-    active:    'bg-green-100 text-green-700',
-    completed: 'bg-gray-100 text-gray-600',
-};
+type OpenSprint = AgileSprint & { tasks: AgileTask[] };
 
-const PRIORITY_COLOR: Record<string, string> = {
-    urgent: 'bg-red-100 text-red-700',
-    high:   'bg-orange-100 text-orange-700',
-    medium: 'bg-blue-100 text-blue-700',
-    low:    'bg-slate-100 text-slate-600',
-};
-
+/**
+ * Project Sprints: the running sprint, the planned ones and the finished ones.
+ * Managers create, start and complete sprints here; the work itself is picked
+ * on the Backlog page.
+ */
 export default function SprintsIndex() {
     const { t } = useTranslation();
-    const { project, sprints, backlog, stages, flash } = usePage().props as any;
+    const { auth, project, sprints = [], backlogSummary = { tasks: 0, points: 0 }, completedSprints = [], velocity, nextSprintName, stages = [], taskForm = null } = usePage().props as any;
+    const permissions: string[] = auth?.permissions || [];
+    const can = (permission: string) => hasPermission(permissions, permission);
+    const canCreate = can('sprint_create');
+    const canUpdate = can('sprint_update');
+    const canDelete = can('sprint_delete');
+    const canMove = can('sprint_manage_tasks');
 
-    const [modal, setModal] = useState(false);
-    const [deleteModal, setDeleteModal] = useState(false);
-    const [current, setCurrent] = useState<any>(null);
-    const [name, setName] = useState('');
-    const [goal, setGoal] = useState('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const openSprints = sprints as OpenSprint[];
+    const activeSprint = openSprints.find(sprint => sprint.status === 'active');
+    const plannedSprints = openSprints.filter(sprint => sprint.status === 'planning');
 
-    useEffect(() => { if (flash?.success) toast.success(flash.success); if (flash?.error) toast.error(flash.error); }, [flash]);
+    const { openTask, taskDialog } = useTaskDetail({ members: taskForm?.members || [], stages, milestones: taskForm?.projects?.[0]?.milestones || [] });
 
-    const openEdit = (s: any) => {
-        setCurrent(s);
-        setName(s.name); setGoal(s.goal || '');
-        setStartDate(s.start_date || ''); setEndDate(s.end_date || '');
-        setModal(true);
+    // Create / edit (the dialog keeps its own fields; a new key opens it fresh).
+    const [sprintForm, setSprintForm] = useState<{ key: number; sprint: AgileSprint | null; initial: SprintFormValues } | null>(null);
+    const openCreate = () => setSprintForm({ key: Date.now(), sprint: null, initial: newSprintValues(openSprints, nextSprintName || t('Sprint')) });
+    const openEdit = (sprint: AgileSprint) => setSprintForm({
+        key: Date.now(), sprint, initial: { name: sprint.name, goal: sprint.goal || '', start_date: sprint.start_date || '', end_date: sprint.end_date || '' },
+    });
+
+    const [starting, setStarting] = useState<AgileSprint | null>(null);
+    const [startForm, setStartForm] = useState<SprintFormValues>({ name: '', goal: '', start_date: '', end_date: '' });
+    const [completing, setCompleting] = useState<OpenSprint | null>(null);
+    const [moveTo, setMoveTo] = useState<string>('backlog');
+    const [deleting, setDeleting] = useState<AgileSprint | null>(null);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [busy, setBusy] = useState(false);
+    const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
+    const [dropTarget, setDropTarget] = useState<number | null>(null);
+
+    const openStart = (sprint: AgileSprint) => {
+        const start = sprint.start_date || toIsoDate(new Date());
+        setStartForm({ name: sprint.name, goal: sprint.goal || '', start_date: start, end_date: sprint.end_date || addDays(start, 13) });
+        setErrors({});
+        setStarting(sprint);
     };
-    const save = () => {
-        const data = { name, goal, start_date: startDate, end_date: endDate };
-        router.put(route('sprints.update', current.id), data, { onSuccess: () => setModal(false), onError: e => toast.error(Object.values(e)[0] as string) });
+    const openComplete = (sprint: OpenSprint) => {
+        setMoveTo(plannedSprints[0] ? String(plannedSprints[0].id) : 'backlog');
+        setCompleting(sprint);
     };
 
-    const addToSprint = (sprintId: number, taskId: number) =>
-        router.post(route('sprints.add-task', sprintId), { task_id: taskId }, { preserveScroll: true });
+    // "Create > Sprint" from anywhere lands here with ?create=1.
+    useEffect(() => {
+        if (canCreate && new URLSearchParams(window.location.search).get('create')) {
+            openCreate();
+            window.history.replaceState(window.history.state, '', route('sprints.index', project.id));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-    return (
-        <PageTemplate
-            title={`${t('Sprints')} — ${project.title}`}
-            description={t('Plan sprints, manage backlog, track velocity.')}
-            url={route('sprints.index', project.id)}
-            breadcrumbs={[
-                { title: t('Projects'), href: route('projects.index') },
-                { title: project.title, href: route('projects.show', project.id) },
-                { title: t('Sprints'), href: route('sprints.index', project.id) },
-            ]}
-        >
-            <div className="grid gap-6 lg:grid-cols-3">
-                {/* Sprints list */}
-                <div className="lg:col-span-2 space-y-4">
-                    {sprints.length === 0 && (
-                        <div className="flex flex-col items-center rounded-xl border-2 border-dashed py-16 text-center">
-                            <Play className="mb-3 h-10 w-10 text-muted-foreground" />
-                            <p className="font-medium text-muted-foreground">{t('No sprints yet')}</p>
-                        </div>
-                    )}
-                    {sprints.map((s: any) => (
-                        <Card key={s.id} className={s.status === 'active' ? 'border-green-300 shadow-md' : ''}>
-                            <CardHeader className="pb-2">
-                                <div className="flex items-start justify-between gap-2">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <CardTitle className="text-base">{s.name}</CardTitle>
-                                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[s.status]}`}>{t(s.status)}</span>
-                                        </div>
-                                        {s.goal && <p className="mt-1 text-sm text-muted-foreground">{s.goal}</p>}
-                                        {(s.start_date || s.end_date) && (
-                                            <p className="mt-1 text-xs text-muted-foreground">
-                                                {s.start_date && new Date(s.start_date).toLocaleDateString()} {s.end_date && `→ ${new Date(s.end_date).toLocaleDateString()}`}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <div className="flex gap-1">
-                                        {s.status === 'planning' && (
-                                            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs"
-                                                onClick={() => router.post(route('sprints.start', s.id))}>
-                                                <Play className="h-3 w-3" /> {t('Start')}
-                                            </Button>
-                                        )}
-                                        {s.status === 'active' && (
-                                            <Button size="sm" variant="outline" className="h-7 gap-1 text-xs"
-                                                onClick={() => router.post(route('sprints.complete', s.id))}>
-                                                <CheckCircle2 className="h-3 w-3" /> {t('Complete')}
-                                            </Button>
-                                        )}
-                                        <Button size="icon" variant="ghost" className="h-7 w-7"
-                                            onClick={() => router.get(route('sprints.show', s.id))}>
-                                            <Eye className="h-3.5 w-3.5" />
-                                        </Button>
-                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)}>
-                                            <Pencil className="h-3.5 w-3.5" />
-                                        </Button>
-                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
-                                            onClick={() => { setCurrent(s); setDeleteModal(true); }}>
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="pt-0">
-                                <p className="text-xs text-muted-foreground">{s.tasks_count} {t('tasks')}</p>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </div>
+    const submitOptions = (onDone: () => void) => ({
+        preserveScroll: true,
+        onStart: () => setBusy(true),
+        onFinish: () => setBusy(false),
+        onSuccess: onDone,
+        onError: (e: Record<string, string>) => setErrors(e),
+    });
+    const startSprint = () => starting && router.post(route('sprints.start', starting.id),
+        { start_date: startForm.start_date, end_date: startForm.end_date, goal: startForm.goal }, submitOptions(() => setStarting(null)));
+    const completeSprint = () => completing && router.post(route('sprints.complete', completing.id), { move_to: moveTo }, submitOptions(() => setCompleting(null)));
+    const deleteSprint = () => deleting && router.delete(route('sprints.destroy', deleting.id), submitOptions(() => setDeleting(null)));
 
-                {/* Backlog */}
-                <div>
-                    <div className="mb-3 flex items-center gap-2">
-                        <Inbox className="h-4 w-4 text-muted-foreground" />
-                        <h2 className="font-semibold">{t('Backlog')} ({backlog.length})</h2>
+    // Tasks can be dragged between the open sprints (and sent back with "Move to > Backlog").
+    const dropProps = (sprintId: number) => canMove ? {
+        onDragOver: (event: DragEvent) => { event.preventDefault(); if (dropTarget !== sprintId) setDropTarget(sprintId); },
+        onDragLeave: (event: DragEvent) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropTarget(null); },
+        onDrop: (event: DragEvent) => {
+            event.preventDefault();
+            setDropTarget(null);
+            const dropped = readDroppedTask(event);
+            if (dropped) moveTask(dropped.taskId, dropped.from, sprintId);
+        },
+    } : {};
+
+    const destinationsFor = (bucket: Bucket) => [
+        ...openSprints.filter(sprint => sprint.id !== bucket).map(sprint => ({ bucket: sprint.id as Bucket, label: sprint.name })),
+        { bucket: 'backlog' as Bucket, label: t('Backlog') },
+    ];
+
+    const renderSprint = (sprint: OpenSprint) => {
+        const isActive = sprint.status === 'active';
+        const left = daysLeftLabel(t, sprint.days_left);
+        const donePct = sprint.task_count > 0 ? Math.round((sprint.done_count / sprint.task_count) * 100) : 0;
+        const isCollapsed = !!collapsed[sprint.id];
+
+        return (
+            <section
+                key={sprint.id}
+                id={`sprint-${sprint.id}`}
+                {...dropProps(sprint.id)}
+                className={cn('overflow-hidden rounded-lg border bg-card transition-shadow', isActive && 'border-emerald-300', dropTarget === sprint.id && 'ring-2 ring-primary/50')}
+                aria-label={sprint.name}
+            >
+                <header className={cn('flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5', isActive ? 'bg-emerald-50/60 dark:bg-emerald-950/20' : 'bg-muted/30')}>
+                    <button type="button" onClick={() => setCollapsed(prev => ({ ...prev, [sprint.id]: !isCollapsed }))} className="flex min-w-0 items-center gap-1.5 text-left" aria-expanded={!isCollapsed}>
+                        {isCollapsed ? <ChevronRight className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+                        <span className="truncate font-semibold">{sprint.name}</span>
+                    </button>
+                    <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wide', isActive ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-100' : 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200')}>
+                        {isActive ? t('Active') : t('Planned')}
+                    </span>
+                    {sprintDateRange(sprint) && <span className="text-xs text-muted-foreground">{sprintDateRange(sprint)}</span>}
+                    {isActive && left && <span className={cn('text-xs', (sprint.days_left ?? 0) < 0 ? 'font-medium text-red-600' : 'text-muted-foreground')}>· {left}</span>}
+                    <span className="text-xs text-muted-foreground">
+                        · {t(':count tasks').replace(':count', String(sprint.task_count))}
+                        {sprint.points > 0 && <> · {t(':count pts').replace(':count', String(sprint.points))}</>}
+                    </span>
+
+                    <div className="ml-auto flex items-center gap-1.5">
+                        {isActive && sprint.task_count > 0 && (
+                            <div className="mr-1 hidden w-28 items-center gap-2 md:flex" title={t(':done of :total done').replace(':done', String(sprint.done_count)).replace(':total', String(sprint.task_count))}>
+                                <Progress value={donePct} className="h-1.5" />
+                                <span className="text-xs tabular-nums text-muted-foreground">{donePct}%</span>
+                            </div>
+                        )}
+                        {canUpdate && isActive && (
+                            <Button size="sm" variant="outline" className="h-8" onClick={() => openComplete(sprint)}>
+                                <CheckCircle2 className="h-4 w-4" />
+                                {t('Complete sprint')}
+                            </Button>
+                        )}
+                        {canUpdate && !isActive && (
+                            activeSprint ? (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        {/* span keeps the tooltip working on a disabled button */}
+                                        <span tabIndex={0}>
+                                            <Button size="sm" variant="outline" className="h-8" disabled>
+                                                <Play className="h-4 w-4" />
+                                                {t('Start sprint')}
+                                            </Button>
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{t('Complete :name first').replace(':name', activeSprint.name)}</TooltipContent>
+                                </Tooltip>
+                            ) : (
+                                <Button size="sm" className="h-8" onClick={() => openStart(sprint)}>
+                                    <Play className="h-4 w-4" />
+                                    {t('Start sprint')}
+                                </Button>
+                            )
+                        )}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('Sprint actions')}>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => router.get(route('sprints.show', sprint.id))}>
+                                    <BarChart3 className="mr-2 h-4 w-4" />{t('Sprint report')}
+                                </DropdownMenuItem>
+                                {isActive && (
+                                    <DropdownMenuItem onClick={() => router.get(route('projects.board', project.id))}>
+                                        <Columns3 className="mr-2 h-4 w-4" />{t('Open board')}
+                                    </DropdownMenuItem>
+                                )}
+                                {canUpdate && (
+                                    <DropdownMenuItem onClick={() => openEdit(sprint)}>
+                                        <Pencil className="mr-2 h-4 w-4" />{t('Edit sprint')}
+                                    </DropdownMenuItem>
+                                )}
+                                {canDelete && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onClick={() => setDeleting(sprint)} className="text-red-600 focus:text-red-600">
+                                            <Trash2 className="mr-2 h-4 w-4" />{t('Delete sprint')}
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
-                    {backlog.length === 0 ? (
-                        <p className="text-sm text-muted-foreground italic">{t('All tasks are in sprints.')}</p>
-                    ) : (
-                        <div className="space-y-2">
-                            {backlog.map((task: any) => (
-                                <div key={task.id} className="rounded-lg border bg-card p-3">
-                                    <div className="flex items-start justify-between gap-2">
-                                        <p className="text-sm font-medium leading-snug">{task.title}</p>
-                                        {task.priority && (
-                                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${PRIORITY_COLOR[task.priority] || ''}`}>
-                                                {task.priority}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {task.task_stage && (
-                                        <p className="mt-1 text-xs text-muted-foreground">{task.task_stage.name}</p>
-                                    )}
-                                    {/* Add to sprint buttons */}
-                                    {sprints.filter((s: any) => s.status !== 'completed').length > 0 && (
-                                        <div className="mt-2 flex flex-wrap gap-1">
-                                            {sprints.filter((s: any) => s.status !== 'completed').map((s: any) => (
-                                                <button key={s.id}
-                                                    onClick={() => addToSprint(s.id, task.id)}
-                                                    className="flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] hover:bg-primary hover:text-primary-foreground transition-colors">
-                                                    <ArrowRight className="h-2.5 w-2.5" /> {s.name}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                    {sprint.goal && !isCollapsed && (
+                        <p className="basis-full pl-6 text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">{t('Goal')}:</span> {sprint.goal}
+                        </p>
+                    )}
+                </header>
+
+                {!isCollapsed && (
+                    sprint.tasks.length > 0 ? (
+                        <div className="border-t">
+                            {sprint.tasks.map(task => (
+                                <MovableTaskRow key={task.id} task={task} bucket={sprint.id} canMove={canMove} destinations={destinationsFor(sprint.id)} onOpen={openTask} />
                             ))}
                         </div>
+                    ) : (
+                        <div className="m-3 rounded-md border-2 border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                            {t('No tasks in this sprint yet.')}{' '}
+                            {canMove && (
+                                <Link href={route('projects.backlog', project.id)} className="font-medium text-primary hover:underline">
+                                    {t('Add them from the backlog')}
+                                </Link>
+                            )}
+                        </div>
+                    )
+                )}
+            </section>
+        );
+    };
+
+    const unfinished = completing ? completing.tasks.filter(task => !task.is_completed) : [];
+
+    return (
+        <ProjectShell project={project} active="sprints" taskForm={taskForm} onCreateSprint={canCreate ? openCreate : undefined}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                    {activeSprint
+                        ? t(':name is running.').replace(':name', activeSprint.name)
+                        : plannedSprints.length > 0 ? t('No sprint is running. Start the next one when the team is ready.') : t('Create a sprint, fill it from the backlog, then start it.')}
+                    {velocity !== null && velocity !== undefined && (
+                        <span className="ml-2 inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs" title={t('Average story points finished per sprint (last 3 sprints)')}>
+                            {t('Velocity')}: {velocity} {t('pts')}
+                        </span>
+                    )}
+                </p>
+                <div className="flex items-center gap-2">
+                    <Button asChild size="sm" variant="outline">
+                        <Link href={route('projects.backlog', project.id)}>
+                            <Inbox className="h-4 w-4" />
+                            {t('Backlog')}
+                            <span className="rounded-full bg-muted px-1.5 text-xs tabular-nums">{backlogSummary.tasks}</span>
+                        </Link>
+                    </Button>
+                    {canCreate && (
+                        <Button size="sm" onClick={openCreate}>
+                            <Plus className="h-4 w-4" />
+                            {t('Create sprint')}
+                        </Button>
                     )}
                 </div>
             </div>
 
-            {/* Sprint form modal */}
-            <Dialog open={modal} onOpenChange={setModal}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader><DialogTitle>{t('Edit Sprint')}</DialogTitle></DialogHeader>
-                    <div className="space-y-3 py-2">
-                        <div><Label>{t('Sprint Name')} *</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Sprint 1" className="mt-1" /></div>
-                        <div><Label>{t('Goal')}</Label><Textarea value={goal} onChange={e => setGoal(e.target.value)} placeholder="What do we aim to achieve?" className="mt-1" rows={2} /></div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div><Label>{t('Start Date')}</Label><Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="mt-1" /></div>
-                            <div><Label>{t('End Date')}</Label><Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="mt-1" /></div>
-                        </div>
+            {openSprints.length === 0 && (
+                <div className="flex flex-col items-center rounded-lg border-2 border-dashed px-6 py-10 text-center">
+                    <Rocket className="mb-3 h-9 w-9 text-muted-foreground" />
+                    <p className="font-medium">{t('No sprint planned yet')}</p>
+                    <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                        {canCreate
+                            ? t('A sprint is a short, fixed period (usually 2 weeks) where the team finishes a chosen set of tasks.')
+                            : t('Your project manager plans sprints here.')}
+                    </p>
+                </div>
+            )}
+
+            {openSprints.map(sprint => renderSprint(sprint))}
+
+            {/* Finished sprints: what each one committed and delivered */}
+            {completedSprints.length > 0 && (
+                <section className="overflow-hidden rounded-lg border bg-card" aria-label={t('Completed sprints')}>
+                    <header className="flex items-center gap-2 border-b bg-muted/30 px-3 py-2.5">
+                        <CheckCircle2 className="h-4 w-4 text-violet-500" />
+                        <span className="font-semibold">{t('Completed sprints')}</span>
+                        <span className="text-xs text-muted-foreground">({completedSprints.length})</span>
+                    </header>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="text-left text-xs text-muted-foreground">
+                                <tr className="border-b">
+                                    <th className="px-4 py-2 font-medium">{t('Sprint')}</th>
+                                    <th className="px-4 py-2 font-medium">{t('Dates')}</th>
+                                    <th className="px-4 py-2 text-right font-medium">{t('Committed')}</th>
+                                    <th className="px-4 py-2 text-right font-medium">{t('Completed')}</th>
+                                    <th className="px-4 py-2 text-right font-medium">{t('Points done')}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(completedSprints as AgileSprint[]).map(sprint => (
+                                    <tr key={sprint.id} className="cursor-pointer border-b last:border-b-0 hover:bg-muted/40" onClick={() => router.get(route('sprints.show', sprint.id))}>
+                                        <td className="px-4 py-2 font-medium">
+                                            <Link href={route('sprints.show', sprint.id)} className="hover:text-primary hover:underline" onClick={(e) => e.stopPropagation()}>{sprint.name}</Link>
+                                        </td>
+                                        <td className="whitespace-nowrap px-4 py-2 text-muted-foreground">{sprintDateRange(sprint)}</td>
+                                        <td className="px-4 py-2 text-right tabular-nums">{sprint.task_count}</td>
+                                        <td className="px-4 py-2 text-right tabular-nums">{sprint.done_count}</td>
+                                        <td className="px-4 py-2 text-right tabular-nums">{sprint.points > 0 ? `${sprint.done_points} / ${sprint.points}` : '—'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
+                </section>
+            )}
+
+            {sprintForm && (
+                <SprintFormDialog
+                    key={sprintForm.key}
+                    open
+                    onClose={() => setSprintForm(null)}
+                    projectId={project.id}
+                    sprint={sprintForm.sprint}
+                    initial={sprintForm.initial}
+                />
+            )}
+
+            {/* Start sprint */}
+            <Dialog open={!!starting} onOpenChange={(open) => !open && setStarting(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{t('Start :name').replace(':name', starting?.name || '')}</DialogTitle>
+                        <DialogDescription>
+                            {t(':count tasks will be on the board. Confirm the dates and goal.').replace(':count', String(starting?.task_count ?? 0))}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <SprintFields form={startForm} setForm={setStartForm} errors={errors} hideName />
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setModal(false)}>{t('Cancel')}</Button>
-                        <Button onClick={save} disabled={!name.trim()}>{t('Save')}</Button>
+                        <Button variant="outline" onClick={() => setStarting(null)}>{t('Cancel')}</Button>
+                        <Button onClick={startSprint} disabled={busy}>
+                            <Play className="h-4 w-4" />
+                            {t('Start sprint')}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            <EnhancedDeleteModal isOpen={deleteModal} onClose={() => setDeleteModal(false)}
-                onConfirm={() => { if (current) router.delete(route('sprints.destroy', current.id), { onSuccess: () => setDeleteModal(false) }); }}
-                entityName={t('sprint')} warningMessage={t('Tasks will be moved back to the backlog.')}
-                itemName={current?.name || ''} />
-        </PageTemplate>
+            {/* Complete sprint */}
+            <Dialog open={!!completing} onOpenChange={(open) => !open && setCompleting(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{t('Complete :name').replace(':name', completing?.name || '')}</DialogTitle>
+                        <DialogDescription>
+                            {t(':done of :total tasks are done.').replace(':done', String(completing?.done_count ?? 0)).replace(':total', String(completing?.task_count ?? 0))}
+                            {(completing?.points ?? 0) > 0 && ' ' + t(':done of :total points.').replace(':done', String(completing?.done_points ?? 0)).replace(':total', String(completing?.points ?? 0))}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {unfinished.length > 0 ? (
+                        <div className="space-y-2">
+                            <Label>{t('Move the :count unfinished tasks to').replace(':count', String(unfinished.length))}</Label>
+                            <div className="space-y-1.5">
+                                {[
+                                    ...plannedSprints.map(sprint => ({ value: String(sprint.id), label: sprint.name })),
+                                    { value: 'new', label: t('A new sprint') },
+                                    { value: 'backlog', label: t('The backlog') },
+                                ].map(option => (
+                                    <label key={option.value} className={cn('flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm', moveTo === option.value && 'border-primary bg-primary/5')}>
+                                        <input type="radio" name="move_to" value={option.value} checked={moveTo === option.value} onChange={() => setMoveTo(option.value)} className="accent-[var(--primary)]" />
+                                        {option.label}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">{t('Every task is done. Nice work!')}</p>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setCompleting(null)}>{t('Cancel')}</Button>
+                        <Button onClick={completeSprint} disabled={busy}>
+                            <CheckCircle2 className="h-4 w-4" />
+                            {t('Complete sprint')}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <EnhancedDeleteModal
+                isOpen={!!deleting}
+                onClose={() => setDeleting(null)}
+                onConfirm={deleteSprint}
+                itemName={deleting?.name || ''}
+                entityName={t('sprint')}
+                warningMessage={t('Its tasks go back to the backlog. The tasks themselves are not deleted.')}
+                isSubmitting={busy}
+            />
+
+            {taskDialog}
+        </ProjectShell>
     );
 }

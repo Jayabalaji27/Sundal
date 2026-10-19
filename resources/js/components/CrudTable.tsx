@@ -16,7 +16,8 @@ import {
   TooltipTrigger
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import * as LucidIcons from 'lucide-react';
 import { hasPermission } from '@/utils/authorization';
 import { TableColumn, TableAction } from '@/types/crud';
@@ -88,85 +89,100 @@ export function CrudTable({
 
     return !permissionKey || hasPermission(permissions, permissionKey);
   });
-  const renderActionButtons = (row: any) => {
+  // An action the user may use on this row (permission and the action's own condition).
+  const isActionVisible = (action: TableAction, row: any) => {
+    const permissionKey = action.requiredPermission || (
+      entityPermissions && (
+        action.action === 'view'
+          ? entityPermissions.view
+          : action.action === 'edit'
+            ? entityPermissions.edit
+            : action.action === 'delete'
+              ? entityPermissions.delete
+              : action.permission
+      )
+    );
+    if (permissionKey && !hasPermission(permissions, permissionKey)) return false;
+    return !action.condition || action.condition(row);
+  };
+
+  const actionHref = (action: TableAction, row: any) => typeof action.href === 'function'
+    ? action.href(row)
+    : (action.href as string).replace(':id', row.id);
+
+  const renderIconAction = (action: TableAction, row: any, index: number) => {
+    const IconComponent = (LucidIcons as any)[action.icon] as React.ElementType;
+    const button = (
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn("h-8 w-8", action.className)}
+        aria-label={action.label}
+        onClick={action.href ? undefined : () => onAction(action.action, row)}
+      >
+        <IconComponent size={16} />
+      </Button>
+    );
+
     return (
-      <div className="flex items-center justify-end space-x-2">
-        {actions.map((action, index) => {
-          // Skip if user doesn't have permission
-          const permissionKey = action.requiredPermission || (
-            entityPermissions && (
-              action.action === 'view'
-                ? entityPermissions.view
-                : action.action === 'edit'
-                  ? entityPermissions.edit
-                  : action.action === 'delete'
-                    ? entityPermissions.delete
-                    : action.permission
-            )
-          );
+      <TooltipProvider key={index}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {action.href ? (
+              <Link href={actionHref(action, row)} target={action.openInNewTab ? '_blank' : undefined}>{button}</Link>
+            ) : button}
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{action.label}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
 
-          if (permissionKey && !hasPermission(permissions, permissionKey)) {
-            return null;
-          }
+  // Up to two actions show as icons. With more, the first (usually View) stays and the
+  // rest - including Delete - move into a labelled "..." menu, so the column stays narrow.
+  const renderActionButtons = (row: any) => {
+    const visible = actions.filter(action => isActionVisible(action, row));
+    const [first, ...rest] = visible;
+    if (visible.length <= 2) {
+      return <div className="flex items-center justify-end space-x-2">{visible.map((action, index) => renderIconAction(action, row, index))}</div>;
+    }
 
-          // Skip if condition function returns false
-          if (action.condition && !action.condition(row)) {
-            return null;
-          }
-
-          const IconComponent = (LucidIcons as any)[action.icon] as React.ElementType;
-
-          // Handle link actions
-          if (action.href) {
-            const href = typeof action.href === 'function'
-              ? action.href(row)
-              : action.href.replace(':id', row.id);
-
-            return (
-              <TooltipProvider key={index}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Link href={href} target={action.openInNewTab ? '_blank' : undefined}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn("h-8 w-8", action.className)}
-                        aria-label={action.label}
-                      >
-                        <IconComponent size={16} />
-                      </Button>
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{action.label}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            );
-          }
-
-          // Handle regular action buttons
-          return (
-            <TooltipProvider key={index}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn("h-8 w-8", action.className)}
-                    aria-label={action.label}
-                    onClick={() => onAction(action.action, row)}
-                  >
-                    <IconComponent size={16} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{action.label}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          );
-        })}
+    return (
+      <div className="flex items-center justify-end space-x-1">
+        {renderIconAction(first, row, 0)}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('More actions')}>
+              <MoreHorizontal size={16} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-40">
+            {rest.map((action, index) => {
+              const IconComponent = (LucidIcons as any)[action.icon] as React.ElementType;
+              const content = (
+                <>
+                  <IconComponent className="mr-2 h-4 w-4" />
+                  {action.label}
+                </>
+              );
+              return action.href ? (
+                <DropdownMenuItem key={index} asChild>
+                  <Link href={actionHref(action, row)} target={action.openInNewTab ? '_blank' : undefined}>{content}</Link>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  key={index}
+                  className={action.action === 'delete' ? 'text-red-600 focus:text-red-600' : undefined}
+                  onClick={() => onAction(action.action, row)}
+                >
+                  {content}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     );
   };
@@ -253,7 +269,8 @@ export function CrudTable({
 
   return (
     <div className="border-collapse dark:bg-gray-900 overflow-x-auto">
-      <Table className="min-w-max w-full">
+      {/* Fits the page: cells wrap rather than pushing the actions column off-screen. */}
+      <Table className="w-full">
         <TableHeader>
           <TableRow className="bg-gray-50 dark:bg-gray-800 border-b">
             <TableHead className="w-12 py-2.5 font-semibold">#</TableHead>

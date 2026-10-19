@@ -3,15 +3,16 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\Bug;
-use App\Models\BugComment;
-use App\Models\BugStatus;
+use App\Models\Task;
+use App\Models\TaskComment;
+use App\Models\TaskStage;
 use App\Models\Project;
 use App\Models\ProjectMilestone;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
 
+/** Sample bugs: tasks of type bug, on the same Board, Backlog and Sprints as the tasks. */
 class BugSeeder extends Seeder
 {
     public function run(): void
@@ -28,7 +29,7 @@ class BugSeeder extends Seeder
             $projectMembers = $project->members->pluck('user')->filter();
             $milestones = $project->milestones;
             $workspace = $project->workspace;
-            $statuses = BugStatus::forWorkspace($workspace->id)->ordered()->get();
+            $stages = TaskStage::withoutGlobalScopes()->where('workspace_id', $workspace->id)->orderBy('order')->get();
 
             // Ensure milestones exist for this project
             if ($milestones->isEmpty()) {
@@ -36,18 +37,20 @@ class BugSeeder extends Seeder
                 $milestones = $project->milestones()->get();
             }
 
-            if ($statuses->isEmpty() || $projectMembers->isEmpty()) continue;
+            if ($stages->isEmpty() || $projectMembers->isEmpty()) continue;
 
             // Create 8 bugs per project
             for ($i = 1; $i <= 8; $i++) {
                 $assignedMember = $projectMembers->random();
                 $reportedBy = $projectMembers->random();
                 $milestone = $milestones->random();
-                $status = $statuses->random();
+                $stage = $stages->random();
 
-                $bug = Bug::create([
+                $bug = Task::create([
                     'project_id' => $project->id,
-                    'bug_status_id' => $status->id,
+                    'type' => 'bug',
+                    'task_stage_id' => $stage->id,
+                    'progress' => $stage->is_completed ? 100 : 0,
                     'milestone_id' => $milestones->isNotEmpty() ? $milestone->id : null,
                     'title' => $this->getBugTitle($i),
                     'description' => $this->getBugDescription($i),
@@ -58,15 +61,15 @@ class BugSeeder extends Seeder
                     'actual_behavior' => $this->getActualBehavior($i),
                     'environment' => $this->getEnvironment(),
                     'assigned_to' => $projectMembers->isNotEmpty() ? $assignedMember->id : null,
-                    'reported_by' => $projectMembers->isNotEmpty() ? $reportedBy->id : 1,
+                    'created_by' => $projectMembers->isNotEmpty() ? $reportedBy->id : 1,
                     'start_date' => now()->subDays(rand(1, 30)),
                     'end_date' => now()->addDays(rand(5, 45)),
                 ]);
 
                 // Create 1-3 comments per bug
                 for ($c = 1; $c <= rand(1, 3); $c++) {
-                    BugComment::create([
-                        'bug_id' => $bug->id,
+                    TaskComment::create([
+                        'task_id' => $bug->id,
                         'user_id' => $projectMembers->random()->id,
                         'comment' => $this->getBugComment($c),
                         'created_at' => now()->subDays(rand(1, 15)),
@@ -244,9 +247,9 @@ class BugSeeder extends Seeder
                 'project_id' => $project->id,
                 'title' => $milestone['name'],
                 'description' => 'Sample milestone for ' . $milestone['name'],
-                'start_date' => now()->addDays($milestone['days_offset']),
-                'end_date' => now()->addDays($milestone['days_offset'] + 20),
-                'status' => 'active',
+                'due_date' => now()->addDays($milestone['days_offset'] + 20),
+                'status' => 'pending',
+                'created_by' => $project->created_by,
             ]);
         }
     }

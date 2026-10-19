@@ -22,23 +22,7 @@ class ExpenseReceiptController extends Controller
         $attachments = [];
 
         foreach ($request->file('files') as $file) {
-            // Store file using existing media system
-            $mediaItem = MediaItem::create([
-                'name' => $file->getClientOriginalName(),
-                'file_name' => $file->store('expense-receipts', 'public'),
-                'mime_type' => $file->getMimeType(),
-                'size' => $file->getSize(),
-                'uploaded_by' => auth()->id()
-            ]);
-
-            // Create expense attachment
-            $attachment = ExpenseAttachment::create([
-                'project_expense_id' => $expense->id,
-                'media_item_id' => $mediaItem->id,
-                'uploaded_by' => auth()->id(),
-                'attachment_type' => $request->attachment_type
-            ]);
-
+            $attachment = ExpenseAttachment::storeUpload($expense, $file, $request->attachment_type, auth()->id());
             $attachments[] = $attachment->load('mediaItem');
         }
 

@@ -1,4 +1,5 @@
 import { PageTemplate } from '@/components/page-template';
+import { SubscriptionTabs } from '@/components/plans/subscription-tabs';
 import { CrudTable } from '@/components/CrudTable';
 import { planOrdersConfig } from '@/config/crud/plan-orders';
 import { useEffect, useState } from 'react';
@@ -94,7 +95,7 @@ export default function PlanOrdersPage() {
 
   const breadcrumbs = [
     { title: t('Dashboard'), href: route('dashboard') },
-    { title: t('Plans'), href: route('plans.index') },
+    { title: t('Subscriptions') },
     { title: t('Plan Orders') }
   ];
 
@@ -246,11 +247,12 @@ export default function PlanOrdersPage() {
 
   return (
     <PageTemplate 
-      title={t('Plan Orders')} 
+      title={t('Subscriptions')} 
       url="/plan-orders"
       breadcrumbs={breadcrumbs}
       noPadding
     >
+      <SubscriptionTabs active="orders" />
       <div className="bg-white rounded-lg border shadow mb-4">
         <div className="p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">

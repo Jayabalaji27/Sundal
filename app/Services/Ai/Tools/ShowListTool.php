@@ -14,7 +14,7 @@ class ShowListTool extends UiTool
     /** List => [route name, permission, label]. */
     private const LISTS = [
         'tasks' => ['tasks.index', 'task_view_any', 'Tasks'],
-        'bugs' => ['bugs.index', 'bug_view_any', 'Bugs'],
+        'bugs' => ['tasks.index', 'bug_view_any', 'Bugs'], // the Tasks list, type=bug
         'projects' => ['projects.index', 'project_view_any', 'Projects'],
     ];
 
@@ -51,7 +51,7 @@ class ShowListTool extends UiTool
             'list' => ['type' => 'enum', 'options' => array_keys(self::LISTS), 'required' => true, 'description' => 'Which list to show.'],
             'project' => ['type' => 'string', 'description' => 'Tasks and bugs: project title or id.'],
             'assignee' => ['type' => 'string', 'description' => 'Tasks and bugs: "me" or a person\'s name or email.'],
-            'stage' => ['type' => 'string', 'description' => 'Tasks: stage name (e.g. In Progress). Bugs: status name (e.g. Open). Projects: planning, active, on_hold, completed or cancelled.'],
+            'stage' => ['type' => 'string', 'description' => 'Tasks and bugs: stage name (e.g. In Progress). Projects: planning, active, on_hold, completed or cancelled.'],
             'priority' => ['type' => 'string', 'description' => 'low, medium, high, critical (projects: urgent instead of critical).'],
             'severity' => ['type' => 'enum', 'options' => self::SEVERITIES, 'description' => 'Bugs only.'],
             'search' => ['type' => 'string', 'description' => 'Part of the title.'],
@@ -68,7 +68,7 @@ class ShowListTool extends UiTool
             throw new ToolInputException(__('The user is not allowed to open :page.', ['page' => $label]));
         }
 
-        $query = [];
+        $query = $list === 'bugs' ? ['type' => 'bug'] : [];
         $shown = [];
         $value = fn (string $key) => trim((string) ($args[$key] ?? ''));
 
@@ -85,14 +85,10 @@ class ShowListTool extends UiTool
             }
         }
 
-        if ($value('stage') !== '' && $list === 'tasks') {
-            $stage = $this->resolver->taskStage($user, $value('stage'));
+        if ($value('stage') !== '' && $list !== 'projects') {
+            $stage = $list === 'bugs' ? $this->resolver->bugStage($user, $value('stage')) : $this->resolver->taskStage($user, $value('stage'));
             $query['stage_id'] = $stage->id;
             $shown[] = $stage->name;
-        } elseif ($value('stage') !== '' && $list === 'bugs') {
-            $status = $this->resolver->bugStatus($user, $value('stage'));
-            $query['status_id'] = $status->id;
-            $shown[] = $status->name;
         } elseif ($value('stage') !== '') {
             $query['status'] = $this->option($value('stage'), self::PROJECT_STATUSES, __('status'));
             $shown[] = $query['status'];

@@ -32,7 +32,7 @@ export default function AuthLayout({
     const { logoLight, logoDark, themeColor, customColor } = useBrand();
     const { appearance } = useAppearance();
 
-    const { globalSettings } = usePage().props as any;
+    const { globalSettings, name: appName } = usePage().props as any;
 
     // Same pairing as the sidebar: logoDark is the dark-ink logo for light
     // backgrounds (the login page showed white text on white). `appearance` can
@@ -115,7 +115,7 @@ function hexToAdjustedRgba(hex, opacity = 1, adjust = 0) {
 
     return (
         <div className="flex min-h-screen w-full bg-slate-50 dark:bg-slate-900">
-            <Head title={`${title} - ${globalSettings?.titleText || 'Taskly'}`} />
+            <Head title={`${title} - ${globalSettings?.titleText || appName}`} />
 
             {/* Left side - SVG illustration */}
             <div

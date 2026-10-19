@@ -57,6 +57,12 @@ class TaskController extends Controller
             $query->where('assigned_to', $request->assigned_to);
         }
 
+        // Tasks and bugs are one list; ?type=bug shows only bugs.
+        $query->ofType($request->type);
+        if (in_array($request->severity, Task::SEVERITIES, true)) {
+            $query->where('tasks.severity', $request->severity);
+        }
+
         if ($request->search) {
             $query->where('title', 'like', '%' . $request->search . '%');
         }
@@ -82,8 +88,9 @@ class TaskController extends Controller
             $query->latest(); // Default sorting
         }
 
-        // Default to kanban view and get all data without pagination
-        $view = $request->get('view', 'kanban');
+        // The Tasks page is a paginated list; the Kanban board lives on each project's Board.
+        // (view=kanban still returns every task for callers that ask for it.)
+        $view = $request->get('view', 'list');
 
         if ($view === 'kanban') {
             $tasks = $query->get();
@@ -109,7 +116,7 @@ class TaskController extends Controller
 
         // Apply same access control to projects dropdown as used for task filtering
         $projectsQuery = Project::forWorkspace($user->current_workspace_id)
-            ->with(['milestones', 'members.user']);
+            ->with(['milestones', 'members.user', 'epics' => fn ($q) => $q->where('status', 'open')->orderBy('name')->select('id', 'project_id', 'name', 'color')]);
 
         // If not workspace owner, only show accessible projects
         if ($userWorkspaceRole !== 'owner') {
@@ -140,7 +147,7 @@ class TaskController extends Controller
             'stages' => $stages,
             'members' => $members,
             'filters' => array_merge(
-                $request->only(['project_id', 'stage_id', 'priority', 'assigned_to', 'search', 'per_page', 'sort_field', 'sort_direction']),
+                $request->only(['project_id', 'stage_id', 'priority', 'assigned_to', 'type', 'severity', 'search', 'per_page', 'sort_field', 'sort_direction']),
                 ['view' => $view]
             ),
             'project_name' => $request->project_name,
@@ -171,6 +178,13 @@ class TaskController extends Controller
             404
         );
 
+        // This answers the task modal's fetch with JSON. A page visit (a link from
+        // the AI assistant, search, an email or an old bug URL) opens the task's
+        // modal on the Tasks list instead of showing raw data.
+        if (request()->header('X-Inertia') || str_contains((string) request()->header('Accept'), 'text/html')) {
+            return redirect()->route('tasks.index', ['task_id' => $task->id, ...($task->type === 'bug' ? ['type' => 'bug'] : [])]);
+        }
+
         $task->load([
             'project.workspace',
             'project.members.user',
@@ -178,6 +192,7 @@ class TaskController extends Controller
             'assignedTo',
             'creator',
             'milestone',
+            'epic:id,name,color',
             'comments.user',
             'checklists.assignedTo',
             'checklists.creator',
@@ -307,14 +322,19 @@ class TaskController extends Controller
         $validated = $request->validate([
             'project_id' => 'required|exists:projects,id',
             'milestone_id' => 'nullable|exists:project_milestones,id',
+            'epic_id' => ['nullable', \Illuminate\Validation\Rule::exists('epics', 'id')->where('project_id', $request->integer('project_id'))],
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:10000',
             'priority' => 'required|in:low,medium,high,critical',
+            'story_points' => 'nullable|integer|min:0|max:100',
+            // Dates are optional; a task may start and be due on the same day.
             'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after:start_date',
+            'end_date' => ['nullable', 'date', ...($request->filled('start_date') ? ['after_or_equal:start_date'] : [])],
             'assigned_to' => 'nullable|exists:users,id',
-            'is_googlecalendar_sync' => 'nullable|boolean'
+            'is_googlecalendar_sync' => 'nullable|boolean',
+            ...$this->typeRules(),
         ]);
+        $validated = $this->normaliseType($validated);
 
         // Ensure project belongs to current workspace
         $project = Project::find($validated['project_id']);
@@ -331,7 +351,7 @@ class TaskController extends Controller
             $this->syncTaskWithGoogleCalendar($task);
         }
 
-        return back()->with('success', __('Task created successfully!'));
+        return back()->with('success', $task->isBug() ? __('Bug reported successfully!') : __('Task created successfully!'));
     }
 
     public function update(Request $request, Task $task)
@@ -350,12 +370,18 @@ class TaskController extends Controller
             'title' => 'required|string|max:255',
             'description' => 'nullable|string|max:10000',
             'priority' => 'required|in:low,medium,high,critical',
+            'story_points' => 'nullable|integer|min:0|max:100',
+            // Dates are optional; a task may start and be due on the same day.
             'start_date' => 'nullable|date',
-            'end_date' => 'nullable|date|after:start_date',
+            'end_date' => ['nullable', 'date', ...($request->filled('start_date') ? ['after_or_equal:start_date'] : [])],
             'assigned_to' => 'nullable|exists:users,id',
             'milestone_id' => 'nullable|exists:project_milestones,id',
-            'is_googlecalendar_sync' => 'boolean'
+            // An epic of the same project.
+            'epic_id' => ['nullable', \Illuminate\Validation\Rule::exists('epics', 'id')->where('project_id', $task->project_id)],
+            'is_googlecalendar_sync' => 'boolean',
+            ...$this->typeRules(),
         ]);
+        $validated = $this->normaliseType($validated, $task);
 
         // Check if assigned_to changed
         $oldAssignedTo = $task->assigned_to;
@@ -390,7 +416,7 @@ class TaskController extends Controller
             }
         }
 
-        return back()->with('success', __('Task updated successfully!'));
+        return back()->with('success', $task->isBug() ? __('Bug updated successfully!') : __('Task updated successfully!'));
     }
 
     public function destroy(Task $task)
@@ -420,7 +446,7 @@ class TaskController extends Controller
 
         $task->delete();
 
-        return back()->with('success', __('Task deleted successfully!'));
+        return back()->with('success', $task->isBug() ? __('Bug deleted successfully!') : __('Task deleted successfully!'));
     }
 
     public function duplicate(Task $task)
@@ -433,7 +459,9 @@ class TaskController extends Controller
         if (!$workspace || $task->project->workspace_id != $workspace->id) {
             abort(403, 'Task not found in current workspace.');
         }
-        $newTask = $task->replicate();
+        // A copy is a new item: it keeps the type and bug details, not the
+        // link to the pre-merge bug record (unique to the original).
+        $newTask = $task->replicate(['legacy_bug_id']);
         $newTask->title = $task->title . ' (Copy)';
         $newTask->start_date = null;
         $newTask->end_date = null;
@@ -541,6 +569,39 @@ class TaskController extends Controller
      * Clients (who only hold task_change_status) may only move tasks on their own
      * projects whose shared settings expose tasks to them.
      */
+    /** A work item's type and, for bugs, its details. Shared by create and update. */
+    private function typeRules(): array
+    {
+        return [
+            'type' => 'nullable|in:' . implode(',', Task::TYPES),
+            'severity' => 'nullable|in:' . implode(',', Task::SEVERITIES),
+            'steps_to_reproduce' => 'nullable|string|max:10000',
+            'expected_behavior' => 'nullable|string|max:5000',
+            'actual_behavior' => 'nullable|string|max:5000',
+            'environment' => 'nullable|string|max:255',
+            'resolution_notes' => 'nullable|string|max:5000',
+        ];
+    }
+
+    /**
+     * A bug gets a severity (Major unless set); a plain task carries no bug details,
+     * so switching a bug back to a task clears them.
+     */
+    private function normaliseType(array $validated, ?Task $task = null): array
+    {
+        $type = $validated['type'] ?? $task?->type ?? 'task';
+        $validated['type'] = $type;
+        if ($type === 'bug') {
+            $validated['severity'] = $validated['severity'] ?? $task?->severity ?? 'major';
+        } else {
+            foreach (Task::BUG_FIELDS as $field) {
+                $validated[$field] = null;
+            }
+        }
+
+        return $validated;
+    }
+
     private function canModifyTask(Task $task, User $user): bool
     {
         $workspace = $user->currentWorkspace;

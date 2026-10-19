@@ -1,0 +1,1 @@
+function t(){const e=new URL(window.location.href);return e.searchParams.get("action")!=="create"?!1:(e.searchParams.delete("action"),window.history.replaceState(window.history.state,"",e.toString()),!0)}export{t as c};

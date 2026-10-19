@@ -128,6 +128,26 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        // The AI assistant: every reply, card decision, voice transcription and
+        // provider error (App\Services\Ai\AiLog). Never what was said.
+        'ai' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/ai.log'),
+            'level' => env('LOG_AI_LEVEL', 'info'),
+            'days' => env('LOG_AI_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
+        // Calls to outside services: Zoom, Google Meet and Calendar, Slack,
+        // Telegram, webhooks and email (App\Services\IntegrationLog).
+        'integrations' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/integrations.log'),
+            'level' => env('LOG_INTEGRATIONS_LEVEL', 'info'),
+            'days' => env('LOG_INTEGRATIONS_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
         'PayTabs' => [
             'driver' => 'single',
             'path' => storage_path('logs/paytabs.log'),

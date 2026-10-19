@@ -16,6 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 // import DeleteUser from '@/components/delete-user';
 import { useTranslation } from 'react-i18next';
 import MediaPicker from '@/components/MediaPicker';
+import { LanguageSwitcher } from '@/components/language-switcher';
 import { toast } from '@/components/custom-toast';
 
 
@@ -177,6 +178,11 @@ export default function ProfileSettings({ mustVerifyEmail, status }: { mustVerif
               {item.title}
             </Button>
           ))}
+          {/* Language lives here rather than in every page's header. */}
+          <div className="flex items-center gap-2 md:ml-auto">
+            <span className="text-sm text-muted-foreground">{t('Language')}</span>
+            <LanguageSwitcher />
+          </div>
         </div>
 
         <div className="flex-1">

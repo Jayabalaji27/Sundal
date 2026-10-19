@@ -14,11 +14,17 @@ import { useTranslation } from 'react-i18next';
 import { formatCurrency } from '@/utils/currency';
 import { Link, router, useForm, usePage } from '@inertiajs/react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ActiveSprintsCard, AttentionCard, AttentionList, ProjectsAtRiskCard, RoleGreeting, RoleStats, groupByDue } from '@/components/dashboard/role-home';
+import { StatStrip } from '@/components/stat-strip';
 
 interface DashboardData {
   cards: Array<{
     value: number;
   }>;
+  // Platform admin: the subscription business (SaaS mode).
+  subscriptions?: { mrr: number; paying: number; trial: number; expired: number; renewals_due: number } | null;
+  // Owner home: active projects whose health score isn't healthy.
+  projectsAtRisk?: { id: number; title: string; score: number; status: 'at_risk' | 'critical'; reason: string | null }[] | null;
   projects?: {
     total: number;
     active: number;
@@ -76,12 +82,13 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
         title={t('Dashboard')}
         url="/dashboard"
         actions={[
-          {
+          // SaaS: Companies is in the sidebar and in the header's Create menu.
+          ...(!isSaasMode ? [{
             label: t('Manage Companies'),
             icon: <Building2 className="h-4 w-4" />,
-            variant: 'default',
+            variant: 'default' as const,
             onClick: () => router.visit(route('companies.index'))
-          },
+          }] : []),
           {
             label: t('Refresh'),
             icon: <RefreshCw className="h-4 w-4" />,
@@ -91,8 +98,19 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
         ]}
       >
         <div className="space-y-6">
-          {/* Main Stats Cards */}
-          <div className={`grid gap-4 ${isSaasMode ? 'md:grid-cols-2 lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3'}`}>
+          {isSaasMode && <RoleGreeting role="superadmin" name={auth?.user?.name} />}
+          {/* SaaS: the subscription business at a glance (self-hosted keeps the count cards). */}
+          {isSaasMode && (
+            <StatStrip items={[
+              { key: 'mrr', label: t('Monthly recurring revenue'), value: formatCurrency(dashboardData?.subscriptions?.mrr || 0), tone: 'success', onClick: () => router.visit(route('plan-orders.index')) },
+              { key: 'paying', label: t('Paying companies'), value: dashboardData?.subscriptions?.paying ?? 0, tone: 'info', onClick: () => router.visit(route('companies.index')) },
+              { key: 'trial', label: t('On trial'), value: dashboardData?.subscriptions?.trial ?? 0, tone: 'violet', onClick: () => router.visit(route('companies.index')) },
+              { key: 'renewals', label: t('Renewals in 14 days'), value: dashboardData?.subscriptions?.renewals_due ?? 0, tone: 'warning', onClick: () => router.visit(route('companies.index')) },
+            ]} />
+          )}
+
+          {!isSaasMode && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer" onClick={() => router.visit(route('companies.index'))}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
@@ -215,81 +233,18 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
             )} */}
 
           </div>
+          )}
 
           {/* Module Cards */}
           {isSaasMode ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg font-medium">
-                    <FileText className="h-5 w-5" />
-                    {t('Plan Orders')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">{t('Pending')}</span>
-                    <span className={(dashboardData?.planOrders?.pending ?? 0) > 0 ? "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20" : "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20"}>
-                      {dashboardData?.planOrders?.pending ?? 0}
-                    </span>
-                  </div>
-                  <Link href={route('plan-orders.index')} className="block">
-                    <div className="text-xs text-primary hover:underline mt-2">{t('Manage Orders')} →</div>
-                  </Link>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg font-medium">
-                    <Clock className="h-5 w-5" />
-                    {t('Plan Requests')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">{t('Pending')}</span>
-                    <span className={(dashboardData?.planRequests?.pending ?? 0) > 0 ? "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20" : "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20"}>
-                      {dashboardData?.planRequests?.pending ?? 0}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">{t('Approved')}</span>
-                    <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400">
-                      {dashboardData?.planRequests?.approved ?? 0}
-                    </span>
-                  </div>
-                  <Link href={route('plan-requests.index')} className="block">
-                    <div className="text-xs text-primary hover:underline mt-2">{t('Manage Requests')} →</div>
-                  </Link>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center gap-2 text-lg font-medium">
-                    <Ticket className="h-5 w-5" />
-                    {t('Coupons')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">{t('Inactive')}</span>
-                    <span className={(dashboardData?.coupons?.expired ?? 0) > 0 ? "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20" : "inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20"}>
-                      {dashboardData?.coupons?.expired ?? 0}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">{t('Active')}</span>
-                    <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">
-                      {dashboardData?.coupons?.active ?? 0}
-                    </span>
-                  </div>
-                  <Link href={route('coupons.index')} className="block">
-                    <div className="text-xs text-primary hover:underline mt-2">{t('Manage Coupons')} →</div>
-                  </Link>
-                </CardContent>
-              </Card>
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Plan orders and plan requests are one queue: Subscriptions in the menu. */}
+              <AttentionList rows={[
+                { key: 'orders', icon: FileText, label: t('Plan orders waiting for approval'), count: dashboardData?.planOrders?.pending ?? 0, href: route('plan-orders.index') },
+                { key: 'requests', icon: Clock, label: t('Plan requests waiting for approval'), count: dashboardData?.planRequests?.pending ?? 0, href: route('plan-requests.index') },
+                { key: 'expired', icon: AlertTriangle, label: t('Companies with an expired plan'), count: dashboardData?.subscriptions?.expired ?? 0, href: route('companies.index') },
+              ]} />
+              <NewCompaniesCard companies={dashboardData?.recentCompanies || []} />
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -369,7 +324,8 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
             </div>
           )}
 
-          {/* System Overview Section */}
+          {/* System Overview Section (self-hosted; SaaS shows New companies and Needs attention above) */}
+          {!isSaasMode && (
           <div className="grid gap-6 lg:grid-cols-3">
             <Card className="lg:col-span-2">
               <CardHeader>
@@ -514,7 +470,7 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
                     };
 
                     return (
-                      <div key={activity.id} className={`p-3 rounded-lg border-l-4 ${getActivityColor(activity.type)} transition-all hover:shadow-sm`}>
+                      <div key={`${activity.type}-${activity.id}`} className={`p-3 rounded-lg border-l-4 ${getActivityColor(activity.type)} transition-all hover:shadow-sm`}>
                         <div className="flex items-start gap-3">
                           <div className="flex-shrink-0 mt-0.5">
                             {getActivityIcon(activity.type)}
@@ -553,6 +509,7 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
               </CardContent>
             </Card>
           </div>
+          )}
 
         </div>
       </PageTemplate>
@@ -577,6 +534,13 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
   const hasProjectStatus = userWorkspaceRole !== 'client' && !!(dashboardData?.projects || dashboardData?.tasks || dashboardData?.taskStages);
   const showRecentActivities = userWorkspaceRole !== 'client';
   const showQuickActions = userWorkspaceRole !== 'client';
+  const roleData = dashboardData as any;
+  const activeSprints = roleData?.activeSprints || [];
+  const attention = roleData?.attention || {};
+  const showAttention = ['company', 'manager'].includes(userWorkspaceRole || '') && Object.keys(attention).length > 0;
+  const showSprints = userWorkspaceRole !== 'client' && (activeSprints.length > 0 || ['company', 'manager'].includes(userWorkspaceRole || ''));
+  // Owners rarely carry tasks themselves: only show their list when it has something.
+  const showMyTasks = !!roleData?.myTasks && !(userWorkspaceRole === 'company' && roleData.myTasks.length === 0);
 
   return (
     <PageTemplate
@@ -585,15 +549,38 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
       actions={pageActions}
     >
       <div className="space-y-6">
+        {/* Role home: what this role checks first. Each number appears once:
+            owners see the money, clients what's due; managers and members act
+            on the lists below, which carry their own counts. */}
+        <RoleGreeting role={userWorkspaceRole || ''} name={auth?.user?.name} />
+        {(userWorkspaceRole === 'company' || userWorkspaceRole === 'client') && (
+          <RoleStats role={userWorkspaceRole || ''} data={roleData} />
+        )}
+        {userWorkspaceRole === 'member' && roleData?.weekHours !== null && roleData?.weekHours !== undefined && (
+          <p className="text-sm text-muted-foreground">
+            {t('Hours logged this week')}:{' '}
+            <Link href={route('timesheets.weekly-view')} className="font-semibold text-foreground hover:text-primary">{roleData.weekHours}h</Link>
+          </p>
+        )}
+        {(showSprints || showAttention) && (
+          <div className={`grid gap-6 ${showSprints && showAttention ? 'lg:grid-cols-2' : ''}`}>
+            {showAttention && <AttentionCard attention={attention} />}
+            {showSprints && <ActiveSprintsCard sprints={activeSprints} role={userWorkspaceRole || ''} />}
+          </div>
+        )}
+        {userWorkspaceRole === 'company' && (roleData?.projectsAtRisk || []).length > 0 && (
+          <ProjectsAtRiskCard projects={roleData.projectsAtRisk} />
+        )}
+
         {/* My Tasks — quick-update widget so members can update their own tasks
             right from the dashboard instead of navigating into a project's
             Scrum/Tasks tab first. Only rendered for roles with task_view_any. */}
-        {dashboardData?.myTasks && (
+        {showMyTasks && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                 <CheckSquare className="h-5 w-5" />
-                {t('My Tasks')}
+                {userWorkspaceRole === 'member' ? t('My work') : t('My Tasks')}
                 {dashboardData.myTasks.length > 0 && (
                   <span className="inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium">
                     {dashboardData.myTasks.length}
@@ -608,8 +595,13 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
                   <p className="text-sm">{t("You're all caught up! No open tasks assigned to you.")}</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {dashboardData.myTasks.map((task: any) => (
+                <div className="space-y-4">
+                  {groupByDue(dashboardData.myTasks as any[]).map(group => (
+                  <div key={group.key} className="space-y-2">
+                    <p className={`text-xs font-semibold uppercase tracking-wide ${group.key === 'overdue' ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'}`}>
+                      {t(group.label)} · {group.tasks.length}
+                    </p>
+                  {group.tasks.map((task: any) => (
                     <div key={task.id} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border border-border bg-card hover:border-primary/40 transition-colors">
                       <div className="flex-1 min-w-0">
                         <Link href={route('tasks.index', { task_id: task.id })} className="font-semibold text-sm text-foreground hover:text-primary transition-colors">
@@ -650,6 +642,8 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
                         </SelectContent>
                       </Select>
                     </div>
+                  ))}
+                  </div>
                   ))}
                 </div>
               )}
@@ -704,342 +698,11 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
           </Card>
         )}
 
-        {/* Main Stats Cards - Dynamically rendered based on backend. Uses flex-wrap
-            with each card flexing to fill the row evenly, so it looks balanced
-            no matter how many cards a given role's permissions leave visible
-            (1 card fills the row, 2 split it evenly, etc.) instead of a fixed
-            grid-cols count leaving an empty gap when the count doesn't match. */}
-        {dashboardData?.cards && dashboardData.cards.length > 0 && (
-          <div className="flex flex-wrap gap-4">
-            {dashboardData.cards.map((card: any, index: number) => {
-              const getCardIcon = (title: string, className: string) => {
-                if (title.includes('User')) return <Users className={className} />;
-                if (title.includes('Project')) return <FolderOpen className={className} />;
-                if (title.includes('Deadline')) return <Calendar className={className} />;
-                if (title.includes('Task')) return <CheckSquare className={className} />;
-                if (title.includes('Revenue') || title.includes('Received')) return <DollarSign className={className} />;
-                return <Activity className={className} />;
-              };
-
-              const getCardColors = (title: string) => {
-                if (title.includes('User')) return { bg: 'bg-emerald-100 dark:bg-emerald-900', text: 'text-emerald-600 dark:text-emerald-100' };
-                if (title.includes('Project')) return { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-600 dark:text-blue-100' };
-                if (title.includes('Deadline')) return { bg: 'bg-orange-100 dark:bg-orange-900', text: 'text-orange-600 dark:text-orange-100' };
-                if (title.includes('Task')) return { bg: 'bg-violet-100 dark:bg-violet-900', text: 'text-violet-600 dark:text-violet-100' };
-                if (title.includes('Revenue') || title.includes('Received')) return { bg: 'bg-amber-100 dark:bg-amber-900', text: 'text-amber-600 dark:text-amber-100' };
-                return { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-600 dark:text-gray-100' };
-              };
-
-              const colors = getCardColors(card.title);
-              const hasLink = !!card.link;
-              const CardTag = hasLink ? Link : 'div';
-              const cardTagProps = hasLink
-                ? { href: card.link }
-                : {};
-
-              return (
-                <CardTag
-                  key={index}
-                  {...cardTagProps}
-                  className={`flex-1 min-w-[220px] flex items-center gap-3 rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-200 p-4 ${hasLink ? 'cursor-pointer' : ''}`}
-                >
-                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${colors.bg}`}>
-                        {getCardIcon(card.title, `h-5 w-5 ${colors.text}`)}
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-xs font-semibold text-muted-foreground truncate capitalize">{t(card.title)}</p>
-                        <p className="text-xl font-bold text-foreground leading-tight">
-                          {card.format === 'currency' ? formatCurrency(card.value) : card.value.toLocaleString()}
-                        </p>
-                    </div>
-                </CardTag>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Budget Overview — single card, no wrapping grid needed so it never
-            leaves an empty half-row gap for roles without other secondary widgets */}
-        {dashboardData?.budgets && userWorkspaceRole !== 'client' && (
-            <Card className="flex flex-col h-full">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <Wallet className="h-5 w-5" />
-                  {t('Budget Overview')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-grow flex flex-col justify-between space-y-4">
-                <div className="flex flex-col gap-3">
-                  <div className="p-3 rounded-lg border border-border bg-card">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="font-medium text-foreground">{t('Utilization')}</span>
-                      <span className="font-bold text-foreground">{budgets.utilization}{t('%')}</span>
-                    </div>
-                    <Progress value={budgets.utilization} className="h-2" />
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-                        <TrendingUp className="h-4 w-4" />
-                      </div>
-                      <span className="text-sm font-medium text-foreground">{t('Spent')}</span>
-                    </div>
-                    <span className="font-bold text-foreground">{formatCurrency(budgets.spent)}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-md bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">
-                        <Wallet className="h-4 w-4" />
-                      </div>
-                      <span className="text-sm font-medium text-foreground">{t('Remaining')}</span>
-                    </div>
-                    <span className="font-bold text-foreground">{formatCurrency(budgets.remaining)}</span>
-                  </div>
-                </div>
-                {auth?.permissions?.includes('budget_dashboard_view') && (
-                  <Link href={route('budgets.dashboard')} className="group/link flex items-center gap-1.5 text-xs font-bold text-primary mt-4 hover:text-primary/80 transition-colors">
-                    {t('View Budgets')}
-                    <span className="transition-transform group-hover/link:translate-x-1">→</span>
-                  </Link>
-                )}
-              </CardContent>
-            </Card>
-        )}
-
-        {/* Main Dashboard Content */}
-        {(hasProjectStatus || showRecentActivities) && (
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Project Status - Only show if data exists. Recent Activities below
-              spans the full row when this card is hidden for a role, instead of
-              sitting alone in 1/3 of the row width. */}
-          {hasProjectStatus && (
-            <Card className="lg:col-span-2 flex flex-col h-full">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <Target className="h-6 w-6" />
-                  {t('Project Status Overview')}
-                  {dashboardData?.projects && (
-                    <span className="inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium">
-                      {projects.total} {t('Total')}
-                    </span>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-grow">
-                <div className="space-y-8">
-                  {/* Project Progress Chart */}
-                  <div className="flex flex-col gap-8">
-                    {dashboardData?.projects && (
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-bold text-foreground capitalize mb-4">{t('Projects Pipeline')}</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="flex items-center gap-3 rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-200 p-4">
-                            <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0 bg-emerald-100 dark:bg-emerald-900">
-                               <Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-100" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs font-semibold text-muted-foreground truncate capitalize">{t('Active')}</p>
-                                <p className="text-xl font-bold text-foreground leading-tight">
-                                  {projects.active.toLocaleString()}
-                                </p>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-3 rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-200 p-4">
-                            <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0 bg-blue-100 dark:bg-blue-900">
-                               <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-100" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs font-semibold text-muted-foreground truncate capitalize">{t('Completed')}</p>
-                                <p className="text-xl font-bold text-foreground leading-tight">
-                                  {projects.completed.toLocaleString()}
-                                </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3 rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-200 p-4">
-                            <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0 bg-rose-100 dark:bg-rose-900">
-                               <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-100" />
-                            </div>
-                            <div className="min-w-0">
-                                <p className="text-xs font-semibold text-muted-foreground truncate capitalize">{t('Overdue')}</p>
-                                <p className="text-xl font-bold text-foreground leading-tight">
-                                  {projects.overdue.toLocaleString()}
-                                </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {dashboardData?.taskStages && dashboardData.taskStages.length > 0 && (
-                      <div className="space-y-4 pt-4 border-t border-border">
-                        <h4 className="text-sm font-bold text-foreground capitalize mb-4">{t('Task Stages')}</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-                          {dashboardData.taskStages.map((stage: any, index: number) => {
-                            const dotColors = [
-                               'bg-blue-500',
-                               'bg-amber-500',
-                               'bg-emerald-500',
-                               'bg-purple-500',
-                               'bg-rose-500',
-                               'bg-cyan-500',
-                               'bg-indigo-500',
-                               'bg-teal-500'
-                            ];
-                            const dotBg = dotColors[index % dotColors.length];
-
-                            return (
-                               <div key={stage.name} className="group flex items-center justify-between p-3 rounded-lg bg-card border border-border hover:border-primary/50 hover:shadow-sm transition-all duration-200">
-                                 <div className="flex items-center gap-3">
-                                   {/* The stage's own colour (as on the Kanban board); palette only as a fallback. */}
-                                   <div
-                                     className={`w-2 h-2 rounded-full ${stage.color ? '' : dotBg} shadow-sm`}
-                                     style={stage.color ? { backgroundColor: stage.color } : undefined}
-                                   />
-                                   <span className="text-sm font-semibold text-foreground/80 capitalize group-hover:text-foreground transition-colors">{stage.name}</span>
-                                 </div>
-                                 <span className="text-sm font-bold text-foreground bg-muted px-2.5 py-0.5 rounded-full">{stage.count}</span>
-                               </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Progress Bar */}
-                  {dashboardData?.projects && dashboardData?.tasks && (
-                    <div className="pt-6 border-t border-border/50">
-                      <div className="flex justify-between items-end mb-3">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-foreground capitalize">{t('Overall Completion')}</span>
-                          <span className="text-xs text-muted-foreground mt-1 capitalize">{t('Projects and tasks combined')}</span>
-                        </div>
-                        <span className="text-lg font-bold text-primary">
-                          {(() => {
-                            const totalItems = projects.total + tasks.total;
-                            const completedItems = projects.completed + tasks.completed;
-                            return totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
-                          })()}%
-                        </span>
-                      </div>
-                      <div className="h-3 w-full bg-muted rounded-full overflow-hidden border border-border/50">
-                        <div 
-                          className="h-full bg-primary transition-all duration-1000 ease-in-out"
-                          style={{ width: `${(() => {
-                            const totalItems = projects.total + tasks.total;
-                            const completedItems = projects.completed + tasks.completed;
-                            return totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
-                          })()}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Links */}
-                  <div className="flex flex-wrap gap-6 pt-5 border-t">
-                    {dashboardData?.projects && (
-                      <Link href={route('projects.index')} className="group/link flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
-                        <div className="p-1.5 rounded-md bg-primary/10 group-hover/link:bg-primary/20 transition-colors">
-                          <FolderOpen className="h-3.5 w-3.5" />
-                        </div>
-                        {t('View Projects')}
-                      </Link>
-                    )}
-                    {dashboardData?.tasks && (
-                      <Link href={route('tasks.index')} className="group/link flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/80 transition-colors">
-                        <div className="p-1.5 rounded-md bg-primary/10 group-hover/link:bg-primary/20 transition-colors">
-                          <CheckSquare className="h-3.5 w-3.5" />
-                        </div>
-                        {t('View Tasks')}
-                      </Link>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Recent Activities — hidden for clients, who shouldn't see task/bug/ticket-level detail */}
-          {showRecentActivities && (
-          <Card className={`flex flex-col h-full ${hasProjectStatus ? '' : 'lg:col-span-3'}`}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <Activity className="h-6 w-6" />
-                  {t('Recent Activities')}
-                <span className="inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium">
-                  {t('Live')}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="relative flex-1 min-h-[350px]">
-              <div className="absolute inset-x-6 top-2 bottom-6 overflow-y-auto pr-1 space-y-0">
-                {recentActivities.map((activity, index) => {
-                  const getActivityStyle = (type: string) => {
-                    switch (type) {
-                      case 'task': return { icon: <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />, bg: 'bg-blue-100 dark:bg-blue-900/40', border: 'border-blue-200 dark:border-blue-800', text: 'text-blue-700 dark:text-blue-400' };
-                      case 'project': return { icon: <FolderOpen className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />, bg: 'bg-emerald-100 dark:bg-emerald-900/40', border: 'border-emerald-200 dark:border-emerald-800', text: 'text-emerald-700 dark:text-emerald-400' };
-                      case 'expense': return { icon: <Receipt className="h-4 w-4 text-amber-600 dark:text-amber-400" />, bg: 'bg-amber-100 dark:bg-amber-900/40', border: 'border-amber-200 dark:border-amber-800', text: 'text-amber-700 dark:text-amber-400' };
-                      case 'bug': return { icon: <Bug className="h-4 w-4 text-rose-600 dark:text-rose-400" />, bg: 'bg-rose-100 dark:bg-rose-900/40', border: 'border-rose-200 dark:border-rose-800', text: 'text-rose-700 dark:text-rose-400' };
-                      case 'invoice': return { icon: <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400" />, bg: 'bg-purple-100 dark:bg-purple-900/40', border: 'border-purple-200 dark:border-purple-800', text: 'text-purple-700 dark:text-purple-400' };
-                      case 'timesheet': return { icon: <Clock className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />, bg: 'bg-indigo-100 dark:bg-indigo-900/40', border: 'border-indigo-200 dark:border-indigo-800', text: 'text-indigo-700 dark:text-indigo-400' };
-                      default: return { icon: <Activity className="h-4 w-4 text-primary" />, bg: 'bg-primary/10', border: 'border-primary/20', text: 'text-primary' };
-                    }
-                  };
-
-                  const style = getActivityStyle(activity.type);
-                  return (
-                    <div key={activity.id} className="group relative pl-10 pb-6 last:pb-0">
-                      {/* Timeline Line */}
-                      {index !== recentActivities.length - 1 && (
-                        <div className="absolute left-[15px] top-8 bottom-0 w-px bg-gray-200 dark:bg-gray-800 group-hover:bg-primary/30 transition-colors" />
-                      )}
-                      
-                      {/* Timeline Dot/Icon */}
-                      <div className={`absolute left-0 top-1 w-8 h-8 rounded-full flex items-center justify-center ring-4 ring-white dark:ring-gray-950 ${style.bg} ${style.border} border group-hover:scale-110 transition-all duration-300 z-10 shadow-sm`}>
-                        {style.icon}
-                      </div>
-
-                      <div className="flex flex-col gap-2 p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 shadow-sm hover:shadow-md transition-all duration-200">
-                        <div className="flex justify-between items-start gap-4">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-white leading-tight">{activity.description}</p>
-                          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20 capitalize`}>
-                            {activity.type?.split('_').join(' ')}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs font-medium text-gray-500 dark:text-gray-400 mt-1">
-                          <span className="flex items-center gap-1.5">
-                            <Avatar className="h-5 w-5 border border-gray-200 dark:border-gray-700">
-                              <AvatarImage src={activity.avatar} alt={activity.user} />
-                              <AvatarFallback>{activity.user?.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <span className="text-gray-700 dark:text-gray-300">{activity.user}</span>
-                          </span>
-                          <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-                          <span className="flex items-center gap-1.5">
-                            <Clock className="h-3.5 w-3.5" />
-                            {activity.time}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-          )}
-        </div>
-        )}
-
-        {/* Financial Overview - Only show if data exists */}
-        {(dashboardData?.invoices || dashboardData?.expenses) && (
-          <div className="grid gap-6 md:grid-cols-2">
+        {/* A client's invoices at a glance (owners see the money in the strip above). */}
+        {userWorkspaceRole === 'client' && dashboardData?.invoices && (
+          <div className="grid gap-6">
             {dashboardData?.invoices && (
-            <Card className={`flex flex-col h-full ${showQuickActions ? '' : 'md:col-span-2'}`}>
+            <Card className="flex flex-col h-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg font-semibold">
                   <FileText className="h-5 w-5" />
@@ -1084,7 +747,7 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
                 </div>
                 <div className="mt-6 pt-4 border-t">
                   <Link href={route('invoices.index')} className="group/link flex items-center gap-1.5 text-sm font-bold text-primary hover:text-primary/80 transition-colors">
-                    {showQuickActions ? t('Manage Invoices') : t('View Invoices')}
+                    {t('View Invoices')}
                     <span className="transition-transform group-hover/link:translate-x-1">→</span>
                   </Link>
                 </div>
@@ -1092,66 +755,49 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
             </Card>
             )}
 
-            {showQuickActions && (
-            <Card className={`flex flex-col h-full ${dashboardData?.invoices ? '' : 'md:col-span-2'}`}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-                  <TrendingUp className="h-5 w-5" />
-                  {t('Quick Actions')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="flex-grow flex flex-col justify-between">
-                <div className="grid grid-cols-2 gap-3">
-                  {dashboardData?.projects && (
-                    <Link href={route('projects.index')} className="group flex flex-col justify-between p-3.5 rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-sm transition-all duration-200 min-h-[90px]">
-                      <div className="p-2 w-fit rounded-lg bg-primary/10 text-primary transition-all duration-200 shadow-sm group-hover:scale-105">
-                        <FolderOpen className="h-4.5 w-4.5" />
-                      </div>
-                      <span className="text-sm font-semibold text-foreground capitalize mt-2">{t('View Projects')}</span>
-                    </Link>
-                  )}
-                  {dashboardData?.tasks && (
-                    <Link href={route('tasks.index')} className="group flex flex-col justify-between p-3.5 rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-sm transition-all duration-200 min-h-[90px]">
-                      <div className="p-2 w-fit rounded-lg bg-primary/10 text-primary transition-all duration-200 shadow-sm group-hover:scale-105">
-                        <CheckSquare className="h-4.5 w-4.5" />
-                      </div>
-                      <span className="text-sm font-semibold text-foreground capitalize mt-2">{t('View Tasks')}</span>
-                    </Link>
-                  )}
-                  {dashboardData?.expenses && userWorkspaceRole !== 'client' && (
-                    <Link href={route('expenses.create')} className="group flex flex-col justify-between p-3.5 rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-sm transition-all duration-200 min-h-[90px]">
-                      <div className="p-2 w-fit rounded-lg bg-primary/10 text-primary transition-all duration-200 shadow-sm group-hover:scale-105">
-                        <Receipt className="h-4.5 w-4.5" />
-                      </div>
-                      <span className="text-sm font-semibold text-foreground capitalize mt-2">{t('Submit Expense')}</span>
-                    </Link>
-                  )}
-                  {dashboardData?.invoices && userWorkspaceRole !== 'client' && (
-                    <Link href={route('invoices.create')} className="group flex flex-col justify-between p-3.5 rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-sm transition-all duration-200 min-h-[90px]">
-                      <div className="p-2 w-fit rounded-lg bg-primary/10 text-primary transition-all duration-200 shadow-sm group-hover:scale-105">
-                        <FileText className="h-4.5 w-4.5" />
-                      </div>
-                      <span className="text-sm font-semibold text-foreground capitalize mt-2">{t('Create Invoice')}</span>
-                    </Link>
-                  )}
-                  {hasRoleDashboardAccess && (
-                    <Link href={route('roles.dashboard')} className="col-span-2 group flex items-center justify-between p-3.5 rounded-xl border border-border bg-card hover:border-primary/40 hover:shadow-sm transition-all duration-200">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-primary/10 text-primary transition-all duration-200 shadow-sm group-hover:scale-105">
-                          <Shield className="h-4.5 w-4.5" />
-                        </div>
-                        <span className="text-sm font-semibold text-foreground capitalize">{t('Manage Workspace Roles')}</span>
-                      </div>
-                      <span className="text-gray-400 group-hover:text-primary transition-all duration-200 transform group-hover:translate-x-1">→</span>
-                    </Link>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            )}
           </div>
         )}
       </div>
     </PageTemplate>
+  );
+}
+
+const initialsOf = (name?: string) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase();
+
+/** Platform admin: the latest sign-ups, each opening that company in Companies. */
+function NewCompaniesCard({ companies }: { companies: NonNullable<DashboardData['recentCompanies']> }) {
+  const { t } = useTranslation();
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <UserPlus className="h-4 w-4" />
+          {t('New companies')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {companies.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">{t('No company has signed up yet.')}</p>
+        ) : companies.map(company => (
+          <Link
+            key={company.id}
+            href={route('companies.index', { search: company.email })}
+            className="flex items-center gap-3 rounded-lg border p-3 text-sm transition-colors hover:border-primary/40 hover:bg-muted/30"
+          >
+            <Avatar className="h-8 w-8 shrink-0">
+              <AvatarFallback className="text-xs font-semibold">{initialsOf(company.name)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">{company.name}</p>
+              <p className="truncate text-xs text-muted-foreground">{company.email}</p>
+            </div>
+            <div className="shrink-0 text-right text-xs">
+              {company.plan && <p className="font-medium">{company.plan}</p>}
+              <p className="text-muted-foreground">{company.registered_at}</p>
+            </div>
+          </Link>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

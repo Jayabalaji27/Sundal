@@ -20,9 +20,9 @@ class Topics
     public const SHARED = ['list_projects', 'list_team_members', 'get_record_history', 'read_attachment', 'get_sheet_rows', 'open_page', 'show_list', 'open_record'];
 
     public const TOOLS = [
-        'tasks' => ['list_tasks', 'create_task', 'assign_task', 'change_task_status', 'list_sprints', 'add_tasks_to_sprint', 'import_tasks_from_sheet', 'plan_tasks_from_document'],
-        'bugs' => ['list_bugs', 'create_bug', 'assign_bug', 'change_bug_status', 'import_bugs_from_sheet'],
-        'projects' => ['create_project', 'add_project_members', 'get_project_report', 'get_budget_status', 'list_tasks', 'list_bugs', 'plan_tasks_from_document'],
+        'tasks' => ['list_tasks', 'create_task', 'assign_task', 'change_task_status', 'list_sprints', 'add_tasks_to_sprint', 'remove_tasks_from_sprint', 'list_epics', 'set_epic', 'import_tasks_from_sheet', 'plan_tasks_from_document'],
+        'bugs' => ['list_bugs', 'create_bug', 'assign_bug', 'change_bug_status', 'list_epics', 'set_epic', 'import_bugs_from_sheet'],
+        'projects' => ['create_project', 'add_project_members', 'get_project_report', 'get_budget_status', 'list_tasks', 'list_bugs', 'list_epics', 'create_epic', 'set_epic', 'list_meetings', 'schedule_meeting', 'plan_tasks_from_document'],
         'time' => ['list_my_time', 'log_time', 'update_time_entry', 'delete_time_entry', 'submit_timesheet', 'start_timer', 'stop_timer', 'list_tasks'],
         'approvals' => ['list_timesheet_approvals', 'decide_timesheets', 'list_expense_approvals', 'decide_expenses'],
         'finance' => [
@@ -36,9 +36,9 @@ class Topics
 
     /** Words that show a message is about a topic, for the out-of-topic check. */
     private const KEYWORDS = [
-        'tasks' => ['task', 'tasks', 'todo', 'to-do', 'story', 'stories', 'sprint', 'sprints', 'stage', 'kanban'],
+        'tasks' => ['task', 'tasks', 'todo', 'to-do', 'story', 'stories', 'sprint', 'sprints', 'stage', 'kanban', 'backlog', 'epic', 'epics'],
         'bugs' => ['bug', 'bugs', 'defect', 'defects', 'issue', 'issues', 'crash', 'crashes'],
-        'projects' => ['project', 'projects', 'milestone', 'milestones', 'report', 'reports', 'progress'],
+        'projects' => ['project', 'projects', 'milestone', 'milestones', 'report', 'reports', 'progress', 'epic', 'epics', 'meeting', 'meetings', 'call', 'stand-up', 'standup', 'review'],
         'time' => ['hours', 'hour', 'hrs', 'timer', 'log time', 'logged', 'worked', 'timesheet', 'timesheets', 'time entry', 'time entries', 'my time', 'clock'],
         'approvals' => ['approve', 'approval', 'approvals', 'reject', 'timesheet', 'timesheets', 'expense', 'expenses', 'pending'],
         'finance' => [

@@ -45,3 +45,18 @@ function something()
 {
     // ..
 }
+
+/** Records what is written to a log channel ('ai', 'integrations') from here on in the test. */
+function captureLog(string $channel): \Monolog\Handler\TestHandler
+{
+    $handler = new \Monolog\Handler\TestHandler();
+    \Illuminate\Support\Facades\Log::channel($channel)->getLogger()->pushHandler($handler);
+
+    return $handler;
+}
+
+/** The context of each line logged as $event, in order. */
+function loggedLines(\Monolog\Handler\TestHandler $handler, string $event): array
+{
+    return collect($handler->getRecords())->filter(fn ($record) => $record['message'] === $event)->map(fn ($record) => $record['context'])->values()->all();
+}

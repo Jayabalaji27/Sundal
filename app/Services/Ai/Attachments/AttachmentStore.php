@@ -4,6 +4,7 @@ namespace App\Services\Ai\Attachments;
 
 use App\Models\AiAttachment;
 use App\Models\User;
+use App\Services\Ai\AiLog;
 use App\Services\PlanLimitService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -84,7 +85,7 @@ class AttachmentStore
             is_resource($handle) && fclose($handle);
         }
 
-        return AiAttachment::create([
+        $attachment = AiAttachment::create([
             'workspace_id' => $user->current_workspace_id,
             'user_id' => $user->id,
             'source' => $source,
@@ -100,6 +101,17 @@ class AttachmentStore
             'extracted_text' => $read['text'],
             'structure' => $read['structure'],
         ]);
+        AiLog::info('ai.attachment.added', [
+            ...AiLog::who($user),
+            'attachment_id' => $attachment->id,
+            'source' => $source,
+            'kind' => $attachment->kind,
+            'status' => $attachment->status,
+            'extension' => $extension,
+            'bytes' => $size,
+        ]);
+
+        return $attachment;
     }
 
     /** A plain file name: no folders, no control characters, at most 200 characters. */
@@ -118,6 +130,8 @@ class AttachmentStore
 
     private function refuse(string $message): never
     {
+        AiLog::info('ai.attachment.refused', ['user_id' => auth()->id(), 'reason' => $message]);
+
         throw ValidationException::withMessages(['file' => $message]);
     }
 }

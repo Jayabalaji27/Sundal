@@ -2,6 +2,7 @@
 
 namespace App\Services\Ai\Attachments;
 
+use App\Services\IntegrationLog;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\ValidationException;
@@ -27,6 +28,22 @@ class GoogleDriveFiles
 
     /** @return array{name: string, contents: string} */
     public function fetch(string $fileId, string $token): array
+    {
+        $started = hrtime(true);
+        try {
+            $file = $this->download($fileId, $token);
+        } catch (ValidationException $e) {
+            IntegrationLog::failed('google_drive', 'file.fetch', $e->getMessage(), $started);
+
+            throw $e;
+        }
+        IntegrationLog::ok('google_drive', 'file.fetch', $started, ['bytes' => strlen($file['contents'])]);
+
+        return $file;
+    }
+
+    /** @return array{name: string, contents: string} */
+    private function download(string $fileId, string $token): array
     {
         try {
             $meta = Http::withToken($token)->timeout(20)->get(self::API . rawurlencode($fileId), ['fields' => 'name,mimeType,size', 'supportsAllDrives' => 'true']);

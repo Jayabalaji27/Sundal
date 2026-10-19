@@ -15,7 +15,6 @@ use App\Models\ProjectActivity;
 use App\Models\TimesheetEntry;
 use App\Models\Timesheet;
 use App\Models\TaskComment;
-use App\Models\BugComment;
 use App\Models\ProjectNote;
 use App\Models\WorkspaceMember;
 use App\Models\ProjectMember;
@@ -544,7 +543,6 @@ class User extends BaseAuthenticatable implements MustVerifyEmail
             TimesheetEntry::where('user_id', $user->id)->delete();
             Timesheet::where('user_id', $user->id)->delete();
             TaskComment::where('user_id', $user->id)->delete();
-            BugComment::where('user_id', $user->id)->delete();
             ProjectNote::where('created_by', $user->id)->delete();
             
             // Remove user from workspace memberships

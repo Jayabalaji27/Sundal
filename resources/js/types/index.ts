@@ -33,6 +33,8 @@ export interface NavItem {
     group?: string;
     defaultOpen?: boolean;
     badge?: { label: string };
+    // Other pages that count as this item (e.g. Approvals covers both approval lists).
+    matches?: string[];
     // Forces a plain <a> (real browser navigation) instead of Inertia's
     // <Link> (XHR-driven SPA visit). Needed for "unified shell" routes
     // (reports/meetings in app-sidebar.tsx) that respond with
@@ -85,6 +87,15 @@ export interface Task {
     title: string;
     description?: string;
     priority: 'low' | 'medium' | 'high' | 'critical';
+    story_points?: number | null;
+    /** A bug is a task of type 'bug': same Board, Backlog and Sprints, plus the bug details below. */
+    type?: 'task' | 'bug';
+    severity?: 'minor' | 'major' | 'critical' | 'blocker' | null;
+    steps_to_reproduce?: string | null;
+    expected_behavior?: string | null;
+    actual_behavior?: string | null;
+    environment?: string | null;
+    resolution_notes?: string | null;
     start_date?: string;
     end_date?: string;
     assigned_to?: number;

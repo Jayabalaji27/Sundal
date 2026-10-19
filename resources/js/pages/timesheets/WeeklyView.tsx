@@ -4,12 +4,11 @@ import { toast } from '@/components/custom-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Plus, Clock, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import TimeEntryForm from '@/components/timesheets/TimeEntryForm';
 import { useTranslation } from 'react-i18next';
 import { hasPermission } from '@/utils/authorization';
-import { todayLocalDateString } from '@/utils/formHelpers';
 
 interface DayEntry {
     date: string;
@@ -39,8 +38,17 @@ interface Props {
     weekStart: string;
     weekEnd: string;
     timesheetId: number | null;
+    timesheetStatus?: 'draft' | 'submitted' | 'approved' | 'rejected' | null;
+    rejectionReason?: string | null;
     permissions?: any;
 }
+
+const STATUS_STYLES: Record<string, string> = {
+    draft: 'bg-slate-100 text-slate-700 ring-slate-500/30',
+    submitted: 'bg-yellow-50 text-yellow-700 ring-yellow-600/20',
+    approved: 'bg-green-50 text-green-700 ring-green-600/20',
+    rejected: 'bg-red-50 text-red-700 ring-red-600/20',
+};
 
 // Weeks run Monday-Sunday to match the backend (Carbon's default week start).
 const getMondayOfWeek = (date: Date): Date => {
@@ -67,7 +75,7 @@ const parseLocalDate = (dateStr: string): Date => {
     return new Date(y, m - 1, d);
 };
 
-export default function WeeklyView({ weekData, projects, weekStart, weekEnd, timesheetId, permissions }: Props) {
+export default function WeeklyView({ weekData, projects, weekStart, weekEnd, timesheetId, timesheetStatus, rejectionReason, permissions }: Props) {
     const { t } = useTranslation();
     const { flash, auth } = usePage().props as any;
     const userPermissions = auth?.permissions || [];
@@ -134,28 +142,29 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
         return startOfWeek.toDateString() === currentWeekStart.toDateString();
     };
 
-    const pageActions: any[] = [
-        {
-            label: t('Monthly View'),
-            icon: <Calendar className="h-4 w-4 mr-2" />,
-            variant: 'outline' as const,
-            onClick: () => router.get(route('timesheets.monthly-view')),
-        },
-    ];
+    // The week is the timesheet: log time per day, then submit it for approval here.
+    const canSubmit = !!timesheetId
+        && (timesheetStatus === 'draft' || timesheetStatus === 'rejected')
+        && getWeekEntries() > 0
+        && hasPermission(userPermissions, 'timesheet_submit');
+    const submitWeek = () => {
+        if (timesheetId) router.post(route('timesheets.submit', timesheetId), {}, { preserveScroll: true });
+    };
+    const statusLabels: Record<string, string> = {
+        draft: t('Draft'), submitted: t('Waiting for approval'), approved: t('Approved'), rejected: t('Rejected'),
+    };
 
     const breadcrumbs = [
         { title: t('Dashboard'), href: route('dashboard') },
-        { title: t('Timesheets'), href: route('timesheets.index') },
-        { title: t('Weekly View') }
+        { title: t('Timesheet') }
     ];
 
     return (
         <PageTemplate 
-            title={t('Weekly View')} 
-            actions={pageActions}
+            title={t('Timesheet')} 
             breadcrumbs={breadcrumbs}
         >
-            <Head title={`Weekly View - ${formatWeekRange()}`} />
+            <Head title={`${t('Timesheet')} - ${formatWeekRange()}`} />
             
             {/* Week Navigation */}
             <Card className="mb-6">
@@ -186,63 +195,32 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
                             </Button>
                         </div>
                         
-                        {!isCurrentWeek() && (
-                            <Button variant="outline" onClick={goToCurrentWeek}>
-                                {t('Current Week')}
-                            </Button>
-                        )}
+                        <div className="flex flex-wrap items-center gap-3">
+                            {!isCurrentWeek() && (
+                                <Button variant="outline" size="sm" onClick={goToCurrentWeek}>
+                                    {t('This week')}
+                                </Button>
+                            )}
+                            <span className="text-sm text-muted-foreground">
+                                <span className="font-semibold text-foreground">{getWeekTotal().toFixed(1)}h</span> {t('total')} · {getWeekBillable().toFixed(1)}h {t('billable')}
+                            </span>
+                            {timesheetStatus && (
+                                <span className={`inline-flex rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${STATUS_STYLES[timesheetStatus] || ''}`}>
+                                    {statusLabels[timesheetStatus] || timesheetStatus}
+                                </span>
+                            )}
+                            {canSubmit && (
+                                <Button size="sm" onClick={submitWeek}>{t('Submit week')}</Button>
+                            )}
+                        </div>
                     </div>
+                    {timesheetStatus === 'rejected' && rejectionReason && (
+                        <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                            <span className="font-medium">{t('Rejected')}:</span> {rejectionReason}
+                        </p>
+                    )}
                 </CardHeader>
             </Card>
-
-            {/* Week Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center gap-2">
-                            <Clock className="h-5 w-5 text-blue-600" />
-                            <span className="text-sm font-medium text-blue-600">{t('Total Hours')}</span>
-                        </div>
-                        <div className="text-xl font-bold text-blue-900">
-                            {getWeekTotal().toFixed(2)}h
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center gap-2">
-                            <Calendar className="h-5 w-5 text-green-600" />
-                            <span className="text-sm font-medium text-green-600">{t('Billable Hours')}</span>
-                        </div>
-                        <div className="text-xl font-bold text-green-900">
-                            {getWeekBillable().toFixed(2)}h
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-purple-600">{t('Entries')}</span>
-                        </div>
-                        <div className="text-xl font-bold text-purple-900">
-                            {getWeekEntries()}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-4">
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-orange-600">{t('Avg/Day')}</span>
-                        </div>
-                        <div className="text-xl font-bold text-orange-900">
-                            {(getWeekTotal() / 7).toFixed(1)}h
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
 
             {/* Daily Breakdown */}
             <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
@@ -309,13 +287,7 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
                     <CardContent className="p-8 text-center">
                         <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                         <h3 className="text-lg font-semibold mb-2">{t('No time entries this week')}</h3>
-                        <p className="text-gray-500 mb-4">{t('Start tracking your time to see your weekly overview')}</p>
-                        {hasPermission(userPermissions, 'timesheet_create') && (
-                            <Button onClick={() => addTimeEntry(todayLocalDateString())}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                {t('Add Time Entry')}
-                            </Button>
-                        )}
+                        <p className="text-gray-500">{t('Use Add on a day to log time, then submit the week.')}</p>
                     </CardContent>
                 </Card>
             )}

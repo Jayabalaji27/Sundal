@@ -1175,8 +1175,8 @@ if (! function_exists('defaultSettings')) {
             'logoDark' => '/images/logos/logo-dark.png',
             'logoLight' => '/images/logos/logo-light.png',
             'favicon' => '/images/logos/favicon.png',
-            'titleText' => 'Taskly',
-            'footerText' => '© ' . date('Y') . ' Taskly. All rights reserved.',
+            'titleText' => config('app.name'),
+            'footerText' => '© ' . date('Y') . ' ' . config('app.name') . '. All rights reserved.',
             'themeColor' => 'green',
             'customColor' => '#10b981',
             'sidebarVariant' => 'inset',
@@ -1203,7 +1203,8 @@ if (! function_exists('defaultSettings')) {
             
             // Currency Settings
             'decimalFormat' => '2',
-            'defaultCurrency' => 'USD',
+            // India launch is single-currency (see config/features.php: currency_mgmt).
+            'defaultCurrency' => 'INR',
             'decimalSeparator' => '.',
             'thousandsSeparator' => ',',
             'floatNumber' => true,
@@ -1493,7 +1494,7 @@ if (! function_exists('getCompanyName')) {
         if ($company) {
             return $company->name;
         } else {
-            return 'Taskly';
+            return config('app.name');
         }
     }
 }

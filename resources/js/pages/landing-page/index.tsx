@@ -393,7 +393,7 @@ export default function LandingPage() {
   };
 
   const seo = settings.config_sections?.seo;
-  const pageTitle = seo?.meta_title || globalSettings?.title_text || 'Taskly SaaS';
+  const pageTitle = seo?.meta_title || globalSettings?.title_text || 'Sundal';
 
   return (
     <>

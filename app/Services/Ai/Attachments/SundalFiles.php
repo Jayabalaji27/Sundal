@@ -2,7 +2,6 @@
 
 namespace App\Services\Ai\Attachments;
 
-use App\Models\BugAttachment;
 use App\Models\MediaItem;
 use App\Models\ProjectAttachment;
 use App\Models\TaskAttachment;
@@ -84,7 +83,6 @@ class SundalFiles
 
         // Managers: their own uploads, and files on records they can see.
         $onRecords = TaskAttachment::query()->whereIn('task_id', $this->resolver->tasks($user)->select('id'))->select('media_item_id')
-            ->union(BugAttachment::query()->whereIn('bug_id', $this->resolver->bugs($user)->select('id'))->select('media_item_id'))
             ->union(ProjectAttachment::query()->whereIn('project_id', $this->resolver->projects($user)->select('id'))->select('media_item_id'));
 
         return $query->where(fn ($q) => $q->where('user_id', $user->id)->orWhereIn('model_id', $onRecords));
@@ -94,11 +92,10 @@ class SundalFiles
     private function whereAttached(Collection $itemIds): array
     {
         $where = [];
-        foreach (TaskAttachment::with('task:id,title')->whereIn('media_item_id', $itemIds)->get() as $a) {
-            $where[$a->media_item_id] ??= __('Task: :title', ['title' => $a->task?->title]);
-        }
-        foreach (BugAttachment::with('bug:id,title')->whereIn('media_item_id', $itemIds)->get() as $a) {
-            $where[$a->media_item_id] ??= __('Bug: :title', ['title' => $a->bug?->title]);
+        foreach (TaskAttachment::with('task:id,title,type')->whereIn('media_item_id', $itemIds)->get() as $a) {
+            $where[$a->media_item_id] ??= $a->task?->type === 'bug'
+                ? __('Bug: :title', ['title' => $a->task->title])
+                : __('Task: :title', ['title' => $a->task?->title]);
         }
         foreach (ProjectAttachment::with('project:id,title')->whereIn('media_item_id', $itemIds)->get() as $a) {
             $where[$a->media_item_id] ??= __('Project: :title', ['title' => $a->project?->title]);

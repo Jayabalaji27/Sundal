@@ -81,7 +81,7 @@ export default function ContactSection({ flash, settings, sectionData, brandColo
             {sectionData?.title || t('Get in Touch')}
           </h2>
           <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed font-medium">
-            {sectionData?.subtitle || t('Have questions about Taskly? We would love to hear from you.')}
+            {sectionData?.subtitle || t('Have questions about Sundal? We would love to hear from you.')}
           </p>
         </div>
 

@@ -10,7 +10,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Creates a task in the workspace's first stage. Shared by TaskController
+ * Creates a task (or a bug: type 'bug') in the workspace's first stage. Shared by TaskController
  * and the AI assistant, so both fire the same notifications. The acting
  * user is passed in, never read from the session.
  *
@@ -27,7 +27,8 @@ class CreateTask
         // One unit: if a follow-up step fails, no half-created task is left behind.
         return DB::transaction(function () use ($actor, $data, $firstStage, $assignedTo) {
             $task = Task::create([
-                ...collect($data)->only(['project_id', 'milestone_id', 'title', 'description', 'priority', 'start_date', 'end_date'])->all(),
+                // type 'bug' plus its details make it a bug (see Task::BUG_FIELDS).
+                ...collect($data)->only(['project_id', 'type', 'milestone_id', 'epic_id', 'title', 'description', 'priority', 'story_points', 'start_date', 'end_date', ...Task::BUG_FIELDS])->all(),
                 'assigned_to' => $assignedTo,
                 'task_stage_id' => $firstStage?->id,
                 'created_by' => $actor->id,

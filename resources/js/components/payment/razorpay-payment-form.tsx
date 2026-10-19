@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Loader2 } from 'lucide-react';
 import { toast } from '@/components/custom-toast';
 import axios from 'axios';
+import { usePage } from '@inertiajs/react';
 
 interface RazorpayPaymentFormProps {
   planId: number;
@@ -27,6 +28,8 @@ export function RazorpayPaymentForm({
   onCancel
 }: RazorpayPaymentFormProps) {
   const { t } = useTranslation();
+  // The checkout shows the brand from Settings, not a hardcoded product name.
+  const { globalSettings, name: appName } = usePage().props as any;
   
   useEffect(() => {
     // Check if Razorpay script is already loaded
@@ -76,7 +79,7 @@ export function RazorpayPaymentForm({
         key: razorpayKey,
         amount: amount,
         currency: currency,
-        name: 'Taskly',
+        name: globalSettings?.titleText || appName,
         description: 'Plan Subscription',
         order_id: order_id,
         handler: function(response: any) {

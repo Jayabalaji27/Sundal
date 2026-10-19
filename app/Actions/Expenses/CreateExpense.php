@@ -24,7 +24,7 @@ class CreateExpense
             ...array_intersect_key($data, array_flip(['project_id', 'budget_category_id', 'task_id', 'amount', 'expense_date', 'title', 'description'])),
             'submitted_by' => $actor->id,
             'status' => 'pending',
-            'currency' => 'USD',
+            'currency' => settings()['defaultCurrency'] ?? 'INR',
         ]);
 
         $expense->load(['project.clients', 'budgetCategory', 'submitter']);

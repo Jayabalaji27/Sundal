@@ -3,7 +3,8 @@ import { router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { Sparkles } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { isSundalPath } from '@/components/ai-confirm-card';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AI_ALIVE_TIMEOUT_MS, AI_MODE_WINDOW, type AiModeMessage, openAiModeTab, openChannel } from '@/lib/ai-mode';
@@ -119,11 +120,19 @@ export function AiModeToggle() {
 
     return (
         <div className="flex items-center gap-2">
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium" title={t('Open the AI Assistant in its own tab')}>
-                <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-                <span className="hidden sm:inline">{t('AI mode')}</span>
-                <Switch checked={open} onCheckedChange={toggle} aria-label={t('AI mode')} />
-            </label>
+            {/* A regular header button; highlighted while the AI tab is open. */}
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={toggle}
+                aria-pressed={open}
+                aria-label={t('AI mode')}
+                title={open ? t('Close AI mode') : t('Open the AI Assistant in its own tab')}
+                className={cn('h-9 gap-1.5 px-2.5', open && 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200')}
+            >
+                <Sparkles className="h-4 w-4 text-violet-500" />
+                <span className="hidden md:inline">{t('AI')}</span>
+            </Button>
             {blocked && (
                 <a href={route('ai-mode')} target={AI_MODE_WINDOW} className="text-xs text-primary underline" onClick={() => setBlocked(false)}>
                     {t('Open AI mode')}

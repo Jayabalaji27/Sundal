@@ -42,7 +42,6 @@ class DatabaseSeeder extends Seeder
                 NewsletterSeeder::class,
                 ContactSeeder::class,
                 TaskStageSeeder::class,
-                BugStatusSeeder::class,
                 ProjectSeeder::class,
                 BudgetCategorySeeder::class,
                 BudgetSeeder::class,

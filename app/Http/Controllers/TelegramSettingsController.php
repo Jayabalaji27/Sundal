@@ -44,7 +44,7 @@ class TelegramSettingsController extends Controller
             'telegram_chat_id' => 'required|string',
         ]);
 
-        $message = "*Test Telegram Integration*\n\nThis is a test message from Taskly. Your Telegram integration is working correctly!";
+        $message = "*Test Telegram Integration*\n\nThis is a test message from " . config('app.name') . ". Your Telegram integration is working correctly!";
         
         $payload = [
             'chat_id' => $validated['telegram_chat_id'],

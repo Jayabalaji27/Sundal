@@ -95,7 +95,7 @@ export default function AboutUs({ settings, sectionData, brandColor = '#3b82f6' 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className={`text-center mb-8 sm:mb-12 lg:mb-16 transition-all duration-700 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            {sectionData.title || t('About Taskly')}
+            {sectionData.title || t('About Sundal')}
           </h2>
           <p className="text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed font-medium">
             {sectionData.description || t('We are passionate about transforming how teams collaborate and manage projects.')}
@@ -109,7 +109,7 @@ export default function AboutUs({ settings, sectionData, brandColor = '#3b82f6' 
               {sectionData.story_title || t('Empowering Team Productivity Since 2020')}
             </h3>
             <div className="text-gray-600 mb-8 leading-relaxed" dangerouslySetInnerHTML={{
-              __html: (sectionData.story_content || 'Founded by a team of project management enthusiasts and technology experts, Taskly was born from the frustration of scattered tools and inefficient workflows.').replace(/\n/g, '</p><p className="mb-6">')
+              __html: (sectionData.story_content || 'Founded by a team of project management enthusiasts and technology experts, Sundal was born from the frustration of scattered tools and inefficient workflows.').replace(/\n/g, '</p><p className="mb-6">')
             }} />
             
             {stats.length > 0 && (

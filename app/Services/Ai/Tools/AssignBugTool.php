@@ -4,14 +4,15 @@ namespace App\Services\Ai\Tools;
 
 use App\Services\Ai\Forms\FormField;
 use App\Services\Ai\Forms\HasForm;
-use App\Actions\Bugs\AssignBug;
+use App\Actions\Tasks\AssignTask;
 use App\Models\User;
 
+/** Bugs are tasks of type bug, so assigning one goes through AssignTask. */
 class AssignBugTool extends AiTool implements HasForm
 {
     public function __construct(
         private readonly RecordResolver $resolver,
-        private readonly AssignBug $assignBug,
+        private readonly AssignTask $assignTask,
     ) {}
 
     public function name(): string
@@ -90,13 +91,13 @@ class AssignBugTool extends AiTool implements HasForm
 
         $before = ['assigned_to' => $bug->assigned_to, 'end_date' => $bug->end_date?->format('Y-m-d')];
 
-        $this->assignBug->handle($user, $bug, $assignee, $payload['due_date'] ?? null);
+        $this->assignTask->handle($user, $bug, $assignee, $payload['due_date'] ?? null);
         $bug->refresh();
 
         return new ToolOutcome(
             __('Assigned bug ":title" to :name.', ['title' => $bug->title, 'name' => $assignee->name]),
             $bug,
-            route('bugs.show', $bug->id, false),
+            route('tasks.show', $bug->id, false),
             [
                 'bug_id' => $bug->id,
                 'before' => $before,
@@ -113,7 +114,7 @@ class AssignBugTool extends AiTool implements HasForm
             throw new ToolInputException(__('Bug ":title" was changed again since, so it was not undone.', ['title' => $bug->title]));
         }
 
-        $this->assignBug->revert($user, $bug, $undo['before']['assigned_to'], $undo['before']['end_date']);
+        $this->assignTask->revert($user, $bug, $undo['before']['assigned_to'], $undo['before']['end_date']);
 
         return __('Bug ":title" assignment put back.', ['title' => $bug->title]);
     }

@@ -1,22 +1,22 @@
-import { useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { router, usePage } from '@inertiajs/react';
 import { ProjectHealthWidget } from '@/components/ProjectHealthWidget';
-import { ScopeCreepWidget } from '@/components/ScopeCreepWidget';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Edit, Plus, Pin, Trash2, Users, Calendar, DollarSign, Clock, User, Eye, Receipt, CheckSquare, Timer, CheckCircle, AlertTriangle, BarChart3, CreditCard, Columns, Paperclip, Download, Upload, Search, Bug, Play, Copy, Check, Globe, Link as LinkIcon, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Pin, Trash2, Users, Calendar, DollarSign, Clock, User, Eye, Receipt, CheckSquare, Timer, CheckCircle, AlertTriangle, BarChart3, CreditCard, Columns, Paperclip, Download, Upload, Search, Play, Copy, Check, Globe, Link as LinkIcon, MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PageTemplate } from '@/components/page-template';
+import { PageAction } from '@/components/page-template';
+import { ProjectShell, ProjectTab, canOpenProjectTab } from '@/components/projects/project-shell';
 import { CrudFormModal } from '@/components/CrudFormModal';
 import { EnhancedDeleteModal } from '@/components/EnhancedDeleteModal';
 import { SimplePagination } from '@/components/SimplePagination';
@@ -95,9 +95,26 @@ function ClientPortalPanel({ project }: { project: any }) {
     );
 }
 
+function SummaryStat({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+    return (
+        <Card>
+            <CardContent className="p-4">
+                <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    {icon}
+                    {label}
+                </div>
+                {children}
+            </CardContent>
+        </Card>
+    );
+}
+
+// Panels of this page (Backlog and Board are separate pages, see ProjectShell).
+const PANEL_TABS = ['overview', 'gantt', 'milestones', 'tasks', 'team', 'attachments', 'notes', 'budget', 'expense', 'timesheet', 'activity', 'portal'];
+
 export default function ProjectShow() {
     const { t } = useTranslation();
-    const { auth, project, budget = null, members, managers, clients, projectTasks = [], taskStages = [], projectBugs = [], projectTimesheets = [], canDeleteProject, canAssignManagers = false, userWorkspaceRole, attachmentFilters = {}, noteFilters = {}, activityFilters = {} } = usePage().props as any;
+    const { auth, project, shellProject, taskForm = null, budget = null, members, managers, clients, projectTasks = [], projectTimesheets = [], canDeleteProject, canAssignManagers = false, userWorkspaceRole, attachmentFilters = {}, noteFilters = {}, activityFilters = {} } = usePage().props as any;
     const permissions = auth?.permissions || [];
     
     // Permission-based access control
@@ -108,7 +125,13 @@ export default function ProjectShow() {
     const canManageNotes = hasPermission(permissions, 'project_manage_notes');
     const canTrackProgress = hasPermission(permissions, 'project_track_progress');
     
-    const [activeTab, setActiveTab] = useState('overview');
+    // The open panel lives in ?tab= so it survives a reload and can be linked to.
+    // A tab the role can't open (e.g. from a shared link) falls back to the Summary.
+    const [activeTab, setActiveTab] = useState<string>(() => {
+        const tab = new URLSearchParams(window.location.search).get('tab');
+        const canOpen = tab === 'portal' ? canManageProject : !!tab && canOpenProjectTab(tab, permissions);
+        return tab && PANEL_TABS.includes(tab) && canOpen ? tab : 'overview';
+    });
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState<any>(null);
@@ -133,6 +156,12 @@ export default function ProjectShow() {
     // Reset pagination when switching tabs
     const handleTabChange = (value: string) => {
         setActiveTab(value);
+        const url = new URL(window.location.href);
+        if (value === 'overview') url.searchParams.delete('tab');
+        else url.searchParams.set('tab', value);
+        url.searchParams.delete('create');
+        // Keep Inertia's history state; only the address changes.
+        window.history.replaceState(window.history.state, '', url.toString());
         if (value === 'milestones') setMilestonesPage(1);
         if (value === 'notes') setNotesPage(1);
         if (value === 'activity') setActivityPage(1);
@@ -679,44 +708,13 @@ export default function ProjectShow() {
         }
     };
 
-    const pageActions = [
-        ...(hasPermission(permissions, 'task_view_any') ? [{
-            label: t('Tasks'),
-            icon: <CheckSquare className="h-4 w-4 mr-2" />,
-            variant: 'outline',
-            onClick: () => router.get(route('tasks.index', { project_id: project.id, project_name: project.title, view: 'kanban' }))
-        }] : []),
-        ...(hasPermission(permissions, 'bug_view_any') ? [{
-            label: t('Bugs'),
-            icon: <Bug className="h-4 w-4 mr-2" />,
-            variant: 'outline',
-            onClick: () => router.get(route('bugs.index', { project_id: project.id, project_name: project.title }))
-        }] : []),
-        ...(hasPermission(permissions, 'expense_view_any') ? [{
-            label: t('Expenses'),
-            icon: <Receipt className="h-4 w-4 mr-2" />,
-            variant: 'outline',
-            onClick: () => router.get(route('expenses.index', { project_id: project.id, project_name: project.title }))
-        }] : []),
-        ...(canManageBudget ? [{
-            label: t('Budget'),
-            icon: <DollarSign className="h-4 w-4 mr-2" />,
-            variant: 'outline',
-            onClick: () => {
-                if (budget) {
-                    router.get(route('budgets.show', budget.id));
-                } else {
-                    router.get(route('budgets.index'));
-                }
-            }
-        }] : [])
-    ];
-    
+    // Tasks, Bugs, Expenses and Budget are tabs of the project now; the header keeps Edit.
+    const pageActions: PageAction[] = [];
     if (canEditProject) {
         pageActions.push({
-            label: t('Edit Project'),
-            icon: <Edit className="h-4 w-4 mr-2" />,
-            variant: 'default',
+            label: t('Edit project'),
+            icon: <Edit className="h-4 w-4" />,
+            variant: 'outline',
             onClick: () => {
                 setCurrentItem(project);
                 setModalType('project');
@@ -726,406 +724,101 @@ export default function ProjectShow() {
         });
     }
 
-    const breadcrumbs = [
-        { title: t('Dashboard'), href: route('dashboard') },
-        { title: t('Projects'), href: route('projects.index') },
-        { title: project.title }
-    ];
+    // "Create > Milestone" from another project page lands here with ?create=milestone.
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get('create') === 'milestone' && hasPermission(permissions, 'project_manage_milestones')) {
+            handleAction('add-milestone');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
-        <PageTemplate 
-            title={project.title}
-            url={`/projects/${project.id}`}
+        <ProjectShell
+            project={shellProject || project}
+            active={activeTab as ProjectTab}
+            onTabChange={handleTabChange}
             actions={pageActions}
-            breadcrumbs={breadcrumbs}
-            noPadding
+            taskForm={taskForm}
+            onCreateMilestone={() => {
+                handleTabChange('milestones');
+                handleAction('add-milestone');
+            }}
         >
-            {/* Project Header */}
-            <div className="bg-white rounded-lg shadow mb-4">
-                <div className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <div className="flex gap-2">
-                                <Badge className={getStatusColor(project.status)}>
-                                    {project.status.replace('_', ' ')}
-                                </Badge>
-                                <Badge className={getPriorityColor(project.priority)}>
-                                    {project.priority}
-                                </Badge>
-                                {project.is_public ? (
-                                    <Badge variant="outline" className="text-green-600 border-green-600">
-                                        {t('Public Project')}
-                                    </Badge>
-                                ) : (
-                                    <Badge variant="outline" className="text-gray-600 border-gray-600">
-                                        {t('Private Project')}
-                                    </Badge>
-                                )}
-                            </div>
+            {/* Project summary: only on the Summary tab. Each figure appears once. */}
+            {activeTab === 'overview' && (
+            <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                    <Badge className={getPriorityColor(project.priority)}>{t(project.priority)}</Badge>
+                    <Badge variant="outline" className="text-gray-600 border-gray-600">
+                        {project.is_public ? t('Public Project') : t('Private Project')}
+                    </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <SummaryStat icon={<Calendar className="h-4 w-4 text-green-500" />} label={t('Deadline')}>
+                        <p className="text-lg font-semibold">{project.deadline ? new Date(project.deadline).toLocaleDateString() : t('Not set')}</p>
+                        {project.start_date && (
+                            <p className="text-xs text-muted-foreground">{t('Started')} {new Date(project.start_date).toLocaleDateString()}</p>
+                        )}
+                    </SummaryStat>
+                    <SummaryStat icon={<BarChart3 className="h-4 w-4 text-blue-500" />} label={t('Progress')}>
+                        <div className="flex items-center gap-2">
+                            <p className="text-lg font-semibold">{project.progress}%</p>
+                            {canTrackProgress && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 px-2 text-xs"
+                                            onClick={() => router.post(route('projects.recalculate-progress', project.id), {}, {
+                                                onSuccess: () => toast.success(t('Progress recalculated successfully')),
+                                                onError: () => toast.error(t('Failed to recalculate progress')),
+                                            })}
+                                        >
+                                            {t('Recalculate')}
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{t('Recalculate Progress')}</TooltipContent>
+                                </Tooltip>
+                            )}
                         </div>
-                    </div>
-
-                    {/* Project Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center gap-2">
-                                    <Users className="h-4 w-4 text-blue-500" />
-                                    <span className="text-sm font-medium">Team Members</span>
-                                </div>
-                                <p className="text-2xl font-bold">{project.members?.length || 0}</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center gap-2">
-                                    <Calendar className="h-4 w-4 text-green-500" />
-                                    <span className="text-sm font-medium">Deadline</span>
-                                </div>
-                                <p className="text-lg font-semibold">{new Date(project.deadline).toLocaleDateString()}</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center gap-2">
-                                    <DollarSign className="h-4 w-4 text-yellow-500" />
-                                    <span className="text-sm font-medium">Budget</span>
-                                </div>
-                                <p className="text-2xl font-bold">{formatCurrency(budget?.total_budget || 0)}</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardContent className="p-4">
-                                <div className="flex items-center gap-2">
-                                    <Clock className="h-4 w-4 text-purple-500" />
-                                    <span className="text-sm font-medium">Est. Hours</span>
-                                </div>
-                                <p className="text-2xl font-bold">{project.estimated_hours}h</p>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* Progress */}
-                    <Card>
-                        <CardContent className="p-4">
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <span className="font-medium">{t('Project Progress')}</span>
-                                    <div className="flex items-center gap-2">
-                                        <span className="font-bold">{project.progress}%</span>
-                                        {hasPermission(permissions, 'project_track_progress') && (
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => {
-                                                            toast.loading('Recalculating progress...');
-                                                            router.post(route('projects.recalculate-progress', project.id), {}, {
-                                                                onSuccess: () => {
-                                                                    toast.dismiss();
-                                                                    toast.success('Progress recalculated successfully');
-                                                                },
-                                                                onError: () => {
-                                                                    toast.dismiss();
-                                                                    toast.error('Failed to recalculate progress');
-                                                                }
-                                                            });
-                                                        }}
-                                                        className="h-6 px-2 text-xs"
-                                                    >
-                                                        <BarChart3 className="h-3 w-3" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>{t('Recalculate Progress')}</TooltipContent>
-                                            </Tooltip>
-                                        )}
-                                    </div>
-                                </div>
-                                <Progress value={project.progress} className="h-2" />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* AI Health Score + Scope Creep are internal delivery metrics - not for clients */}
+                        <Progress value={project.progress} className="mt-2 h-2" />
+                    </SummaryStat>
                     {userWorkspaceRole !== 'client' && (
-                        <>
-                            <ProjectHealthWidget projectId={project.id} />
-                            <ScopeCreepWidget projectId={project.id} />
-                        </>
+                        <SummaryStat icon={<Clock className="h-4 w-4 text-purple-500" />} label={t('Hours')}>
+                            <p className="text-lg font-semibold">
+                                {Number(project.total_project_hours || 0).toFixed(1)}h
+                                <span className="text-sm font-normal text-muted-foreground"> / {project.estimated_hours || 0}h {t('estimated')}</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                                {Number(project.total_billable_hours || 0).toFixed(1)}h {t('billable')} · {project.members?.length || 0} {t('people')}
+                            </p>
+                        </SummaryStat>
+                    )}
+                    {budget && (
+                        <SummaryStat icon={<DollarSign className="h-4 w-4 text-yellow-500" />} label={t('Budget')}>
+                            <p className="text-lg font-semibold">{formatCurrency(budget.total_budget || 0)}</p>
+                            <p className="text-xs text-muted-foreground">
+                                {formatCurrency(budget.total_spent || 0)} {t('spent')} · {Number(budget.utilization_percentage || 0).toFixed(1)}%
+                            </p>
+                        </SummaryStat>
                     )}
                 </div>
+
+                {/* One health indicator (scope creep is one of its factors) - internal, not for clients */}
+                {userWorkspaceRole !== 'client' && <ProjectHealthWidget projectId={project.id} />}
             </div>
+            )}
 
-            {/* Tabs Content */}
-            <div className="bg-white rounded-lg shadow">
+            <div className="rounded-lg border bg-card">
                 <Tabs value={activeTab} onValueChange={handleTabChange} className="relative">
-                    <div className="border-b bg-gradient-to-r from-gray-50 to-blue-50 relative z-10">
-                        <TabsList className="h-auto min-h-12 bg-white/80 backdrop-blur-sm border-0 rounded-none p-2 shadow-none relative z-20 flex-wrap w-full justify-center gap-1">
-                            {/* Primary tabs — always visible. Everything else lives under "More" to
-                                keep the bar to a single row (avoids the old wrap-and-overlap bug) and
-                                cut down on visual clutter from having 14 top-level tabs. */}
-                            {hasPermission(permissions, 'project_view') && (
-                                <TabsTrigger value="overview" className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:scale-105 hover:bg-primary/10 hover:text-primary text-gray-600">
-                                    <User className="h-4 w-4 mr-2" />
-                                    Overview
-                                </TabsTrigger>
-                            )}
-                            {hasPermission(permissions, 'task_view_any') && (
-                                <TabsTrigger value="tasks" className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:scale-105 hover:bg-primary/10 hover:text-primary text-gray-600">
-                                    <CheckSquare className="h-4 w-4 mr-2" />
-                                    Tasks
-                                </TabsTrigger>
-                            )}
-                            {hasPermission(permissions, 'project_assign_members') && (
-                                <TabsTrigger value="team" className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:scale-105 hover:bg-primary/10 hover:text-primary text-gray-600">
-                                    <Users className="h-4 w-4 mr-2" />
-                                    Team
-                                </TabsTrigger>
-                            )}
-                            {hasPermission(permissions, 'project_manage_milestones') && (
-                                <TabsTrigger value="milestones" className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:scale-105 hover:bg-primary/10 hover:text-primary text-gray-600">
-                                    <Calendar className="h-4 w-4 mr-2" />
-                                    Milestones
-                                </TabsTrigger>
-                            )}
-                            {hasPermission(permissions, 'project_view') && (
-                                <TabsTrigger value="activity" className="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:scale-105 hover:bg-primary/10 hover:text-primary text-gray-600">
-                                    <Clock className="h-4 w-4 mr-2" />
-                                    Activity
-                                </TabsTrigger>
-                            )}
-
-                            {(() => {
-                                const secondaryTabs = [
-                                    { value: 'notes', label: 'Notes', icon: Pin, show: hasPermission(permissions, 'project_manage_notes') },
-                                    { value: 'budget', label: 'Budget', icon: DollarSign, show: hasPermission(permissions, 'project_manage_budget') },
-                                    { value: 'expense', label: 'Expense', icon: CreditCard, show: hasPermission(permissions, 'expense_view_any') },
-                                    { value: 'scrum', label: 'Scrum', icon: Columns, show: hasPermission(permissions, 'task_view_any') },
-                                    { value: 'gantt', label: 'Gantt', icon: BarChart3, show: hasPermission(permissions, 'task_view_any') },
-                                    { value: 'sprints', label: 'Sprints', icon: Play, show: hasPermission(permissions, 'sprint_view_any') },
-                                    { value: 'portal', label: 'Client Portal', icon: Globe, show: false },
-                                    { value: 'bugs', label: 'Bugs', icon: Bug, show: hasPermission(permissions, 'bug_view_any') },
-                                    { value: 'timesheet', label: 'Timesheet', icon: Timer, show: hasPermission(permissions, 'timesheet_view_any') },
-                                    { value: 'attachments', label: 'Attachments', icon: Paperclip, show: hasPermission(permissions, 'project_manage_attachments') },
-                                ].filter(tab => tab.show);
-                                const activeSecondary = secondaryTabs.find(tab => tab.value === activeTab);
-
-                                if (secondaryTabs.length === 0) return null;
-
-                                return (
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 hover:bg-primary/10 hover:text-primary flex items-center ${activeSecondary ? 'bg-primary text-primary-foreground shadow-lg' : 'text-gray-600'}`}
-                                            >
-                                                {activeSecondary ? <activeSecondary.icon className="h-4 w-4 mr-2" /> : <MoreHorizontal className="h-4 w-4 mr-2" />}
-                                                {activeSecondary ? activeSecondary.label : 'More'}
-                                            </button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="center">
-                                            {secondaryTabs.map(tab => (
-                                                <DropdownMenuItem key={tab.value} onClick={() => handleTabChange(tab.value)}>
-                                                    <tab.icon className="h-4 w-4 mr-2" />
-                                                    {tab.label}
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                );
-                            })()}
-                        </TabsList>
-                    </div>
 
                     <div className="p-4 relative overflow-visible z-0">
                         <TabsContent value="overview" className="space-y-6 mt-0">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Project Description</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className="text-gray-700 leading-relaxed">{project.description || 'No description provided.'}</p>
-                                </CardContent>
-                            </Card>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Calendar className="h-5 w-5 text-blue-500" />
-                                            Project Timeline
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        <div className="flex justify-between">
-                                            <span className="text-sm text-gray-600">Start Date:</span>
-                                            <span className="font-medium">{project.start_date ? new Date(project.start_date).toLocaleDateString() : 'Not set'}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-sm text-gray-600">Deadline:</span>
-                                            <span className="font-medium">{project.deadline ? new Date(project.deadline).toLocaleDateString() : 'Not set'}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-sm text-gray-600">Estimated Hours:</span>
-                                            <span className="font-medium">{project.estimated_hours || 0}h</span>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Users className="h-5 w-5 text-green-500" />
-                                            Team Summary
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3">
-                                        <div className="flex justify-between">
-                                            <span className="text-sm text-gray-600">Managers:</span>
-                                            <span className="font-medium">{project.members?.filter((member: any) => member.role === 'manager').length || 0}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-sm text-gray-600">Team Members:</span>
-                                            <span className="font-medium">{project.members?.filter((member: any) => member.role === 'member').length || 0}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-sm text-gray-600">Clients:</span>
-                                            <span className="font-medium">{project.clients?.length || 0}</span>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </div>
-
-                            {/* Project Reports */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Timer className="h-5 w-5 text-blue-500" />
-                                            Time Tracking Summary
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Total Hours Logged:</span>
-                                                <span className="font-semibold">
-                                                    {Number(project.total_project_hours || 0).toFixed(1)}h
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Billable Hours:</span>
-                                                <span className="font-semibold text-green-600">
-                                                    {Number(project.total_billable_hours || 0).toFixed(1)}h
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Team Members Active:</span>
-                                                <span className="font-semibold">
-                                                    {project.total_team_members || 0}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <BarChart3 className="h-5 w-5 text-purple-500" />
-                                            Project Reports
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Total Milestones:</span>
-                                                <span className="font-semibold">{project.milestones?.length || 0}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Notes Created:</span>
-                                                <span className="font-semibold text-blue-600">
-                                                    {project.notes?.total || 0}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Attachments:</span>
-                                                <span className="font-semibold text-green-600">
-                                                    {project.attachments?.total || 0}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Activities:</span>
-                                                <span className="font-semibold text-orange-600">
-                                                    {project.activities?.total || 0}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <DollarSign className="h-5 w-5 text-yellow-500" />
-                                            Budget Utilization
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Total Budget:</span>
-                                                <span className="font-semibold">{formatCurrency(budget?.total_budget || 0)}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Amount Spent:</span>
-                                                <span className="font-semibold text-red-600">{formatCurrency(budget?.total_spent || 0)}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Remaining:</span>
-                                                <span className="font-semibold text-green-600">{formatCurrency(budget?.remaining_budget || 0)}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Utilization:</span>
-                                                <span className="font-semibold">{budget?.utilization_percentage?.toFixed(1) || '0.0'}%</span>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Users className="h-5 w-5 text-purple-500" />
-                                            Team Performance
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-4">
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Team Size:</span>
-                                                <span className="font-semibold">{project.team_size ?? project.members?.length ?? 0}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Active Members:</span>
-                                                <span className="font-semibold text-green-600">
-                                                    {project.total_team_members || 0}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Avg Hours/Member:</span>
-                                                <span className="font-semibold">
-                                                    {Number(project.avg_hours_per_member || 0).toFixed(1)}h
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm text-gray-600">Project Progress:</span>
-                                                <span className="font-semibold">{project.progress || 0}%</span>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                            <div>
+                                <h3 className="mb-2 font-semibold">{t('Project Description')}</h3>
+                                <p className="text-gray-700 leading-relaxed whitespace-pre-line">{project.description || t('No description provided.')}</p>
                             </div>
                         </TabsContent>
 
@@ -2015,176 +1708,6 @@ export default function ProjectShow() {
                             )}
                         </TabsContent>
 
-                        <TabsContent value="bugs" className="space-y-6 mt-0">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-semibold">Project Bugs</h3>
-                                <div className="flex gap-2">
-                                    <Button size="sm" onClick={() => router.get(route('bugs.index', { project_id: project.id, project_name: project.title }))}>
-                                        <Eye className="h-4 w-4 mr-2" />
-                                        Manage Bugs
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {projectBugs && projectBugs.length > 0 ? (
-                                <div className="space-y-4">
-                                    {/* Bug Stats */}
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                        <Card>
-                                            <CardContent className="p-4">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <Bug className="h-4 w-4 text-red-500" />
-                                                    <span className="text-sm font-medium">Total Bugs</span>
-                                                </div>
-                                                <p className="text-2xl font-bold">{projectBugs.length}</p>
-                                            </CardContent>
-                                        </Card>
-                                        <Card>
-                                            <CardContent className="p-4">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <CheckCircle className="h-4 w-4 text-green-500" />
-                                                    <span className="text-sm font-medium">Open Issues</span>
-                                                </div>
-                                                <p className="text-2xl font-bold">
-                                                    {projectBugs.filter((bug: any) => !['Resolved', 'Closed'].includes(bug.bug_status?.name)).length}
-                                                </p>
-                                            </CardContent>
-                                        </Card>
-                                        <Card>
-                                            <CardContent className="p-4">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <AlertTriangle className="h-4 w-4 text-orange-500" />
-                                                    <span className="text-sm font-medium">Critical</span>
-                                                </div>
-                                                <p className="text-2xl font-bold">
-                                                    {projectBugs.filter((bug: any) => bug.priority === 'critical').length}
-                                                </p>
-                                            </CardContent>
-                                        </Card>
-                                        <Card>
-                                            <CardContent className="p-4">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <User className="h-4 w-4 text-purple-500" />
-                                                    <span className="text-sm font-medium">Unassigned</span>
-                                                </div>
-                                                <p className="text-2xl font-bold">
-                                                    {projectBugs.filter((bug: any) => !bug.assigned_to).length}
-                                                </p>
-                                            </CardContent>
-                                        </Card>
-                                    </div>
-
-                                    {/* Recent Bugs */}
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle>Recent Bugs</CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="space-y-3">
-                                                {projectBugs.slice(0, 5).map((bug: any) => (
-                                                    <div key={bug.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                                                        <div className="flex-1">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="flex-1">
-                                                                    <h4 className="font-medium text-sm">{bug.title}</h4>
-                                                                    <p className="text-xs text-gray-500 mt-1 line-clamp-1">{bug.description || 'No description'}</p>
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <Badge 
-                                                                        variant="outline" 
-                                                                        className={`text-xs ${
-                                                                            bug.priority === 'critical' ? 'bg-red-100 text-red-800 border-red-200' :
-                                                                            bug.priority === 'high' ? 'bg-orange-100 text-orange-800 border-orange-200' :
-                                                                            bug.priority === 'medium' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                                                                            'bg-green-100 text-green-800 border-green-200'
-                                                                        }`}
-                                                                    >
-                                                                        {bug.priority}
-                                                                    </Badge>
-                                                                    <Badge 
-                                                                        variant="outline" 
-                                                                        className={`text-xs ${
-                                                                            bug.severity === 'blocker' ? 'bg-red-100 text-red-800 border-red-200' :
-                                                                            bug.severity === 'critical' ? 'bg-orange-100 text-orange-800 border-orange-200' :
-                                                                            bug.severity === 'major' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
-                                                                            'bg-green-100 text-green-800 border-green-200'
-                                                                        }`}
-                                                                    >
-                                                                        {bug.severity}
-                                                                    </Badge>
-                                                                    <Badge 
-                                                                        variant="outline" 
-                                                                        style={{ 
-                                                                            backgroundColor: bug.bug_status?.color + '20', 
-                                                                            borderColor: bug.bug_status?.color,
-                                                                            color: bug.bug_status?.color
-                                                                        }}
-                                                                        className="text-xs"
-                                                                    >
-                                                                        {bug.bug_status?.name}
-                                                                    </Badge>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center justify-between mt-2">
-                                                                <div className="flex items-center gap-2">
-                                                                    {bug.assigned_to ? (
-                                                                        <div className="flex items-center gap-1">
-                                                                            <Avatar className="h-5 w-5">
-                                                                                <AvatarImage src={bug.assigned_to.avatar} />
-                                                                                <AvatarFallback className="text-xs">
-                                                                                    {bug.assigned_to.name?.charAt(0)}
-                                                                                </AvatarFallback>
-                                                                            </Avatar>
-                                                                            <span className="text-xs text-gray-600">{bug.assigned_to.name}</span>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <span className="text-xs text-gray-400">Unassigned</span>
-                                                                    )}
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="text-xs text-gray-500">
-                                                                        Reported by {bug.reported_by?.name}
-                                                                    </span>
-                                                                    <span className="text-xs text-gray-500">
-                                                                        {bug.end_date ? new Date(bug.end_date).toLocaleDateString() : 'No due date'}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                            {projectBugs.length > 5 && (
-                                                <div className="mt-4 text-center">
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
-                                                        onClick={() => router.get(route('bugs.index', { project_id: project.id, project_name: project.title }))}
-                                                    >
-                                                        View All {projectBugs.length} Bugs
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                </div>
-                            ) : (
-                                <Card>
-                                    <CardContent className="p-8 text-center">
-                                        <Bug className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                                        <h3 className="text-lg font-semibold mb-2">No Bugs Reported</h3>
-                                        <p className="text-gray-500 mb-4">Track and manage bugs for better project quality.</p>
-                                        {canManageProject && (
-                                            <Button onClick={() => router.get(route('bugs.index', { project_id: project.id, project_name: project.title }))}>
-                                                <Plus className="h-4 w-4 mr-2" />
-                                                Report First Bug
-                                            </Button>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                            )}
-                        </TabsContent>
-
                         <TabsContent value="timesheet" className="space-y-6 mt-0">
                             <div className="flex justify-between items-center">
                                 <h3 className="text-lg font-semibold">Time Tracking</h3>
@@ -2659,16 +2182,6 @@ export default function ProjectShow() {
                             )}
                         </TabsContent>
 
-                        {/* ── SPRINTS ──────────────────────────────────────────── */}
-                        <TabsContent value="sprints" className="mt-0">
-                            <div className="flex items-center justify-between mb-4">
-                                <p className="text-sm text-muted-foreground">Manage sprints and backlog for this project.</p>
-                                <Button size="sm" onClick={() => router.get(route('sprints.index', project.id))}>
-                                    <Play className="mr-1.5 h-4 w-4" /> Open Sprint Planner
-                                </Button>
-                            </div>
-                        </TabsContent>
-
                         {/* ── CLIENT PORTAL ────────────────────────────────────── */}
                         <TabsContent value="portal" className="mt-0">
                             <ClientPortalPanel project={project} />
@@ -2825,98 +2338,6 @@ export default function ProjectShow() {
                                             </Button>
                                         )}
                                     </p>
-                                </div>
-                            )}
-                        </TabsContent>
-
-                        {/* ── SCRUM BOARD ─────────────────────────────────────── */}
-                        <TabsContent value="scrum" className="mt-0">
-                            {taskStages.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                                    <Columns className="h-10 w-10 mb-3 opacity-40" />
-                                    <p className="font-medium">No task stages found.</p>
-                                    <p className="text-sm mt-1">Create task stages first from the Tasks menu.</p>
-                                </div>
-                            ) : (
-                                <div className="flex gap-4 overflow-x-auto pb-4 pt-2">
-                                    {taskStages.map((stage: any) => {
-                                        const stageTasks = projectTasks.filter((t: any) => t.task_stage_id === stage.id);
-                                        const PRIORITY_COLORS: Record<string, string> = {
-                                            urgent: 'bg-red-100 text-red-700',
-                                            high: 'bg-orange-100 text-orange-700',
-                                            medium: 'bg-blue-100 text-blue-700',
-                                            low: 'bg-gray-100 text-gray-600',
-                                        };
-                                        return (
-                                            <div key={stage.id} className="flex-shrink-0 w-72">
-                                                {/* Column header */}
-                                                <div className="flex items-center gap-2 mb-3 px-1">
-                                                    <span className="inline-block h-3 w-3 rounded-full flex-shrink-0"
-                                                        style={{ backgroundColor: stage.color || '#6366f1' }} />
-                                                    <span className="font-semibold text-sm truncate">{stage.name}</span>
-                                                    <span className="ml-auto text-xs bg-muted rounded-full px-2 py-0.5 font-medium">
-                                                        {stageTasks.length}
-                                                    </span>
-                                                </div>
-                                                {/* Task cards */}
-                                                <div className="space-y-2.5 min-h-[120px]">
-                                                    {stageTasks.length === 0 && (
-                                                        <div className="rounded-lg border-2 border-dashed py-8 text-center text-xs text-gray-400">
-                                                            No tasks
-                                                        </div>
-                                                    )}
-                                                    {stageTasks.map((task: any) => (
-                                                        <div key={task.id}
-                                                            className="rounded-lg border bg-white p-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                                                            onClick={() => router.get(route('tasks.index', { task_id: task.id }))}>
-                                                            <div className="flex items-start justify-between gap-2 mb-2">
-                                                                <p className="text-sm font-medium leading-snug line-clamp-2">{task.title}</p>
-                                                                {task.priority && (
-                                                                    <span className={`shrink-0 text-xs rounded-full px-2 py-0.5 font-medium ${PRIORITY_COLORS[task.priority] || 'bg-gray-100 text-gray-600'}`}>
-                                                                        {task.priority}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            {task.end_date && (
-                                                                <p className="text-xs text-gray-500 mb-2">
-                                                                    Due: {new Date(task.end_date).toLocaleDateString()}
-                                                                </p>
-                                                            )}
-                                                            <div className="flex items-center justify-between mt-2">
-                                                                {task.assigned_to ? (
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <Avatar className="h-5 w-5">
-                                                                            <AvatarImage src={task.assigned_to?.avatar} />
-                                                                            <AvatarFallback className="text-[10px]">
-                                                                                {task.assigned_to?.name?.charAt(0)}
-                                                                            </AvatarFallback>
-                                                                        </Avatar>
-                                                                        <span className="text-xs text-gray-500 truncate max-w-[80px]">{task.assigned_to?.name}</span>
-                                                                    </div>
-                                                                ) : <span />}
-                                                                {/* Move to stage */}
-                                                                <select
-                                                                    className="text-xs border rounded px-1.5 py-0.5 bg-white cursor-pointer"
-                                                                    value={task.task_stage_id || ''}
-                                                                    onClick={e => e.stopPropagation()}
-                                                                    onChange={e => {
-                                                                        const newStageId = e.target.value;
-                                                                        router.put(route('tasks.change-stage', task.id),
-                                                                            { task_stage_id: newStageId },
-                                                                            { preserveScroll: true }
-                                                                        );
-                                                                    }}>
-                                                                    {taskStages.map((s: any) => (
-                                                                        <option key={s.id} value={s.id}>{s.name}</option>
-                                                                    ))}
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
                                 </div>
                             )}
                         </TabsContent>
@@ -3113,6 +2534,6 @@ export default function ProjectShow() {
                 onClose={() => setIsTimesheetModalOpen(false)}
                 projects={[project]}
             />
-        </PageTemplate>
+        </ProjectShell>
     );
 }

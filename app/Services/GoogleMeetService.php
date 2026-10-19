@@ -4,7 +4,6 @@ namespace App\Services;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
-use Illuminate\Support\Facades\Log;
 use App\Models\Setting;
 use Google\Client as GoogleClient;
 use Google\Service\Calendar;
@@ -56,16 +55,6 @@ class GoogleMeetService
             ->where('key', 'google_meet_refresh_token')
             ->value('value');
 
-        // Debug: Log the credentials for troubleshooting
-        Log::info('Google Meet Credentials Check', [
-            'user_id' => $user->id,
-            'owner_id' => $ownerId,
-            'workspace_id' => $workspace->id,
-            'json_file' => $jsonFile,
-            'has_token' => !empty($token),
-            'has_refresh_token' => !empty($refreshToken)
-        ]);
-
         return [
             'json_file' => $jsonFile,
             'token' => $token,
@@ -100,7 +89,7 @@ class GoogleMeetService
 
             if ($client->isAccessTokenExpired()) {
                 if ($credentials['refresh_token']) {
-                    $newToken = $client->fetchAccessTokenWithRefreshToken($credentials['refresh_token']);
+                    $newToken = $this->refreshed($client, $credentials['refresh_token']);
 
                     // Update the stored token
                     $user = auth()->user();
@@ -124,7 +113,7 @@ class GoogleMeetService
 
             return $tokenData['access_token'];
         } catch (\Exception $e) {
-            Log::error('Google OAuth Error: ' . $e->getMessage());
+            IntegrationLog::failed('google_meet', 'oauth.token', $e);
             throw new \Exception('Failed to get Google access token: ' . $e->getMessage());
         }
     }
@@ -134,10 +123,12 @@ class GoogleMeetService
      */
     public function createMeeting($meetingData)
     {
+        $started = hrtime(true);
         $credentials = $this->getGoogleMeetCredentials();
 
         // Check if credentials are available
         if (!$credentials['json_file'] || !$credentials['token']) {
+            IntegrationLog::failed('google_meet', 'meeting.create', 'not configured', $started);
             throw new \Exception('Google Meet credentials not configured. Please configure Google Meet settings first.');
         }
 
@@ -161,7 +152,7 @@ class GoogleMeetService
             // Check if token is expired and refresh if needed
             if ($client->isAccessTokenExpired()) {
                 if ($credentials['refresh_token']) {
-                    $newToken = $client->fetchAccessTokenWithRefreshToken($credentials['refresh_token']);
+                    $newToken = $this->refreshed($client, $credentials['refresh_token']);
                     $client->setAccessToken($newToken);
 
                     // Update stored token
@@ -212,6 +203,8 @@ class GoogleMeetService
                 throw new \Exception('Failed to create Google Meet link. Please check your Google Calendar configuration.');
             }
             
+            IntegrationLog::ok('google_meet', 'meeting.create', $started, ['event_id' => $createdEvent->getId()]);
+
             return [
                 'success' => true,
                 'data' => [
@@ -222,7 +215,7 @@ class GoogleMeetService
             ];
 
         } catch (\Exception $e) {
-            Log::error('Google Meet Service Error: ' . $e->getMessage());
+            IntegrationLog::failed('google_meet', 'meeting.create', $e, $started);
             throw new \Exception('Failed to create Google Meet: ' . $e->getMessage());
         }
     }
@@ -232,6 +225,7 @@ class GoogleMeetService
      */
     public function updateMeeting($meetingId, $meetingData)
     {
+        $started = hrtime(true);
         try {
             $credentials = $this->getGoogleMeetCredentials();
 
@@ -245,8 +239,7 @@ class GoogleMeetService
             // Check if token is expired and refresh if needed
             if ($client->isAccessTokenExpired()) {
                 if ($credentials['refresh_token']) {
-                    $newToken = $client->fetchAccessTokenWithRefreshToken($credentials['refresh_token']);
-                    $client->setAccessToken($newToken);
+                    $client->setAccessToken($this->refreshed($client, $credentials['refresh_token']));
                 } else {
                     throw new \Exception('Token expired and no refresh token available');
                 }
@@ -269,10 +262,11 @@ class GoogleMeetService
             $event->setEnd($end);
 
             $service->events->update('primary', $meetingId, $event);
+            IntegrationLog::ok('google_meet', 'meeting.update', $started, ['event_id' => $meetingId]);
 
             return ['success' => true];
         } catch (\Exception $e) {
-            Log::error('Google Meet Update Meeting Error: ' . $e->getMessage());
+            IntegrationLog::failed('google_meet', 'meeting.update', $e, $started, ['event_id' => $meetingId]);
             return [
                 'success' => false,
                 'error' => 'Failed to update Google Meet meeting: ' . $e->getMessage()
@@ -285,6 +279,7 @@ class GoogleMeetService
      */
     public function deleteMeeting($meetingId)
     {
+        $started = hrtime(true);
         try {
             $credentials = $this->getGoogleMeetCredentials();
 
@@ -298,8 +293,7 @@ class GoogleMeetService
             // Check if token is expired and refresh if needed
             if ($client->isAccessTokenExpired()) {
                 if ($credentials['refresh_token']) {
-                    $newToken = $client->fetchAccessTokenWithRefreshToken($credentials['refresh_token']);
-                    $client->setAccessToken($newToken);
+                    $client->setAccessToken($this->refreshed($client, $credentials['refresh_token']));
                 } else {
                     throw new \Exception('Token expired and no refresh token available');
                 }
@@ -307,10 +301,11 @@ class GoogleMeetService
 
             $service = new Calendar($client);
             $service->events->delete('primary', $meetingId);
+            IntegrationLog::ok('google_meet', 'meeting.delete', $started, ['event_id' => $meetingId]);
 
             return ['success' => true];
         } catch (\Exception $e) {
-            Log::error('Google Meet Delete Meeting Error: ' . $e->getMessage());
+            IntegrationLog::failed('google_meet', 'meeting.delete', $e, $started, ['event_id' => $meetingId]);
             return [
                 'success' => false,
                 'error' => 'Failed to delete Google Meet meeting: ' . $e->getMessage()
@@ -323,6 +318,7 @@ class GoogleMeetService
      */
     public function getMeeting($meetingId)
     {
+        $started = hrtime(true);
         try {
             $credentials = $this->getGoogleMeetCredentials();
 
@@ -336,8 +332,7 @@ class GoogleMeetService
             // Check if token is expired and refresh if needed
             if ($client->isAccessTokenExpired()) {
                 if ($credentials['refresh_token']) {
-                    $newToken = $client->fetchAccessTokenWithRefreshToken($credentials['refresh_token']);
-                    $client->setAccessToken($newToken);
+                    $client->setAccessToken($this->refreshed($client, $credentials['refresh_token']));
                 } else {
                     throw new \Exception('Token expired and no refresh token available');
                 }
@@ -345,18 +340,36 @@ class GoogleMeetService
 
             $service = new Calendar($client);
             $event = $service->events->get('primary', $meetingId);
+            IntegrationLog::ok('google_meet', 'meeting.get', $started, ['event_id' => $meetingId]);
 
             return [
                 'success' => true,
                 'data' => $event
             ];
         } catch (\Exception $e) {
-            Log::error('Google Meet Get Meeting Error: ' . $e->getMessage());
+            IntegrationLog::failed('google_meet', 'meeting.get', $e, $started, ['event_id' => $meetingId]);
             return [
                 'success' => false,
                 'error' => 'Failed to get Google Meet meeting: ' . $e->getMessage()
             ];
         }
+    }
+
+    /**
+     * A new access token from the refresh token. Google answers a refused
+     * refresh (revoked access, expired consent) with an "error" array rather
+     * than an exception; it is thrown here so it is never saved as the token.
+     */
+    private function refreshed(GoogleClient $client, string $refreshToken): array
+    {
+        $token = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+        if (!empty($token['error']) || empty($token['access_token'])) {
+            IntegrationLog::failed('google_meet', 'oauth.refresh', $token['error_description'] ?? $token['error'] ?? 'no access token');
+            throw new \Exception('Google refused to refresh the access token. Connect Google Meet again in Settings.');
+        }
+        IntegrationLog::ok('google_meet', 'oauth.refresh');
+
+        return $token;
     }
 
     /**
@@ -398,7 +411,7 @@ class GoogleMeetService
                 !empty($token) &&
                 file_exists(storage_path('app/public/' . $jsonFile));
         } catch (\Exception $e) {
-            Log::error('Error checking Google Meet credentials: ' . $e->getMessage());
+            IntegrationLog::failed('google_meet', 'credentials.check', $e);
             return false;
         }
     }

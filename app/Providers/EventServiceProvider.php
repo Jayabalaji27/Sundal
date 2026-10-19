@@ -7,7 +7,6 @@ use App\Events\UserCreated;
 use App\Events\WorkspaceInvited;
 use App\Events\ProjectMemberAssigned;
 use App\Events\TaskAssigned;
-use App\Events\BugAssigned;
 use App\Events\ExpenseCreated;
 use App\Events\InvoiceCreated;
 use App\Events\ProjectCreated;
@@ -31,7 +30,6 @@ use App\Listeners\SendContractCreatedEmail;
 use App\Listeners\SendWorkspaceInvitationEmail;
 use App\Listeners\SendProjectAssignmentEmail;
 use App\Listeners\SendTaskAssignmentEmail;
-use App\Listeners\SendBugAssignmentEmail;
 use App\Listeners\SendExpenseNotificationEmail;
 use App\Listeners\SendInvoiceNotificationEmail;
 use App\Listeners\SendZoomMeetingNotificationEmail;
@@ -90,9 +88,6 @@ class EventServiceProvider extends ServiceProvider
         ],
         TaskAssigned::class => [
             SendTaskAssignmentEmail::class,
-        ],
-        BugAssigned::class => [
-            SendBugAssignmentEmail::class,
         ],
         ExpenseCreated::class => [
             SendExpenseNotificationEmail::class,

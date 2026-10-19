@@ -259,7 +259,7 @@ const EXAMPLES: { text: string; topic: string }[] = [
 const TOPIC_HINTS: Record<string, string> = {
     tasks: 'Describe the task, e.g. "Login page for Mobile App, high priority"',
     bugs: 'Describe the bug, e.g. "Login button does nothing on mobile"',
-    projects: 'Ask about a project, or create one',
+    projects: 'Ask about a project, its epics or meetings, or create one',
     time: 'e.g. "Log 3 hours on Website Redesign for today"',
     approvals: 'e.g. "Approve the pending timesheets for Website Redesign"',
     finance: 'e.g. "Create an invoice for the Website Redesign tasks"',
@@ -268,9 +268,9 @@ const TOPIC_HINTS: Record<string, string> = {
 };
 
 const TOPIC_EXAMPLES: Record<string, string[]> = {
-    tasks: ['Login page for the Mobile App project, high priority', "Move 'API docs' to Done", 'What tasks are overdue?', 'Assign the checkout task to me'],
-    bugs: ['Login button does nothing on mobile', 'Which bugs are still open?', 'Assign the login bug to me'],
-    projects: ['Create a project called Mobile App', 'Write the weekly report for my biggest project', 'Who is over budget this month?'],
+    tasks: ['Login page for the Mobile App project, high priority', "Move 'API docs' to Done", 'What tasks are overdue?', 'Put the cart tasks into the Checkout epic'],
+    bugs: ['Login button does nothing on mobile', 'Which bugs are still open?', 'Assign the login bug to me', 'Which critical bugs are in the Checkout epic?'],
+    projects: ['Create a project called Mobile App', 'Write the weekly report for my biggest project', 'What meetings do I have this week?', 'Who is over budget this month?'],
     time: ['Log 3 hours on Website Redesign for today', 'Start the timer on Mobile App', 'How many hours did I log this week?', 'Submit my timesheet'],
     approvals: ['Which timesheets are waiting for my approval?', 'Which expenses are pending?'],
     finance: ['Create an invoice for the Website Redesign tasks', 'Mark INV-104 as paid', 'Add a 120 hosting expense to Mobile App', 'Which invoices are unpaid?'],

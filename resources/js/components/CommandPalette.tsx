@@ -101,7 +101,7 @@ export function CommandPalette() {
             { id: 'tasks', label: t('Tasks'), icon: <CheckSquare className="h-4 w-4" />, group: t('Navigate'), shortcut: 'T', action: () => navigate(route('tasks.index')) },
         ] : []),
         ...(hasPermission(permissions, 'bug_view_any') ? [
-            { id: 'bugs', label: t('Bugs'), icon: <Bug className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('bugs.index')) },
+            { id: 'bugs', label: t('Bugs'), icon: <Bug className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('tasks.index', { type: 'bug' })) },
         ] : []),
         ...(hasPermission(permissions, 'timesheet_view_any') ? [
             { id: 'timesheets', label: t('Timesheets'), icon: <Clock className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('timesheets.index')) },
@@ -155,7 +155,7 @@ export function CommandPalette() {
         })),
         ...results.bugs.map(b => ({
             id: `bug-${b.id}`, label: b.title, icon: <Bug className="h-4 w-4" />,
-            group: t('Bugs'), action: () => navigate(route('bugs.show', b.id)),
+            group: t('Bugs'), action: () => navigate(route('tasks.show', b.id)),
         })),
     ];
 

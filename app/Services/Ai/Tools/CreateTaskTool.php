@@ -45,6 +45,7 @@ class CreateTaskTool extends AiTool implements HasForm
             'priority' => ['type' => 'enum', 'options' => self::PRIORITIES, 'description' => 'Defaults to medium.'],
             'assignee' => ['type' => 'string', 'description' => '"me" or a person\'s name or email.'],
             'start_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD.'],
+            'epic' => ['type' => 'string', 'description' => 'Epic of the same project to file the task under (name or id).'],
             'due_date' => ['type' => 'string', 'description' => 'YYYY-MM-DD, after the start date.'],
         ];
     }
@@ -70,6 +71,7 @@ class CreateTaskTool extends AiTool implements HasForm
     public function prepare(array $args, User $user): PreparedAction
     {
         $project = $this->resolver->project($user, (string) ($args['project'] ?? ''));
+        $epic = !empty($args['epic']) ? $this->resolver->epic($user, (string) $args['epic'], '#' . $project->id) : null;
 
         $title = trim((string) ($args['title'] ?? ''));
         if ($title === '' || mb_strlen($title) > 255) {
@@ -109,9 +111,11 @@ class CreateTaskTool extends AiTool implements HasForm
                 __('Assignee') => $assignee?->name ?? __('Unassigned'),
                 __('Start') => $start,
                 __('Due') => $due,
+                __('Epic') => $epic?->name,
             ]),
             payload: [
                 'project_id' => $project->id,
+                'epic_id' => $epic?->id,
                 'title' => $title,
                 'description' => $description,
                 'priority' => $priority,
@@ -127,6 +131,9 @@ class CreateTaskTool extends AiTool implements HasForm
         $project = $this->resolver->byId($this->resolver->projects($user), (int) $payload['project_id'], __('project'));
         if (!empty($payload['assigned_to'])) {
             $this->resolver->byId($this->resolver->members($user), (int) $payload['assigned_to'], __('person'));
+        }
+        if (!empty($payload['epic_id'])) {
+            $this->resolver->byId($this->resolver->epics($user)->where('project_id', $project->id), (int) $payload['epic_id'], __('epic'));
         }
 
         $task = $this->createTask->handle($user, [...$payload, 'project_id' => $project->id]);

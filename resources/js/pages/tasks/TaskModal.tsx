@@ -8,12 +8,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, User, MessageSquare, CheckSquare, Paperclip, Flag, Layers, FolderOpen } from 'lucide-react';
+import { Calendar, User, MessageSquare, CheckSquare, Paperclip, Flag, Layers, FolderOpen, AlertOctagon } from 'lucide-react';
 import { Task, User as UserType, TaskStage, ProjectMilestone } from '@/types';
 import TaskComments from '@/components/tasks/TaskComments';
 import TaskChecklist from '@/components/tasks/TaskChecklist';
 import TaskAttachments from '@/components/tasks/TaskAttachments';
 import { toast } from '@/components/custom-toast';
+import { EpicChip, SEVERITY_OPTIONS, SeverityBadge, TypeIcon } from '@/components/tasks/agile-bits';
 
 interface Props {
     task: Task;
@@ -60,66 +61,42 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
         });
     };
 
-    const handlePriorityChange = (priority: string) => {
-        router.put(route('tasks.update', task.id), {
-            title: currentTask.title,
-            description: currentTask.description || '',
-            priority: priority,
-            start_date: currentTask.start_date,
-            end_date: currentTask.end_date,
-            assigned_to: currentTask.assigned_to?.id,
-            milestone_id: currentTask.milestone_id
-        }, {
-            onSuccess: () => {
-                refreshTask();
-            },
-            onError: () => {
-                toast.error('Failed to update priority');
-            }
-        });
-    };
-
-    const handleAssigneeChange = (assigneeId: string) => {
-        const assignedUserId = assigneeId === 'unassigned' ? null : parseInt(assigneeId);
-        
+    /** Saves one sidebar field, sending the rest of the task as it is. */
+    const updateTask = (changes: Record<string, any>, errorMessage: string) => {
         router.put(route('tasks.update', task.id), {
             title: currentTask.title,
             description: currentTask.description || '',
             priority: currentTask.priority,
             start_date: currentTask.start_date,
             end_date: currentTask.end_date,
-            assigned_to: assignedUserId,
-            milestone_id: currentTask.milestone_id
+            assigned_to: currentTask.assigned_to?.id,
+            milestone_id: currentTask.milestone_id,
+            ...changes,
         }, {
-            onSuccess: () => {
-                refreshTask();
-            },
-            onError: () => {
-                toast.error('Failed to update assignee');
-            }
+            onSuccess: () => refreshTask(),
+            onError: () => toast.error(errorMessage),
         });
     };
 
-    const handleDateChange = (field: string, value: string) => {
-        router.put(route('tasks.update', task.id), {
-            title: currentTask.title,
-            description: currentTask.description || '',
-            priority: currentTask.priority,
-            start_date: field === 'start_date' ? (value || null) : currentTask.start_date,
-            end_date: field === 'end_date' ? (value || null) : currentTask.end_date,
-            assigned_to: currentTask.assigned_to?.id,
-            milestone_id: currentTask.milestone_id
-        }, {
-            onSuccess: () => {
-                refreshTask();
-            },
-            onError: () => {
-                toast.error('Failed to update date');
-            }
-        });
-    };
+    const handlePriorityChange = (priority: string) => updateTask({ priority }, t('Failed to update priority'));
+
+    const handleSeverityChange = (severity: string) => updateTask({ severity }, t('Failed to update severity'));
+
+    const handleAssigneeChange = (assigneeId: string) =>
+        updateTask({ assigned_to: assigneeId === 'unassigned' ? null : parseInt(assigneeId) }, t('Failed to update assignee'));
+
+    const handleDateChange = (field: string, value: string) => updateTask({ [field]: value || null }, t('Failed to update date'));
 
     const isViewMode = mode === 'view';
+    const isBug = currentTask.type === 'bug';
+    // Only the bug details someone filled in.
+    const bugDetails = isBug ? [
+        { label: t('Steps to reproduce'), value: currentTask.steps_to_reproduce },
+        { label: t('Expected result'), value: currentTask.expected_behavior },
+        { label: t('Actual result'), value: currentTask.actual_behavior },
+        { label: t('Environment'), value: currentTask.environment },
+        { label: t('Resolution notes'), value: currentTask.resolution_notes },
+    ].filter(detail => detail.value) : [];
 
     const getPriorityColor = (priority: string) => {
         switch (priority) {
@@ -135,7 +112,11 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="max-w-5xl h-[90vh] flex flex-col p-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-2 border-b">
-                    <DialogTitle>{currentTask.title}</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2.5 pr-6">
+                        <TypeIcon type={currentTask.type} />
+                        <span className="min-w-0 truncate">{currentTask.title}</span>
+                        {isBug && <SeverityBadge severity={currentTask.severity} />}
+                    </DialogTitle>
                 </DialogHeader>
 
                 <div className="flex-1 overflow-y-auto md:overflow-hidden p-6">
@@ -148,6 +129,20 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
                                 {currentTask.description || t('-')}
                             </div>
                         </div>
+
+                        {bugDetails.length > 0 && (
+                            <div className="shrink-0 rounded-lg border border-red-200/70 bg-red-50/40 p-3 dark:border-red-900/50 dark:bg-red-950/20">
+                                <h3 className="mb-2 text-sm font-medium text-gray-900">{t('Bug details')}</h3>
+                                <dl className="grid max-h-48 gap-3 overflow-y-auto pr-2 sm:grid-cols-2">
+                                    {bugDetails.map(detail => (
+                                        <div key={detail.label} className={detail.label === t('Steps to reproduce') || detail.label === t('Resolution notes') ? 'sm:col-span-2' : ''}>
+                                            <dt className="text-xs font-medium text-muted-foreground">{detail.label}</dt>
+                                            <dd className="mt-0.5 whitespace-pre-line text-sm text-gray-700 dark:text-gray-200">{detail.value}</dd>
+                                        </div>
+                                    ))}
+                                </dl>
+                            </div>
+                        )}
 
                         {/* Tabs for Comments, Checklist, Attachments */}
                         <Tabs defaultValue="comments" className="flex-1 flex flex-col overflow-hidden">
@@ -167,29 +162,29 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
                             </TabsList>
 
                             <TabsContent value="comments" className="flex-1 flex flex-col overflow-hidden mt-0">
-                                <TaskComments 
-                                    task={currentTask} 
-                                    comments={currentTask.comments || []} 
-                                    currentUser={members[0]} 
+                                <TaskComments
+                                    task={currentTask}
+                                    comments={currentTask.comments || []}
+                                    currentUser={members[0]}
                                     onUpdate={refreshTask}
                                     canAddComments={workspaceRole !== 'client'}
                                 />
                             </TabsContent>
 
                             <TabsContent value="checklist" className="flex-1 flex flex-col overflow-hidden mt-0">
-                                <TaskChecklist 
-                                    task={currentTask} 
-                                    checklist={currentTask.checklists || []} 
-                                    members={currentTask.project?.members?.filter(m => m.user?.type !== 'client').map(m => m.user) || members} 
+                                <TaskChecklist
+                                    task={currentTask}
+                                    checklist={currentTask.checklists || []}
+                                    members={currentTask.project?.members?.filter(m => m.user?.type !== 'client').map(m => m.user) || members}
                                     onUpdate={refreshTask}
                                     canManageChecklists={workspaceRole !== 'client' && workspaceRole !== 'member'}
                                 />
                             </TabsContent>
 
                             <TabsContent value="attachments" className="flex-1 flex flex-col overflow-hidden mt-0">
-                                <TaskAttachments 
-                                    task={currentTask} 
-                                    attachments={currentTask.attachments || []} 
+                                <TaskAttachments
+                                    task={currentTask}
+                                    attachments={currentTask.attachments || []}
                                     availableMedia={currentTask.project?.workspace?.media || []}
                                     onUpdate={refreshTask}
                                     canAddAttachments={workspaceRole !== 'client' && workspaceRole !== 'member'}
@@ -262,6 +257,32 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
                                 </div>
                             )}
                         </div>
+
+                        {/* Severity: how bad a bug is (priority says how soon) */}
+                        {isBug && (
+                            <div>
+                                <label className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                                    <AlertOctagon className="h-4 w-4" />
+                                    {t('Severity')}
+                                </label>
+                                {!isViewMode && taskPermissions?.update && workspaceRole !== 'client' ? (
+                                    <div className="mt-1">
+                                        <Select value={currentTask.severity || 'major'} onValueChange={handleSeverityChange}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="z-[9999]">
+                                                {SEVERITY_OPTIONS.map(option => (
+                                                    <SelectItem key={option.value} value={option.value}>{t(option.label)}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                ) : (
+                                    <div className="mt-1"><SeverityBadge severity={currentTask.severity} /></div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Assignee */}
                         {workspaceRole !== 'client' && (
@@ -363,6 +384,17 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
                             </label>
                             <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white">{currentTask.project?.title || '-'}</p>
                         </div>
+
+                        {/* Epic */}
+                        {(currentTask as any).epic && (
+                            <div>
+                                <label className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                                    <Layers className="h-4 w-4" />
+                                    {t('Epic')}
+                                </label>
+                                <div className="mt-1"><EpicChip epic={(currentTask as any).epic} className="max-w-full text-xs" /></div>
+                            </div>
+                        )}
 
                         {/* Milestone */}
                         {currentTask.milestone && (

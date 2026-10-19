@@ -1,4 +1,4 @@
-import { useForm, router, usePage } from '@inertiajs/react';
+import { useForm, usePage } from '@inertiajs/react';
 import { isRegistrationEnabled } from '@/utils/helpers';
 import { Mail, Lock } from 'lucide-react';
 import { FormEventHandler, useState, useEffect } from 'react';
@@ -8,13 +8,13 @@ import TextLink from '@/components/text-link';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 import AuthLayout from '@/layouts/auth-layout';
 import AuthButton from '@/components/auth/auth-button';
 import Recaptcha from '@/components/recaptcha';
 import { useBrand } from '@/contexts/BrandContext';
 import { THEME_COLORS } from '@/hooks/use-appearance';
+import { DemoLogins, DemoLoginsPanel } from '@/components/auth/demo-logins';
 
 
 type LoginForm = {
@@ -27,9 +27,11 @@ type LoginForm = {
 interface LoginProps {
     status?: string;
     canResetPassword: boolean;
+    /** Demo accounts to list, only while DEMO_LOGIN_PANEL is on (config/demo.php). */
+    demoLogins?: DemoLogins | null;
 }
 
-export default function Login({ status, canResetPassword }: LoginProps) {
+export default function Login({ status, canResetPassword, demoLogins }: LoginProps) {
     const { t } = useTranslation();
     const { themeColor, customColor } = useBrand();
 
@@ -189,87 +191,13 @@ export default function Login({ status, canResetPassword }: LoginProps) {
                     {t("Log in")}
                 </AuthButton>
                 
-                {isDemo && (
-                    <div className="mt-6">
-                        <div className="border-t border-gray-200 dark:border-gray-700 pt-5">
-                            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4 text-center">{t("Demo Quick Access")}</h3>
-                            
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {pageProps.isSaasMode && (
-                                    <Button 
-                                        type="button" 
-                                        onClick={() => {
-                                            router.post(route('login'), {
-                                                email: 'superadmin@example.com',
-                                                password: 'password',
-                                                remember: false
-                                            });
-                                        }}
-                                        className="text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-200"
-                                        style={{ backgroundColor: primaryColor }}
-                                    >
-                                        {t("Login as Super Admin")}
-                                    </Button>
-                                )}
-                                <Button 
-                                    type="button" 
-                                    onClick={() => {
-                                        router.post(route('login'), {
-                                            email: 'company@example.com',
-                                            password: 'password',
-                                            remember: false
-                                        });
-                                    }}
-                                    className="text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-200"
-                                    style={{ backgroundColor: primaryColor }}
-                                >
-                                    {t("Login as Company")}
-                                </Button>
-                                        <Button 
-                                            type="button" 
-                                            onClick={() => {
-                                                router.post(route('login'), {
-                                                    email: 'sarah.johnson@techcorp.com',
-                                                    password: 'password',
-                                                    remember: false
-                                                });
-                                            }}
-                                            className="text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-200"
-                                            style={{ backgroundColor: primaryColor }}
-                                        >
-                                            {t("Login as Manager")}
-                                        </Button>
-                                        <Button 
-                                            type="button" 
-                                            onClick={() => {
-                                                router.post(route('login'), {
-                                                    email: 'david.kim@techcorp.com',
-                                                    password: 'password',
-                                                    remember: false
-                                                });
-                                            }}
-                                            className="text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-200"
-                                            style={{ backgroundColor: primaryColor }}
-                                        >
-                                            {t("Login as Member")}
-                                        </Button>
-                                        <Button 
-                                            type="button" 
-                                            onClick={() => {
-                                                router.post(route('login'), {
-                                                    email: 'globaltechindustries@client.com',
-                                                    password: 'password',
-                                                    remember: false
-                                                });
-                                            }}
-                                            className="text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-200"
-                                            style={{ backgroundColor: primaryColor }}
-                                        >
-                                            {t("Login as Client")}
-                                        </Button>
-                            </div>
-                        </div>
-                    </div>
+                {demoLogins && demoLogins.accounts.length > 0 && (
+                    <DemoLoginsPanel
+                        logins={demoLogins}
+                        primaryColor={primaryColor}
+                        selectedEmail={data.email}
+                        onFill={(email, password) => setData({ ...data, email, password })}
+                    />
                 )}
 
                 {(pageProps.isSaasMode && isRegistrationEnabled(pageProps)) && (

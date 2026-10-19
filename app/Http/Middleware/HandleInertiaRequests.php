@@ -93,10 +93,10 @@ class HandleInertiaRequests extends Middleware
             }
 
             // Get currency symbol with error handling
-            $currencyCode = $settings['defaultCurrency'] ?? 'USD';
+            $currencyCode = $settings['defaultCurrency'] ?? 'INR';
             $currencySettings = [
-                'currencySymbol' => '$',
-                'currencyNname' => 'US Dollar'
+                'currencySymbol' => '₹',
+                'currencyNname' => 'Indian Rupee'
             ];
 
             try {
@@ -151,6 +151,8 @@ class HandleInertiaRequests extends Middleware
                 'aiAssistant' => fn() => \App\Services\Ai\AiAccess::role($request->user())
                     ? \App\Services\Ai\AiAccess::status($request->user())
                     : null,
+                // What's waiting in the Approvals inbox (owners and managers), for the menu badge.
+                'approvalsWaiting' => fn() => $this->getApprovalsWaiting($request),
                 // The voice panel: 'server' (company key transcribes), 'browser', or null.
                 'aiVoice' => fn() => \App\Services\Ai\AiAccess::canUse($request->user())
                     ? \App\Services\Ai\AiAccess::voiceMode(\App\Services\Ai\AiAccess::settings($request->user()))
@@ -187,6 +189,17 @@ class HandleInertiaRequests extends Middleware
             'features' => config('features', []),
 
         ];
+    }
+
+    private function getApprovalsWaiting(Request $request): ?int
+    {
+        $user = $request->user();
+        if (!$user || !$user->current_workspace_id || $user->type === 'superadmin') {
+            return null;
+        }
+        $counts = app(\App\Services\ApprovalQueue::class)->counts($user);
+
+        return $counts ? array_sum($counts) : null;
     }
 
     private function getStorageSettings(Request $request): array

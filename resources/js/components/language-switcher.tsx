@@ -161,22 +161,24 @@ export const LanguageSwitcher: React.FC = () => {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center gap-2 rounded-md shadow-sm border bg-white">
-                    <Globe className="h-4 w-4" />
-                    {currentLanguage && (
-                        <>
-                            <span className="text-sm font-medium hidden md:inline-block">
-                                {currentLanguage.name}
-                            </span>
-                            <ReactCountryFlag
-                                countryCode={currentLanguage.countryCode}
-                                svg
-                                style={{
-                                    width: '1.2em',
-                                    height: '1.2em',
-                                }}
-                            />
-                        </>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    aria-label={t('Language')}
+                    title={currentLanguage ? `${t('Language')}: ${currentLanguage.name}` : t('Language')}
+                >
+                    {currentLanguage ? (
+                        <ReactCountryFlag
+                            countryCode={currentLanguage.countryCode}
+                            svg
+                            style={{
+                                width: '1.25em',
+                                height: '1.25em',
+                            }}
+                        />
+                    ) : (
+                        <Globe className="h-4 w-4" />
                     )}
                 </Button>
             </DropdownMenuTrigger>

@@ -13,8 +13,8 @@ namespace App\Services\Ai\Forms;
  *    unassigned). Never asked; shown on the confirm card, changeable.
  *  - optional:  not required (due date…). Never asked.
  *
- * Kinds: project, member, members (several people), task, bug, task_stage,
- * bug_status, invoice (a draft), unpaid_invoice, expense (not yet approved),
+ * Kinds: project, member, members (several people), task, bug (a task of
+ * type bug), task_stage, invoice (a draft), unpaid_invoice, expense (not yet approved),
  * budget_category, time_entry and timesheet (the user's own, unlocked),
  * billable_tasks (several tasks not on a sent invoice): records, picked
  * from a list the user may see. Also enum (fixed options), date
@@ -23,7 +23,7 @@ namespace App\Services\Ai\Forms;
 final class FormField
 {
     public const RECORD_KINDS = [
-        'project', 'member', 'members', 'task', 'bug', 'task_stage', 'bug_status', 'invoice', 'unpaid_invoice',
+        'project', 'member', 'members', 'task', 'bug', 'task_stage', 'invoice', 'unpaid_invoice',
         'expense', 'budget_category', 'time_entry', 'timesheet', 'billable_tasks',
     ];
 
@@ -87,7 +87,6 @@ final class FormField
             'task' => __('Which task?'),
             'bug' => __('Which bug?'),
             'task_stage' => __('Which stage?'),
-            'bug_status' => __('Which status?'),
             'invoice', 'unpaid_invoice' => __('Which invoice?'),
             'expense' => __('Which expense?'),
             'budget_category' => __('Which budget category?'),

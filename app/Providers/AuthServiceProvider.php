@@ -2,8 +2,6 @@
 
 namespace App\Providers;
 
-use App\Models\Bug;
-use App\Policies\BugPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
 class AuthServiceProvider extends ServiceProvider
@@ -14,7 +12,6 @@ class AuthServiceProvider extends ServiceProvider
      * @var array<class-string, class-string>
      */
     protected $policies = [
-        Bug::class => BugPolicy::class,
     ];
 
     /**

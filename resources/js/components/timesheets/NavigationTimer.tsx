@@ -111,18 +111,8 @@ export default function NavigationTimer() {
         }
     };
 
-    const navigateToTimer = () => {
-        try {
-            if (typeof route === 'undefined') {
-                window.location.href = route('timesheets.index');
-                return;
-            }
-            router.visit(route('timesheets.index'));
-        } catch (error) {
-            console.error('Navigation failed:', error);
-            window.location.href = route('timesheets.index');
-        }
-    };
+    // The running time opens the Timesheet (the week), where the time is logged.
+    const navigateToTimer = () => router.visit(route('timesheets.weekly-view'));
 
     const buttonClass = timerState.active 
         ? (timerState.is_paused 
@@ -142,12 +132,19 @@ export default function NavigationTimer() {
         return null;
     }
 
+    // Nothing in the header while idle: time is logged on the Timesheet page. A timer
+    // started elsewhere (e.g. by the AI Assistant) shows here while it runs or is paused.
+    if (!timerState.active) {
+        return null;
+    }
+
     return (
         <Button 
             variant="outline" 
             size="sm" 
-            className={`gap-2 ${buttonClass}`}
+            className={`h-9 gap-2 ${buttonClass}`}
             onClick={navigateToTimer}
+            title={timerState.is_paused ? 'Timer paused' : 'Timer running'}
         >
             <Clock className={`h-4 w-4 ${iconClass}`} />
             <span className={`font-mono text-xs ${textClass}`}>

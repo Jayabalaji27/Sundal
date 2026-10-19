@@ -121,7 +121,7 @@ function ProjectLinkContent({ project, encryptedId }: { project: any; encryptedI
 
     return (
         <div className="min-h-screen bg-gray-100 dark:bg-gray-950">
-            <Head title={`Project Details - ${(usePage().props as any).globalSettings?.titleText || 'Taskly'}`} />
+            <Head title={`Project Details - ${(usePage().props as any).globalSettings?.titleText || (usePage().props as any).name}`} />
             {/* Language Switcher - Top Right */}
             <div className="absolute top-7 right-4 z-50 mr-75">
                 <LanguageSwitcher />
@@ -566,7 +566,7 @@ function ProjectLinkContent({ project, encryptedId }: { project: any; encryptedI
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     {[
                                         { label: t('Total Bugs'), value: currentProject.bugs.length, icon: Bug, iconBg: 'bg-red-100 dark:bg-red-900', iconColor: 'text-red-600 dark:text-red-100', valueColor: 'text-gray-900 dark:text-gray-100' },
-                                        { label: t('Open Issues'), value: currentProject.bugs.filter((b: any) => !['Resolved','Closed'].includes(b.bug_status?.name)).length, icon: CheckSquare, iconBg: 'bg-green-100 dark:bg-green-900', iconColor: 'text-green-600 dark:text-green-100', valueColor: 'text-gray-900 dark:text-gray-100' },
+                                        { label: t('Open Issues'), value: currentProject.bugs.filter((b: any) => !b.task_stage?.is_completed).length, icon: CheckSquare, iconBg: 'bg-green-100 dark:bg-green-900', iconColor: 'text-green-600 dark:text-green-100', valueColor: 'text-gray-900 dark:text-gray-100' },
                                         { label: t('Critical'), value: currentProject.bugs.filter((b: any) => b.priority === 'critical').length, icon: AlertTriangle, iconBg: 'bg-orange-100 dark:bg-orange-900', iconColor: 'text-orange-600 dark:text-orange-100', valueColor: 'text-gray-900 dark:text-gray-100' },
                                         { label: t('Unassigned'), value: currentProject.bugs.filter((b: any) => !b.assigned_to).length, icon: Users, iconBg: 'bg-purple-100 dark:bg-purple-900', iconColor: 'text-purple-600 dark:text-purple-100', valueColor: 'text-gray-900 dark:text-gray-100' },
                                     ].map((item, i) => (
@@ -603,12 +603,11 @@ function ProjectLinkContent({ project, encryptedId }: { project: any; encryptedI
                                                                 bug.severity === 'major' ? 'bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20' :
                                                                 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20'
                                                             }`}>{formatText(bug.severity || 'minor')}</span>
+                                                            {/* Bugs are tasks of type bug: their status is the task stage. */}
                                                             <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
-                                                                bug.bug_status?.name === 'New' ? 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20' :
-                                                                bug.bug_status?.name === 'In Progress' ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20' :
-                                                                bug.bug_status?.name === 'Resolved' ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20' :
+                                                                bug.task_stage?.is_completed ? 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20' :
                                                                 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20'
-                                                            }`}>{bug.bug_status?.name || 'New'}</span>
+                                                            }`}>{bug.task_stage?.name || t('Open')}</span>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
@@ -623,12 +622,12 @@ function ProjectLinkContent({ project, encryptedId }: { project: any; encryptedI
                                                         </span>
                                                         <span className="flex items-center gap-1.5">
                                                             <Avatar className="h-5 w-5">
-                                                                {bug.reported_by?.avatar && <AvatarImage src={bug.reported_by.avatar} />}
+                                                                {bug.creator?.avatar && <AvatarImage src={bug.creator.avatar} />}
                                                                 <AvatarFallback className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                                                                    {bug.reported_by?.name?.charAt(0) || <User className="h-3 w-3" />}
+                                                                    {bug.creator?.name?.charAt(0) || <User className="h-3 w-3" />}
                                                                 </AvatarFallback>
                                                             </Avatar>
-                                                            {t('Reported by')} {bug.reported_by?.name}
+                                                            {t('Reported by')} {bug.creator?.name}
                                                         </span>
                                                     </div>
                                                 </div>

@@ -149,6 +149,9 @@ export default function InvoiceIndex() {
         }
     };
 
+    const isClient = userWorkspaceRole === 'client';
+    const canPay = (row: Invoice) => row.status !== 'paid' && row.status !== 'cancelled' && row.balance_due > 0;
+
     // CrudTable configuration
     const columns = [
         {
@@ -171,9 +174,10 @@ export default function InvoiceIndex() {
                 </div>
             )
         },
-        {
+        // A client's invoices are all theirs, so they don't need the client column.
+        ...(isClient ? [] : [{
             key: 'client',
-            label: t('Client/Customer'),
+            label: t('Client'),
             render: (_: any, row: Invoice) => row.client ? (
                 <div className="flex items-center gap-2">
                     <Avatar className="h-7 w-7 shrink-0">
@@ -187,7 +191,7 @@ export default function InvoiceIndex() {
             ) : (
                 <span className="text-sm text-gray-400">—</span>
             )
-        },
+        }]),
         {
             key: 'project',
             label: t('Project'),
@@ -200,31 +204,19 @@ export default function InvoiceIndex() {
             )
         },
         {
+            // Total, with what's still due underneath: one column instead of three.
             key: 'total_amount',
-            label: t('Total Amount'),
+            label: t('Amount'),
             sortable: true,
-            render: (value: number) => (
-                <span className="text-sm font-semibold text-gray-900">
-                    {formatCurrency(value)}
-                </span>
-            )
-        },
-        {
-            key: 'paid_amount',
-            label: t('Paid Amount'),
-            render: (_: any, row: Invoice) => (
-                row.paid_amount > 0
-                    ? <span className="text-sm font-semibold text-green-600">{formatCurrency(row.paid_amount)}</span>
-                    : <span className="text-sm text-gray-400">-</span>
-            )
-        },
-        {
-            key: 'balance_due',
-            label: t('Due Amount'),
-            render: (_: any, row: Invoice) => (
-                row.balance_due > 0 && row.status !== 'paid' && row.status !== 'cancelled'
-                    ? <span className="text-sm font-semibold text-red-500">{formatCurrency(row.balance_due)}</span>
-                    : <span className="text-sm text-gray-400">-</span>
+            render: (value: number, row: Invoice) => (
+                <div className="whitespace-nowrap">
+                    <div className="text-sm font-semibold text-gray-900">{formatCurrency(value)}</div>
+                    {row.balance_due > 0 && row.status !== 'paid' && row.status !== 'cancelled' ? (
+                        <div className="text-xs font-medium text-red-500">{formatCurrency(row.balance_due)} {t('due')}</div>
+                    ) : row.paid_amount > 0 ? (
+                        <div className="text-xs text-green-600">{t('Paid')}</div>
+                    ) : null}
+                </div>
             )
         },
         {
@@ -258,7 +250,18 @@ export default function InvoiceIndex() {
                     )}
                 </div>
             )
-        }
+        },
+        // Paying is why a client opens this page, so it's a visible button, not a row icon.
+        ...(isClient ? [{
+            key: 'pay',
+            label: '',
+            render: (_: any, row: Invoice) => canPay(row) ? (
+                <Button size="sm" onClick={() => handleAction('pay', row)}>
+                    <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+                    {t('Pay now')}
+                </Button>
+            ) : null
+        }] : [])
     ];
 
     const actions = [
@@ -297,18 +300,12 @@ export default function InvoiceIndex() {
         //     condition: (row: Invoice) => userWorkspaceRole !== 'client' && (row.status === 'sent' || row.status === 'viewed' || row.status === 'overdue')
         // },
         {
-            label: t('Pay Now'),
-            icon: 'CreditCard',
-            action: 'pay',
-            className: 'text-blue-500 hover:text-blue-700',
-            condition: (row: Invoice) => userWorkspaceRole === 'client' && row.status !== 'paid' && row.status !== 'cancelled'
-        },
-        {
             label: t('Delete'),
             icon: 'Trash2',
             action: 'delete',
             className: 'text-red-500 hover:text-red-700',
-            condition: (row: Invoice) => ['owner', 'manager'].includes(userWorkspaceRole) && row.status === 'draft'
+            // Same permission as the delete route: managers create invoices, the owner deletes them.
+            condition: (row: Invoice) => (auth?.permissions || []).includes('invoice_delete') && row.status === 'draft'
         }
     ];
 

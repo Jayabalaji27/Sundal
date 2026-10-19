@@ -9,12 +9,24 @@ import { Badge } from '@/components/ui/badge';
 
 // Store expanded menu state in localStorage
 const STORAGE_KEY = 'nav_expanded_items';
+const GROUPS_STORAGE_KEY = 'nav_open_groups';
 
-export function NavMain({ items = [], position, sidebarStyle = 'plain' }: { items: NavItem[]; position: 'left' | 'right'; sidebarStyle?: string }) {
+const readOpenGroups = (): Record<string, boolean> => {
+    try {
+        return JSON.parse(localStorage.getItem(GROUPS_STORAGE_KEY) || '{}') || {};
+    } catch {
+        return {};
+    }
+};
+
+export function NavMain({ items = [], position, sidebarStyle = 'plain', collapsibleGroups = [] }: { items: NavItem[]; position: 'left' | 'right'; sidebarStyle?: string; collapsibleGroups?: string[] }) {
     const { t } = useTranslation();
     const page = usePage();
     const { state } = useSidebar();
     const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+    // Secondary sections (collapsibleGroups) start closed so the sidebar shows the
+    // everyday pages first; a section opens itself when the current page is in it.
+    const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(readOpenGroups);
 
     // Auto-expand the group containing the active route when the URL changes.
     // This used to rebuild expandedItems from an empty object every navigation,
@@ -67,7 +79,31 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain' }: { item
             }
             return merged;
         });
+
+        const activeGroups = items
+            .filter(item => item.group && collapsibleGroups.includes(item.group) && (isActive(item.href) || isChildActive(item.children)))
+            .map(item => item.group as string);
+        if (activeGroups.length > 0) {
+            setOpenGroups(prev => {
+                if (activeGroups.every(group => prev[group])) return prev;
+                const merged = { ...prev, ...Object.fromEntries(activeGroups.map(group => [group, true])) };
+                try {
+                    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(merged));
+                } catch {}
+                return merged;
+            });
+        }
     }, [page.url, items]); // Re-run when URL changes or items change
+
+    const toggleGroup = (label: string) => {
+        setOpenGroups(prev => {
+            const next = { ...prev, [label]: !prev[label] };
+            try {
+                localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(next));
+            } catch {}
+            return next;
+        });
+    };
 
     // Helper function to check nested children for active items
     const checkNestedChildren = (
@@ -203,15 +239,33 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain' }: { item
             });
             if (currentGroup) groups.push(currentGroup);
 
-            return groups.map((group, groupIndex) => (
-                <SidebarGroup key={groupIndex} className="px-1.5 py-0">
-                    {group.label && (
-            <SidebarGroupLabel className={`flex w-full text-xs ${position === 'right' ? 'justify-end' : 'justify-start'}`}>
-                           <span className="text-[13px] font-bold capitalize tracking-wide text-gray-500 dark:text-gray-400 leading-none">
-                                    {group.label}
-                                </span>
+            return groups.map((group, groupIndex) => {
+                const isCollapsibleGroup = !!group.label && collapsibleGroups.includes(group.label);
+                // In icon-only mode there is no room for section headers, so every item shows.
+                const isGroupOpen = !isCollapsibleGroup || state === 'collapsed' || !!openGroups[group.label];
+
+                return (
+                <SidebarGroup key={groupIndex} className={`px-1.5 py-0 ${groupIndex > 0 ? 'mt-2' : ''}`}>
+                    {group.label && (isCollapsibleGroup ? (
+                        <SidebarGroupLabel asChild className={`flex w-full ${position === 'right' ? 'justify-end' : 'justify-start'}`}>
+                            <button
+                                type="button"
+                                onClick={() => toggleGroup(group.label)}
+                                aria-expanded={isGroupOpen}
+                                className="cursor-pointer gap-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                            >
+                                <span className="leading-none">{group.label}</span>
+                                {isGroupOpen ? <ChevronDown className="ml-auto h-3 w-3" /> : <ChevronRight className="ml-auto h-3 w-3" />}
+                            </button>
                         </SidebarGroupLabel>
-                    )}
+                    ) : (
+                        <SidebarGroupLabel className={`flex w-full ${position === 'right' ? 'justify-end' : 'justify-start'}`}>
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground leading-none">
+                                {group.label}
+                            </span>
+                        </SidebarGroupLabel>
+                    ))}
+                    {isGroupOpen && (
                     <SidebarMenu>
                         {group.items.map((item) => (
                     <div key={item.title}>
@@ -279,7 +333,7 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain' }: { item
                         ) : (
                             // Regular item without children
                             <SidebarMenuItem>
-                                <SidebarMenuButton asChild isActive={isActive(item.href)} tooltip={{ children: item.title }} className={activeClass}>
+                                <SidebarMenuButton asChild isActive={isActive(item.href) || !!item.matches?.some(isActive)} tooltip={{ children: item.title }} className={activeClass}>
                                     {item.target === '_blank' || item.forceFullReload ? (
                                         <a
                                             href={item.href || '#'}
@@ -290,11 +344,17 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain' }: { item
                                                 <>
                                                     {item.icon && <item.icon className="h-4 w-4" />}
                                                     {state !== "collapsed" && <span>{item.title}</span>}
+                                                    {state !== "collapsed" && item.badge && (
+                                                        <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">{item.badge.label}</span>
+                                                    )}
                                                 </>
                                             ) : (
                                                 <>
                                                     {item.icon && <item.icon className="h-4 w-4" />}
                                                     {state !== "collapsed" && <span>{item.title}</span>}
+                                                    {state !== "collapsed" && item.badge && (
+                                                        <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">{item.badge.label}</span>
+                                                    )}
                                                 </>
                                             )}
                                         </a>
@@ -308,11 +368,17 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain' }: { item
                                                 <>
                                                     {item.icon && <item.icon className="h-4 w-4" />}
                                                     {state !== "collapsed" && <span>{item.title}</span>}
+                                                    {state !== "collapsed" && item.badge && (
+                                                        <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">{item.badge.label}</span>
+                                                    )}
                                                 </>
                                             ) : (
                                                 <>
                                                     {item.icon && <item.icon className="h-4 w-4" />}
                                                     {state !== "collapsed" && <span>{item.title}</span>}
+                                                    {state !== "collapsed" && item.badge && (
+                                                        <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">{item.badge.label}</span>
+                                                    )}
                                                 </>
                                             )}
                                         </Link>
@@ -323,8 +389,10 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain' }: { item
                     </div>
                         ))}
                     </SidebarMenu>
+                    )}
                 </SidebarGroup>
-            ));
+                );
+            });
         })()}
         </>
     );

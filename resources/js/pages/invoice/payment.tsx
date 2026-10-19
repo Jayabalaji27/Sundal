@@ -106,7 +106,7 @@ export default function InvoicePayment() {
 
     return (
         <>
-            <Head title={`Invoice - ${company?.name || 'Taskly SaaS'}`}>
+            <Head title={`Invoice - ${company?.name || appName}`}>
                 {favicon && (
                     <link rel="icon" type="image/x-icon" href={favicon} />
                 )}

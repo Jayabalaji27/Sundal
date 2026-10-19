@@ -24,7 +24,7 @@ export default function TaxIndex() {
 
   return (
     <PageTemplate
-      title={t('Tax Settings')}
+      title={t('Tax rates')}
       url="/taxes"
       breadcrumbs={breadcrumbs}
     >

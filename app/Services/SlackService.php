@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\UserNotificationTemplate;
 use App\Models\Setting;
-use Illuminate\Support\Facades\Log;
 
 class SlackService
 {
@@ -29,10 +28,10 @@ class SlackService
         $language = $user?->lang ?: 'en';
 
         $slackService = new self();
-        return $slackService->sendTemplateMessageWithLanguage($templateName, $data, $webhookUrl, $language);
+        return $slackService->sendTemplateMessageWithLanguage($templateName, $data, $webhookUrl, $language, $workspaceId);
     }
 
-    public function sendTemplateMessageWithLanguage($templateName, $variables, $webhookUrl, $language = 'en')
+    public function sendTemplateMessageWithLanguage($templateName, $variables, $webhookUrl, $language = 'en', $workspaceId = null)
     {
         if (!$webhookUrl) {
             return false;
@@ -43,11 +42,11 @@ class SlackService
 
         $payload = [
             'text' => $message,
-            'username' => config('app.name', 'Taskly'),
+            'username' => config('app.name'),
             'icon_emoji' => ':bell:'
         ];
 
-        return $this->sendCurlRequest($webhookUrl, $payload);
+        return $this->sendCurlRequest($webhookUrl, $payload, 'message.send', array_filter(['template' => $templateName, 'workspace_id' => $workspaceId]));
     }
 
     private function getTemplateMessage($templateName, $variables, $language)
@@ -88,8 +87,10 @@ class SlackService
         return str_replace(array_keys($variables), array_values($variables), $content);
     }
 
-    private function sendCurlRequest($webhookUrl, $payload)
+    /** Posts to the incoming webhook and logs the outcome (never the webhook URL: it is the secret). */
+    private function sendCurlRequest($webhookUrl, $payload, string $action, array $context = [])
     {
+        $started = hrtime(true);
         $jsonPayload = json_encode($payload);
         $ch = curl_init($webhookUrl);
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
@@ -107,13 +108,18 @@ class SlackService
         $curlError = curl_error($ch);
         curl_close($ch);
 
-        return $httpCode === 200 && empty($curlError);
+        $ok = $httpCode === 200 && empty($curlError);
+        $ok
+            ? IntegrationLog::ok('slack', $action, $started, $context)
+            : IntegrationLog::failed('slack', $action, $curlError ?: "HTTP {$httpCode}: " . mb_substr((string) $response, 0, 200), $started, $context + ['status' => $httpCode ?: null]);
+
+        return $ok;
     }
 
     private static function formatMessage($templateName, $data)
     {
         $title = $data['title'] ?? ucfirst(str_replace('_', ' ', $templateName));
-        $message = $data['message'] ?? 'New notification from Taskly';
+        $message = $data['message'] ?? 'New notification from ' . config('app.name');
 
         $formatted = "*{$title}*\n\n{$message}";
 
@@ -127,15 +133,15 @@ class SlackService
     public function sendTestMessage($webhookUrl)
     {
         $payload = [
-            'text' => '*Test Message from Taskly*
+            'text' => '*Test Message from ' . config('app.name') . '*
 
 This is a test message to verify your Slack integration is working correctly.
 
 If you can see this message, your webhook configuration is successful! 🎉',
-            'username' => config('app.name', 'Taskly'),
+            'username' => config('app.name'),
             'icon_emoji' => ':white_check_mark:'
         ];
 
-        return $this->sendCurlRequest($webhookUrl, $payload);
+        return $this->sendCurlRequest($webhookUrl, $payload, 'message.test');
     }
 }

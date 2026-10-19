@@ -5,7 +5,6 @@ namespace App\Services\Ai;
 use GuzzleHttp\Exception\ConnectException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
-use Illuminate\Support\Facades\Log;
 use OpenAI\Exceptions\ErrorException;
 use OpenAI\Exceptions\TransporterException;
 use Prism\Prism\Exceptions\PrismException;
@@ -46,7 +45,9 @@ class ProviderErrors
             $messages += ['rate_limited' => __('The free AI model has used up its requests for now. OpenRouter allows 20 a minute and 50 a day on an account that never bought credits. Try again later, or ask your company owner to connect another provider.')];
         }
 
-        Log::warning('AI provider call failed', [
+        AiLog::warning('ai.provider.error', [
+            'user_id' => auth()->id(),
+            'workspace_id' => auth()->user()?->current_workspace_id,
             'provider' => $provider,
             'model' => $model,
             'kind' => $kind,

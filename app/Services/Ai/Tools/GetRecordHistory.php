@@ -51,7 +51,7 @@ class GetRecordHistory extends AiTool
 
         [$record, $creatorColumn] = match ($type) {
             'task' => [$this->resolver->task($user, $ref), 'created_by'],
-            'bug' => [$this->resolver->bug($user, $ref), 'reported_by'],
+            'bug' => [$this->resolver->bug($user, $ref), 'created_by'], // bugs are tasks of type bug
             'project' => [$this->resolver->project($user, $ref), 'created_by'],
             'invoice' => [$this->invoice($user, $ref), 'created_by'],
         };
@@ -85,6 +85,9 @@ class GetRecordHistory extends AiTool
         $new = collect($activity->properties['attributes'] ?? []);
         $old = collect($activity->properties['old'] ?? []);
 
+        if (in_array($activity->event, ['added_to_sprint', 'removed_from_sprint'], true)) {
+            return [['field' => 'sprint', 'value' => $new['sprint'] ?? "#{$new['sprint_id']}"]];
+        }
         if ($activity->event !== 'updated') {
             return [];
         }

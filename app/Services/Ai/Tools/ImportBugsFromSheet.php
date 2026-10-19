@@ -75,6 +75,6 @@ class ImportBugsFromSheet extends ImportFromSheet
 
     protected function link(Model $record): string
     {
-        return route('bugs.show', $record->getKey(), false);
+        return route('tasks.show', $record->getKey(), false);
     }
 }

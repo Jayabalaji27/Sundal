@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\Ai\AiAccess;
+use App\Services\Ai\AiLog;
 use App\Services\Ai\AiMode;
 use App\Services\Ai\AiProviderException;
 use App\Services\Ai\Transcriber;
@@ -25,9 +26,11 @@ class AiVoiceController extends Controller
         $this->ensureCanUse($user);
 
         AiMode::resume($request, $user);
+        $voice = AiAccess::voiceMode(AiAccess::settings($user));
+        AiLog::info('ai.voice.session', [...AiLog::who($user), 'speech_to_text' => $voice]);
 
         return response()->json([
-            'voice' => AiAccess::voiceMode(AiAccess::settings($user)),
+            'voice' => $voice,
             'idleSeconds' => AiMode::idleSeconds($user),
         ]);
     }
@@ -51,6 +54,8 @@ class AiVoiceController extends Controller
 
         $key = 'ai-voice:' . $user->id;
         if (RateLimiter::tooManyAttempts($key, (int) config('ai_assistant.voice.transcriptions_per_minute', 30))) {
+            AiLog::warning('ai.voice.rate_limited', AiLog::who($user));
+
             return response()->json(['error' => __('Too many recordings. Please wait a minute.')], 429);
         }
         RateLimiter::hit($key, 60);
@@ -67,6 +72,8 @@ class AiVoiceController extends Controller
         try {
             $text = $transcriber->transcribe($settings, $user, (string) $file->get(), $mime, $validated['lang'] ?? null);
         } catch (AiProviderException $e) {
+            AiLog::warning('ai.voice.transcribe_failed', [...AiLog::who($user), 'provider' => $settings->provider, 'error' => $e->getMessage()]);
+
             return response()->json(['error' => $e->getMessage()], 502);
         }
 

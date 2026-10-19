@@ -43,8 +43,8 @@ class SlackSettingsController extends Controller
         ]);
 
         $message = [
-            'text' => 'Test message from Taskly SaaS',
-            'username' => 'Taskly Bot',
+            'text' => 'Test message from ' . config('app.name'),
+            'username' => config('app.name') . ' Bot',
             'icon_emoji' => ':robot_face:',
         ];
 

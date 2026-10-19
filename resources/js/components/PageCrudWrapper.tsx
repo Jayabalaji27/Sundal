@@ -16,6 +16,7 @@ import { toast } from '@/components/custom-toast';
 import { CrudConfig } from '@/types/crud';
 import { BreadcrumbItem } from '@/types';
 import { useTranslation } from 'react-i18next';
+import { consumeCreateIntent } from '@/utils/create-intent';
 
 export interface CrudButton {
   label: string;
@@ -190,6 +191,12 @@ export function PageCrudWrapper({
     setFormMode('create');
     setIsFormModalOpen(true);
   };
+
+  // Opened from a "Create" link (?action=create): start with the empty form.
+  useEffect(() => {
+    if (consumeCreateIntent() && hasPermission(permissions, entity.permissions.create)) handleAddNew();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   
   const handleFormSubmit = (formData: any) => {
     // Make a copy of the form data to avoid modifying the original

@@ -19,8 +19,9 @@ declare const route: any;
  */
 export function AiVoiceAssistant() {
     const { t } = useTranslation();
-    const { auth } = usePage<{ auth?: { aiAssistant?: string | null; aiVoice?: VoiceMode | null } }>().props;
-    const mode: VoiceMode | null = auth?.aiAssistant === 'allowed' ? auth?.aiVoice ?? null : null;
+    const { auth, features } = usePage<{ auth?: { aiAssistant?: string | null; aiVoice?: VoiceMode | null }; features?: { ai_assistant?: boolean } }>().props;
+    // Off when the AI Assistant is switched off for this installation (config/features.php: ai_assistant).
+    const mode: VoiceMode | null = features?.ai_assistant && auth?.aiAssistant === 'allowed' ? auth?.aiVoice ?? null : null;
     const engine = voiceEngine(mode);
     const voice = useVoice();
     const statusText = useVoiceStatusText(voice);

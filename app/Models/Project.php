@@ -88,6 +88,11 @@ class Project extends Model
         return $this->hasMany(ProjectMilestone::class)->orderBy('order');
     }
 
+    public function epics(): HasMany
+    {
+        return $this->hasMany(Epic::class);
+    }
+
     public function notes(): HasMany
     {
         return $this->hasMany(ProjectNote::class)->latest();
@@ -108,9 +113,10 @@ class Project extends Model
         return $this->hasMany(ProjectExpense::class);
     }
 
+    /** Bugs are tasks of type bug. */
     public function bugs(): HasMany
     {
-        return $this->hasMany(Bug::class);
+        return $this->hasMany(Task::class)->where('type', 'bug');
     }
 
     public function tasks(): HasMany
@@ -196,6 +202,32 @@ class Project extends Model
     }
 
     // Helper methods
+
+    /**
+     * What every project page header (ProjectShell) shows: title, status and
+     * the first few team members' avatars.
+     */
+    public function shellSummary(): array
+    {
+        $members = $this->members()->with('user:id,name,avatar')->limit(5)->get()
+            ->pluck('user')->filter()
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'avatar' => check_file($user->avatar) ? get_file($user->avatar) : null,
+            ])->values();
+
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'status' => $this->status,
+            'priority' => $this->priority,
+            'deadline' => $this->deadline?->toDateString(),
+            'members' => $members,
+            'members_count' => $this->members()->count(),
+        ];
+    }
+
     public function isOverdue(): bool
     {
         return $this->deadline && $this->deadline->isPast() && $this->status !== 'completed';
@@ -259,7 +291,7 @@ class Project extends Model
     public function deletionSummary(): array
     {
         return [
-            'tasks' => $this->tasks()->count(),
+            'tasks' => $this->tasks()->where('type', 'task')->count(),
             'bugs' => $this->bugs()->count(),
             'milestones' => $this->milestones()->count(),
             'budgets' => $this->budget()->count(),
@@ -297,13 +329,6 @@ class Project extends Model
                     $task->delete();
                 }
                 
-                // Delete bugs and their comments/attachments
-                foreach ($project->bugs()->get() as $bug) {
-                    $bug->comments()->delete();
-                    $bug->attachments()->delete();
-                    $bug->delete();
-                }
-
                 // Delete project attachments
                 $project->attachments()->delete();
                 
