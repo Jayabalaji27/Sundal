@@ -960,6 +960,111 @@ round (`AiModulesTest`, `DashboardTest`, `FunctionalTest`, `PlanAccessTest`,
 
 ---
 
+### RP-22 · 2026-10-20 · Reports: PDF / Excel / Word downloads and email
+
+- **Customer Report "Generate" fixed.** It returned a 500 for every project. It loaded a
+  `tasks.stage` relation (Task's is `taskStage`), and `$project->budget` returns the
+  `projects.budget` amount column, not the `ProjectBudget` relation. "Tasks done" now uses
+  `Task::isCompleted()` instead of a stage named "Done". The page reads `task_stage` and `end_date`.
+- **Customer Report can be opened again.** Timesheet Reports passed its header button as `action`;
+  `PageTemplate` only reads `actions`, so the button never showed.
+- The Customer Report follows project visibility (`visibleTo`), like the Timesheet report (B2).
+- **Downloads:** the Project, Timesheet and Customer reports download as PDF, Excel or Word
+  (`?format=pdf|xlsx|docx`; Project still defaults to its chart PDF). Each report builds a
+  `ReportDocument`, and `ReportRenderer` writes it in any format. PDF and Word share a row budget
+  across tables (400 / 1,500 rows) and say when a table was cut; Excel always has every row. PDF
+  fonts are subset, so files are about 25 times smaller.
+- **Email:** after a download, "Email it" (or the Email button) sends the report to the user's own
+  address or to one they type, with an optional note. The server rebuilds the file from the same
+  filters. It goes out through the workspace owner's mail settings (`MailConfigService`); when
+  none are set, the dialog says so. Throttled to 10 a minute.
+- New routes: `timesheet-reports.export|email`, `customer-reports.export|email`,
+  `project-reports.email`. No new permissions: export and email need the permission the report page needs.
+- Generate requests now send `Accept: application/json`, so validation errors are shown instead of
+  "Failed to generate report."
+
+Deploy: no migrations or seeders. Run `npm run build`, and `php artisan route:clear` if routes are cached.
+
+Tests: `tests/Feature/ReportExportTest.php` (13 tests). Full suite 507 passed, 35 failed, 1 skipped;
+the 35 are the same failures listed under RP-21.
+
+---
+
+### RP-23 · 2026-10-21 · Media Library: uploads vanished, images only, grey thumbnails
+
+Reported on Project > Files, but the Media Library is shared by every file picker.
+
+- **Uploads vanished.** `MediaItem::$fillable` left out `workspace_id` and `user_id`, so every
+  upload since the first commit was saved without them, and the library (which lists a workspace's
+  own items) never showed it again. Migration `2026_10_20_000001` restores the uploader from the
+  Spatie `media` row, and the workspace only when that user belongs to exactly one. Uploads by people
+  in several workspaces stay hidden rather than risk landing in the wrong one.
+- **Images only.** The picker read `storageSettings.allowed_file_types`, which was never shared, and
+  fell back to `jpg,png,webp,gif`. `storageSettings` now carries the list and size limit that
+  `StorageConfigService` validates uploads against; the top-level `allowed_file_types` /
+  `max_file_size` props use the same values. `jpg` and `jpeg` now always go together. The library
+  shows the allowed types and size, says "files" rather than "images", and pre-selects new uploads.
+- The media collection's size check used a `max_file_size_mb` key that doesn't exist (always 2 MB);
+  it now uses `max_file_size_kb` like the upload endpoint.
+- Documents have no thumbnail: their `thumb_url` is now the file itself (no more 403s), and the Files
+  tab shows a type badge (PDF, DOC, XLS…) instead of a broken image.
+- **Local only:** `public/storage` was a plain folder (OneDrive had turned the link into a copy), so
+  `/storage/...` files gave 403. Replaced with `php artisan storage:link`; the old folder is in
+  `storage/app/backup-public-storage-2026-10-20` (all 20 files were already in `storage/app/public`).
+
+Deploy: `php artisan migrate`, `npm run build`. Check that `public/storage` on the server is a link
+(`php artisan storage:link`); if thumbnails there are grey, it isn't.
+
+Tests: `tests/Feature/MediaLibraryUploadTest.php` (6 tests).
+
+---
+
+### RP-24 · 2026-10-21 · Contract attachments: preview and remove files before upload
+
+- The Upload Files dialog (Contract > Attachments) lists the picked files instead of "N file(s)
+  selected": an image thumbnail or a type badge (PDF, DOCX…), name, size and a remove button, plus
+  "Remove all". Picking or dropping more files adds to the list (the same file isn't added twice).
+  Drag and drop now works; the dialog said it did, but the zone had no drop handling.
+- Files the server would refuse (type not in Storage settings, or over the size limit) are marked
+  in red and block Upload until removed. Before, the server stopped at the first bad file after
+  saving the ones before it. Reusable as `components/selected-files-list.tsx`.
+- `upload_file()` (contracts, todos, bank-transfer receipts, SEO image) now takes allowed types and
+  max size from `StorageConfigService`, the platform Storage settings the pickers show. It read the
+  company's own settings, which in SaaS mode fell back to defaults and ignored the admin's choices.
+
+Tests: one more in `tests/Feature/MediaLibraryUploadTest.php` (7 in all).
+
+---
+
+### RP-25 · 2026-10-21 · Tasks Export / Import, Contracts Export
+
+- **Tasks > Import / Export** (header menu):
+  - **Export to Excel**: the list as the page shows it (filters, sort, a member's own tasks only),
+    `TaskController::filteredTasks()` shared with the page. Columns use the import's names, so an
+    exported file re-imports without matching columns by hand.
+  - **Import from Excel / CSV** (`task_create`, not clients): the shared `ImportModal` flow. One task per
+    row; the project by exact name or ID among projects the user can see, or the project the page is
+    filtered by. Priority words ("P1", "urgent"), stage, assignee (email / full name, only with
+    `task_assign_users`), dates incl. Excel day numbers, milestone, story points, type/severity.
+    Creates new tasks only: a title already in the project, or repeated in the file, is skipped.
+    **Nobody is notified** (`CreateTask::handle(..., notify: false)`). Problems are listed by row.
+  - Value parsing is shared with the AI assistant's sheet import (`App\Imports\Concerns\InterpretsSheetValues`,
+    moved unchanged from `ImportFromSheet`). Row logic: `App\Imports\TaskImport`.
+- **Contracts > Export**: the list with its filters (a client gets only their own). Added `Contract::project()`.
+- **Shared import modal** (Companies too): columns are pre-matched by name, each has "Don't import",
+  required fields are checked, and an import with problems shows a summary (imported / skipped /
+  failed) with the rows, instead of only "Import completed with errors".
+- **Fixed:** `{type}.import` created records for whatever table the file was *uploaded* for; a user
+  allowed to import tasks could have created company accounts. The upload and the import must now match.
+- **Fixed:** the platform admin's Companies import failed at upload (403): `csv.import` and
+  `csv.import.modal` were behind `block.superadmin.workspace`.
+
+Deploy: `npm run build`; no migrations.
+
+Tests: `tests/Feature/TaskImportExportTest.php`.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)

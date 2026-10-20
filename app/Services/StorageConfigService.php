@@ -169,7 +169,7 @@ class StorageConfigService
 
             return [
                 'disk'               => $diskName,
-                'allowed_file_types' => $settings['storage_file_types'] ?? 'jpg,png,webp,gif',
+                'allowed_file_types' => self::normalizeFileTypes($settings['storage_file_types'] ?? 'jpg,png,webp,gif'),
                 'max_file_size_kb'   => (int) ($settings['storage_max_upload_size'] ?? 2048),
                 's3' => [
                     'key'      => $settings['aws_access_key_id'] ?? '',
@@ -195,6 +195,27 @@ class StorageConfigService
     }
 
     /**
+     * Lower-cased, de-duplicated extension list in which jpg and jpeg go together:
+     * they are the same format, and listing only "jpg" made .jpeg photos
+     * impossible to pick in the file chooser or to save to the media library.
+     */
+    public static function normalizeFileTypes(string $types): string
+    {
+        $list = array_values(array_unique(array_filter(array_map(
+            fn ($type) => strtolower(trim($type, " .\t\n\r")),
+            explode(',', $types)
+        ))));
+
+        foreach ([['jpg', 'jpeg'], ['jpeg', 'jpg']] as [$have, $add]) {
+            if (in_array($have, $list, true) && !in_array($add, $list, true)) {
+                $list[] = $add;
+            }
+        }
+
+        return implode(',', $list);
+    }
+
+    /**
      * Clear storage configuration cache (no-op since cache is disabled)
      */
     public static function clearCache(): void
@@ -209,7 +230,7 @@ class StorageConfigService
     {
         return [
             'disk'               => 'public',
-            'allowed_file_types' => 'jpg,png,webp,gif',
+            'allowed_file_types' => 'jpg,png,webp,gif,jpeg',
             'max_file_size_kb'   => 2048,
             's3'                 => [],
             'wasabi'             => [],

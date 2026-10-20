@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { PageTemplate } from '@/components/page-template';
+import { SelectedFilesList, fileKey, fileProblem, formatFileSize, type FileLimits } from '@/components/selected-files-list';
 import { useTranslation } from 'react-i18next';
 import { Copy, FileText, FileSpreadsheet, FileArchive, FileCode, File, Image, MessageSquare, Paperclip, User, Calendar, DollarSign, Plus, Pin, Trash2, Eye, Upload, Search, Clock, CheckCircle, AlertTriangle, Send, Download, Edit, ArrowLeft, PinOff, Save } from 'lucide-react';
 
@@ -70,7 +71,29 @@ export default function ContractShow() {
     const [isAddingComment, setIsAddingComment] = useState(false);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    const [isDraggingFiles, setIsDraggingFiles] = useState(false);
     const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+    const { storageSettings } = usePage().props as any;
+    const uploadLimits: FileLimits = {
+        allowedTypes: storageSettings?.allowed_file_types || '',
+        maxSizeKb: storageSettings?.max_file_size_kb || 2048,
+    };
+    const invalidFileCount = selectedFiles.filter((file) => fileProblem(file, uploadLimits, t)).length;
+
+    // Picking or dropping more files adds to the selection instead of replacing it.
+    const addFiles = (files: FileList | File[] | null) => {
+        if (!files?.length) return;
+        setSelectedFiles((current) => {
+            const keys = new Set(current.map(fileKey));
+            return [...current, ...Array.from(files).filter((file) => !keys.has(fileKey(file)))];
+        });
+    };
+
+    const closeUploadModal = () => {
+        setIsUploadModalOpen(false);
+        setSelectedFiles([]);
+        setIsDraggingFiles(false);
+    };
     const [searchAttachments, setSearchAttachments] = useState('');
     const [attachmentsPerPage, setAttachmentsPerPage] = useState(10);
     const [currentAttachmentsPage, setCurrentAttachmentsPage] = useState(1);
@@ -1039,7 +1062,7 @@ export default function ContractShow() {
                 </Tabs>
             </div>
 
-            <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+            <Dialog open={isUploadModalOpen} onOpenChange={(open) => (open ? setIsUploadModalOpen(true) : !isUploadingAttachment && closeUploadModal())}>
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
@@ -1049,14 +1072,20 @@ export default function ContractShow() {
                     </DialogHeader>
                     <div className="space-y-6">
                         <div
-                            className="relative border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 border-gray-300 hover:border-gray-400 hover:bg-gray-50"
+                            className={`relative border-2 border-dashed rounded-xl text-center transition-all duration-200 ${selectedFiles.length > 0 ? 'p-6' : 'p-12'} ${isDraggingFiles ? 'border-primary bg-primary/5' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'}`}
+                            onDragEnter={(e) => { e.preventDefault(); setIsDraggingFiles(true); }}
+                            onDragOver={(e) => { e.preventDefault(); setIsDraggingFiles(true); }}
+                            onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDraggingFiles(false); }}
+                            onDrop={(e) => { e.preventDefault(); setIsDraggingFiles(false); if (!isUploadingAttachment) addFiles(e.dataTransfer.files); }}
                         >
                             <div>
-                                <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                                    <Upload className="h-8 w-8 text-gray-400" />
-                                </div>
+                                {selectedFiles.length === 0 && (
+                                    <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                                        <Upload className="h-8 w-8 text-gray-400" />
+                                    </div>
+                                )}
                                 <h3 className="text-lg font-medium mb-2">
-                                    {t('Upload your files')}
+                                    {selectedFiles.length > 0 ? t('Add more files') : t('Upload your files')}
                                 </h3>
                                 <p className="text-sm text-muted-foreground mb-6">
                                     {t('Drag and drop your files here, or click to browse')}
@@ -1065,7 +1094,12 @@ export default function ContractShow() {
                                 <Input
                                     type="file"
                                     multiple
-                                    onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                                    accept={uploadLimits.allowedTypes ? uploadLimits.allowedTypes.split(',').map((type) => `.${type.trim()}`).join(',') : undefined}
+                                    onChange={(e) => {
+                                        addFiles(e.target.files);
+                                        // Clear it so the same file can be picked again after removing it.
+                                        e.target.value = '';
+                                    }}
                                     className="hidden"
                                     id="file-upload-contract"
                                 />
@@ -1089,17 +1123,30 @@ export default function ContractShow() {
                                     )}
                                 </Button>
 
-                                {selectedFiles.length > 0 && (
-                                    <div className="mt-4 text-sm text-gray-600">
-                                        {selectedFiles.length} file(s) selected
-                                    </div>
+                                {uploadLimits.allowedTypes && (
+                                    <p className="mt-4 text-xs text-muted-foreground">
+                                        {t('Allowed')}: {uploadLimits.allowedTypes.split(',').map((type) => type.trim().toUpperCase()).join(', ')} &bull; {t('up to')} {formatFileSize(uploadLimits.maxSizeKb * 1024)}
+                                    </p>
                                 )}
                             </div>
                         </div>
 
+                        <SelectedFilesList
+                            files={selectedFiles}
+                            limits={uploadLimits}
+                            onRemove={(file) => setSelectedFiles((current) => current.filter((f) => fileKey(f) !== fileKey(file)))}
+                            onClear={() => setSelectedFiles([])}
+                            disabled={isUploadingAttachment}
+                        />
+
                         {selectedFiles.length > 0 && (
-                            <div className="flex gap-2 justify-end">
-                                <Button variant="outline" onClick={() => { setIsUploadModalOpen(false); setSelectedFiles([]); }} disabled={isUploadingAttachment}>
+                            <div className="flex flex-wrap items-center gap-2 justify-end">
+                                {invalidFileCount > 0 && (
+                                    <p className="mr-auto text-xs text-destructive">
+                                        {t('Remove the files marked in red to upload.')}
+                                    </p>
+                                )}
+                                <Button variant="outline" onClick={closeUploadModal} disabled={isUploadingAttachment}>
                                     {t('Cancel')}
                                 </Button>
                                 <Button onClick={() => {
@@ -1108,9 +1155,8 @@ export default function ContractShow() {
                                     selectedFiles.forEach(file => formData.append('files[]', file));
                                     router.post(route('contract-attachments.store', contract.id), formData, {
                                         onSuccess: () => {
-                                            setIsUploadModalOpen(false);
-                                            setSelectedFiles([]);
                                             setIsUploadingAttachment(false);
+                                            closeUploadModal();
                                             toast.success('Attachments uploaded successfully');
                                         },
                                         onError: (errors) => {
@@ -1118,7 +1164,7 @@ export default function ContractShow() {
                                             toast.error(`Failed: ${Object.values(errors).join(', ')}`);
                                         }
                                     });
-                                }} disabled={isUploadingAttachment}>
+                                }} disabled={isUploadingAttachment || invalidFileCount > 0}>
                                     {isUploadingAttachment ? (
                                         <>
                                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>

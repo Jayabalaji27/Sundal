@@ -13,7 +13,9 @@ class MediaItem extends Model implements HasMedia
 {
     use HasFactory, InteractsWithMedia;
 
-    protected $fillable = ['name', 'description'];
+    // workspace_id and user_id must be fillable: the Media Library only lists a
+    // workspace's own items, so an upload saved without them never showed up again.
+    protected $fillable = ['name', 'description', 'workspace_id', 'user_id'];
     
     protected $appends = ['url', 'thumb_url', 'mime_type'];
     
@@ -34,7 +36,8 @@ class MediaItem extends Model implements HasMedia
     public function getThumbUrlAttribute()
     {
         $media = $this->getFirstMedia('images');
-        return $media ? $media->getUrl('thumb') : $this->getUrlAttribute();
+        // Only images get a thumbnail; a PDF's "thumb" URL would point at nothing.
+        return $media ? $media->getUrl($media->hasGeneratedConversion('thumb') ? 'thumb' : '') : $this->getUrlAttribute();
     }
     
     public function toArray()
@@ -50,7 +53,8 @@ class MediaItem extends Model implements HasMedia
     {
         $config = StorageConfigService::getStorageConfig();
         $allowedExtensions = array_map('trim', explode(',', strtolower($config['allowed_file_types'])));
-        $maxSizeBytes = ($config['max_file_size_mb'] ?? 2) * 1024 * 1024; // Convert MB to bytes
+        // Same limit the upload endpoint validates against (stored in KB).
+        $maxSizeBytes = ($config['max_file_size_kb'] ?? 2048) * 1024;
         
         $this->addMediaCollection('images')
             ->acceptsFile(function ($file) use ($allowedExtensions, $maxSizeBytes) {
@@ -73,7 +77,7 @@ class MediaItem extends Model implements HasMedia
             ->useDisk(StorageConfigService::getActiveDisk());
     }
 
-    public function registerMediaConversions(Media $media = null): void
+    public function registerMediaConversions(?Media $media = null): void
     {
         $this->addMediaConversion('thumb')
             ->width(300)

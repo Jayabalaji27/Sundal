@@ -110,6 +110,22 @@ function SummaryStat({ icon, label, children }: { icon: ReactNode; label: string
 }
 
 // Panels of this page (Backlog and Board are separate pages, see ProjectShell).
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+
+const fileExtension = (name?: string) => (name?.includes('.') ? name.split('.').pop()!.toUpperCase() : 'FILE');
+
+const isImageFile = (item: { mime_type?: string; name?: string }) =>
+    item.mime_type ? item.mime_type.startsWith('image/') : IMAGE_EXTENSIONS.includes(fileExtension(item.name).toLowerCase());
+
+const fileBadgeColor = (name?: string) => {
+    const ext = fileExtension(name).toLowerCase();
+    if (ext === 'pdf') return 'bg-red-500';
+    if (['doc', 'docx'].includes(ext)) return 'bg-blue-500';
+    if (['xls', 'xlsx', 'csv'].includes(ext)) return 'bg-green-600';
+    if (['ppt', 'pptx'].includes(ext)) return 'bg-orange-500';
+    return 'bg-gray-500';
+};
+
 const PANEL_TABS = ['overview', 'gantt', 'milestones', 'tasks', 'team', 'attachments', 'notes', 'budget', 'expense', 'timesheet', 'activity', 'portal'];
 
 export default function ProjectShow() {
@@ -2039,14 +2055,23 @@ export default function ProjectShow() {
                                                     <div className="relative overflow-hidden rounded-t-lg">
                                                         {attachment.media_item?.url ? (
                                                             <div className="relative">
-                                                                <img 
-                                                                    src={attachment.media_item.thumb_url || attachment.media_item.url} 
+                                                                {isImageFile(attachment.media_item) ? (
+                                                                <img
+                                                                    src={attachment.media_item.thumb_url || attachment.media_item.url}
                                                                     alt={attachment.media_item.name}
                                                                     className="w-full h-24 object-cover transition-transform duration-200 group-hover:scale-105"
                                                                     onError={(e) => {
                                                                         e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDIwMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMTUwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik04NyA2NUw5MyA3MUwxMDcgNTdMMTIzIDczVjEwNUg3N1Y2NUg4N1oiIGZpbGw9IiM5Q0EzQUYiLz4KPGNpcmNsZSBjeD0iOTEiIGN5PSI1NyIgcj0iNCIgZmlsbD0iIzlDQTNBRiIvPgo8L3N2Zz4K';
                                                                     }}
                                                                 />
+                                                                ) : (
+                                                                    // Documents have no thumbnail image; show their type instead.
+                                                                    <div className="w-full h-24 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                                                                        <span className={`rounded px-2.5 py-1.5 text-xs font-bold text-white ${fileBadgeColor(attachment.media_item.name)}`}>
+                                                                            {fileExtension(attachment.media_item.name)}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
                                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                                                                 
                                                                 {/* Action Buttons Overlay */}

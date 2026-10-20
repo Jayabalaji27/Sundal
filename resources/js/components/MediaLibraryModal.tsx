@@ -40,11 +40,15 @@ export default function MediaLibraryModal({
   const canCreateMedia = hasPermission(permissions, 'media_upload');
   const canManageMedia = hasPermission(permissions, 'manage-media');
 
-  const allowedTypes = storageSettings?.allowed_file_types || 'jpg,png,webp,gif';
-    const acceptAttribute = allowedTypes
-        .split(',')
-        .map((type) => `.${type.trim()}`)
-        .join(',');
+  // The types and size the upload endpoint accepts (Settings > Storage).
+  const allowedTypes: string = storageSettings?.allowed_file_types || 'jpg,jpeg,png,webp,gif';
+  const maxFileSizeKb: number = storageSettings?.max_file_size_kb || 2048;
+  const acceptAttribute = allowedTypes
+      .split(',')
+      .map((type) => `.${type.trim()}`)
+      .join(',');
+  const allowedTypesLabel = allowedTypes.split(',').map((type) => type.trim().toUpperCase()).join(', ');
+  const maxFileSizeLabel = maxFileSizeKb >= 1024 ? `${+(maxFileSizeKb / 1024).toFixed(1)} MB` : `${maxFileSizeKb} KB`;
 
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [filteredMedia, setFilteredMedia] = useState<MediaItem[]>([]);
@@ -144,6 +148,11 @@ export default function MediaLibraryModal({
       if (response.ok) {
         if (result.data && result.data.length > 0) {
           setMedia(prev => [...result.data, ...prev]);
+          // Pick what was just uploaded, so "Select" is the next click rather
+          // than finding the new file in the grid first.
+          if (multiple) {
+            setSelectedItems(prev => [...prev, ...result.data.map((item: MediaItem) => item.url).filter((url: string) => !prev.includes(url))]);
+          }
         }
 
         // Show appropriate success/warning messages
@@ -266,7 +275,11 @@ export default function MediaLibraryModal({
                 type="file"
                 multiple
                 accept={acceptAttribute}
-                onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
+                onChange={(e) => {
+                  if (e.target.files) handleFileUpload(e.target.files);
+                  // Clear it so picking the same file again still uploads.
+                  e.target.value = '';
+                }}
                 className="hidden"
                 id="file-upload"
               />
@@ -288,6 +301,11 @@ export default function MediaLibraryModal({
         {/* Stats bar */}
         <div className="flex-shrink-0 flex flex-wrap items-center justify-between gap-2 px-5 py-2 text-xs text-muted-foreground bg-muted/30 border-b">
           <span>{filteredMedia.length} {t('files')} &bull; {t('Page')} {currentPage} {t('of')} {totalPages || 1}</span>
+          {canCreateMedia && (
+            <span title={allowedTypesLabel}>
+              {t('Allowed')}: {allowedTypesLabel} &bull; {t('up to')} {maxFileSizeLabel}
+            </span>
+          )}
           {multiple && selectedItems.length > 0 && (
             <Badge variant="default" className="text-xs">
               {selectedItems.length} {t('selected')}
@@ -325,7 +343,7 @@ export default function MediaLibraryModal({
                   </p>
                 )}
                 <p className="text-sm text-muted-foreground mb-4">
-                  {searchTerm ? t('Try a different search term or upload new images') : t('Upload images to get started')}
+                  {searchTerm ? t('Try a different search term or upload new files') : t('Upload files to get started')}
                 </p>
                 {canCreateMedia && (
                   <Button
@@ -335,7 +353,7 @@ export default function MediaLibraryModal({
                     disabled={uploading}
                   >
                     <Plus className="h-4 w-4 mr-1.5" />
-                    {t('Upload Images')}
+                    {t('Upload Files')}
                   </Button>
                 )}
               </div>

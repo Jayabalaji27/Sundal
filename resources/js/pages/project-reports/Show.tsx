@@ -1,9 +1,10 @@
 import React, { useState, useEffect, Fragment, useRef } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
-import { Download, Search, Filter, ArrowLeft } from 'lucide-react';
+import { Search, Filter, ArrowLeft } from 'lucide-react';
 import { usePdfDownload } from '@/hooks/usePdfDownload';
 import { PageTemplate } from '@/components/page-template';
+import { ReportExportActions } from '@/components/reports/report-export-actions';
 import { hasPermission } from '@/utils/authorization';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -164,10 +165,6 @@ export default function Show({ project, stats, userStats, users, stages, workspa
         }
     };
 
-    const handleExport = () => {
-        window.open(route('project-reports.export', project.id), '_blank');
-    };
-
     const formatDate = (dateString: string) => {
         if (!dateString) return '-';
         return window.appSettings.formatDateTime(new Date(dateString),false);
@@ -295,16 +292,10 @@ export default function Show({ project, stats, userStats, users, stages, workspa
     ];
 
     const pageActions = [
-        ...(hasPermission(permissions, 'project_report_export') ? [{
-            label: t('Download PDF'),
-            icon: <Download className="h-4 w-4 mr-2" />,
-            variant: 'default' as const,
-            onClick: handleExport
-        }] : []),
         {
             label: t('Back'),
             icon: <ArrowLeft className="h-4 w-4 mr-2" />,
-            variant: 'outline',
+            variant: 'outline' as const,
             onClick: () => router.get(route('project-reports.index'))
         }
     ];
@@ -328,6 +319,12 @@ export default function Show({ project, stats, userStats, users, stages, workspa
             title={t('Project Detail')}
             url="/project-reports"
             actions={pageActions}
+            toolbar={hasPermission(permissions, 'project_report_export') && (
+                <ReportExportActions
+                    exportUrl={route('project-reports.export', project.id)}
+                    emailUrl={route('project-reports.email', project.id)}
+                />
+            )}
             breadcrumbs={breadcrumbs}
             noPadding
         >

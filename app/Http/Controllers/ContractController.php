@@ -47,7 +47,43 @@ class ContractController extends Controller
     {
         $this->authorizePermission('contract_view_any');
         $workspaceId = auth()->user()->current_workspace_id;
-        
+
+        $query = $this->filteredContracts($request);
+
+        $perPage = in_array($request->get('per_page', 12), [12, 24, 48, 100]) ? $request->get('per_page', 12) : 12;
+        $contracts = $query->paginate($perPage);
+
+        $contracts->getCollection()->transform(function ($contract) {
+            if ($contract->client) {
+                $contract->client->avatar = check_file($contract->client->avatar)
+                    ? get_file($contract->client->avatar)
+                    : get_file('avatars/avatar.png');
+            }
+            return $contract;
+        });
+
+        return $this->renderIndex($request, $contracts, $workspaceId);
+    }
+
+    /** The contracts list as an Excel file, with the page's filters and sort. */
+    public function export(Request $request)
+    {
+        $this->authorizePermission('contract_view_any');
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\ContractExport($this->filteredContracts($request)->with('project:id,title')),
+            'contracts_' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }
+
+    /**
+     * Contracts page list: this workspace, a client's own only, with the
+     * page's filters and sort. Shared with the Excel export.
+     */
+    private function filteredContracts(Request $request)
+    {
+        $workspaceId = auth()->user()->current_workspace_id;
+
         // Start with base query without forWorkspace scope to avoid ambiguity
         $query = Contract::where('contracts.workspace_id', $workspaceId)
             ->with(['contractType', 'client:' . self::CLIENT_COLUMNS, 'creator:' . self::CREATOR_COLUMNS])
@@ -105,18 +141,11 @@ class ContractController extends Controller
                 break;
         }
 
-        $perPage = in_array($request->get('per_page', 12), [12, 24, 48, 100]) ? $request->get('per_page', 12) : 12;
-        $contracts = $query->paginate($perPage);
+        return $query;
+    }
 
-        $contracts->getCollection()->transform(function ($contract) {
-            if ($contract->client) {
-                $contract->client->avatar = check_file($contract->client->avatar)
-                    ? get_file($contract->client->avatar)
-                    : get_file('avatars/avatar.png');
-            }
-            return $contract;
-        });
-        
+    private function renderIndex(Request $request, $contracts, $workspaceId)
+    {
         $contractTypes = ContractType::forWorkspace($workspaceId)->active()->ordered()->get();
         // The client filter and project lists feed the create/edit dialog and the
         // client filter; a client only needs themselves and their own projects.

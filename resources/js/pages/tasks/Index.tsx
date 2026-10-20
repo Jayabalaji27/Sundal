@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Plus, Search, Filter, MoreHorizontal, Eye, Edit, Copy, Trash2, LayoutGrid, List, User as UserIcon, CheckSquare, Columns, AlertTriangle } from 'lucide-react';
-import { PageTemplate } from '@/components/page-template';
+import { PageTemplate, type PageAction } from '@/components/page-template';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
 import { Task, Project, TaskStage, User, PaginatedData } from '@/types';
 import { toast } from '@/components/custom-toast';
@@ -25,7 +25,8 @@ import { AgileTask, SEVERITY_OPTIONS, SeverityBadge, TypeIcon } from '@/componen
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { BOARD_VIEWS, BoardView, BoardViewMenu } from '@/components/tasks/board-view-menu';
 import { hasPermission } from '@/utils/authorization';
-import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, ChevronDown, FileDown, FileUp } from 'lucide-react';
+import { ImportModal } from '@/components/ImportModal';
 import { cn } from '@/lib/utils';
 
 /** Remembers the view picked here, so the menu link opens on it (read by TaskController). */
@@ -80,6 +81,8 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+    const [isImportOpen, setIsImportOpen] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [editingTask, setEditingTask] = useState<Task | null>(null);
     // The Board's three views: Detail and Plain cards by stage, or the Sheet (this table).
     const view: BoardView = BOARD_VIEWS.includes(filters.view as BoardView) ? (filters.view as BoardView) : 'sheet';
@@ -311,7 +314,69 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
         );
     };
 
-    const pageActions = [];
+    const userPermissionList = auth?.permissions || [];
+    const canExport = hasPermission(userPermissionList, 'task_view_any');
+    const canImport = userWorkspaceRole !== 'client' && hasPermission(userPermissionList, 'task_create');
+
+    // The list as the page shows it now (the applied filters and sort), as Excel.
+    const exportTasks = async () => {
+        setIsExporting(true);
+        try {
+            const params: Record<string, string> = {};
+            ['project_id', 'stage_id', 'priority', 'assigned_to', 'type', 'severity', 'search', 'sort_field', 'sort_direction'].forEach((key) => {
+                const value = (filters as Record<string, any>)[key];
+                if (value && value !== 'all') params[key] = String(value);
+            });
+            const response = await fetch(route('tasks.export', params), { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const url = URL.createObjectURL(await response.blob());
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `tasks_${new Date().toLocaleDateString('en-CA')}.xlsx`; // today's local date, YYYY-MM-DD
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            toast.success(t('Tasks exported'));
+        } catch (error) {
+            console.error('Task export failed:', error);
+            toast.error(t('Export failed'));
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const importExportMenu = (canExport || canImport) && (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isExporting}>
+                    <FileDown className="h-4 w-4 mr-2" />
+                    {isExporting ? t('Exporting...') : t('Import / Export')}
+                    <ChevronDown className="h-4 w-4 ml-1" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-52">
+                {canExport && (
+                    <DropdownMenuItem onClick={exportTasks} className="gap-2">
+                        <FileDown className="h-4 w-4" />
+                        {t('Export to Excel')}
+                    </DropdownMenuItem>
+                )}
+                {canImport && (
+                    <DropdownMenuItem onClick={() => setIsImportOpen(true)} className="gap-2">
+                        <FileUp className="h-4 w-4" />
+                        {t('Import from Excel / CSV')}
+                    </DropdownMenuItem>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+
+    const importProject = filters.project_id && filters.project_id !== 'all'
+        ? projects.find((p) => String(p.id) === String(filters.project_id))
+        : undefined;
+
+    const pageActions: PageAction[] = [];
 
     // Only show Create Task button for non-clients; on the bug list it reports a bug.
     if (userWorkspaceRole !== 'client') {
@@ -343,6 +408,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
             title={project_name ? `${project_name} - ${t('Tasks')}` : showingBugs ? t('Bugs') : (userWorkspaceRole === 'member' ? t('My Tasks') : t('Tasks'))}
             url="/tasks"
             actions={pageActions}
+            toolbar={importExportMenu}
             breadcrumbs={breadcrumbs}
             noPadding
         >
@@ -761,6 +827,29 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                 itemName={taskToDelete?.title || ''}
                 entityName={taskToDelete?.type === 'bug' ? t('bug') : t('task')}
             />
+
+            {canImport && (
+                <ImportModal
+                    isOpen={isImportOpen}
+                    onClose={() => setIsImportOpen(false)}
+                    type="tasks"
+                    title="Tasks"
+                    requiredFields={importProject ? ['title'] : ['title', 'project']}
+                    extraData={importProject ? { project_id: importProject.id } : undefined}
+                    notes={
+                        <ul className="text-xs text-blue-700 list-disc pl-4 space-y-0.5">
+                            <li>{t('One task per row, from Excel (.xlsx, .xls) or CSV. Columns are matched by name; you can change any match.')}</li>
+                            <li>
+                                {importProject
+                                    ? t('Rows without a Project go into {{project}}.', { project: importProject.title })
+                                    : t('Each row needs a Project (its exact name). Filter this page by a project first to put every row into it.')}
+                            </li>
+                            <li>{t('People are matched by email or full name. Stage, priority and dates are optional.')}</li>
+                            <li>{t('A title already in the project is skipped. Nobody is notified about imported tasks.')}</li>
+                        </ul>
+                    }
+                />
+            )}
         </PageTemplate>
     );
 }

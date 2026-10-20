@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Plus, Search, Filter, Eye, Edit, Trash2, LayoutGrid, List, Copy, Send, Download } from 'lucide-react';
-import { PageTemplate } from '@/components/page-template';
+import { PageTemplate, type PageAction } from '@/components/page-template';
 import { CrudFormModal } from '@/components/CrudFormModal';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
 import { CrudTable } from '@/components/CrudTable';
@@ -267,8 +267,38 @@ export default function ContractsIndex() {
         );
     };
 
-    const pageActions = [];
-    
+    const pageActions: PageAction[] = [];
+
+    // The list as the page shows it now (applied filters and sort), as Excel.
+    pageActions.push({
+        label: t('Export'),
+        icon: <Download className="h-4 w-4 mr-2" />,
+        variant: 'outline',
+        onClick: async () => {
+            try {
+                const params: Record<string, string> = {};
+                ['search', 'status', 'contract_type_id', 'client_id', 'project_id', 'sort_field', 'sort_direction'].forEach((key) => {
+                    const value = pageFilters[key];
+                    if (value && value !== 'all') params[key] = String(value);
+                });
+                const response = await fetch(route('contracts.export', params), { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const url = URL.createObjectURL(await response.blob());
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `contracts_${new Date().toLocaleDateString('en-CA')}.xlsx`; // today's local date, YYYY-MM-DD
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                toast.success(t('Contracts exported'));
+            } catch (error) {
+                console.error('Contract export failed:', error);
+                toast.error(t('Export failed'));
+            }
+        }
+    });
+
     if (hasPermission(permissions, 'contract_create')) {
         pageActions.push({
             label: t('Add Contract'),

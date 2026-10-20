@@ -1568,8 +1568,12 @@ if (! function_exists('upload_file')) {
             if (!isset($storage_settings['storage_type'])) {
                 $storage_settings['storage_type'] = 'local';
             }
-            $max_size  = !empty($storage_settings['storage_max_upload_size']) ? $storage_settings['storage_max_upload_size'] : '2048';
-            $mimes     = !empty($storage_settings['storage_file_types'])      ? $storage_settings['storage_file_types']      : defaultSettings()['storage_file_types'];
+            // Types and size come from the Storage settings, the same limits the Media
+            // Library and every file picker (storageSettings) use, so a file the page
+            // offers is one this accepts.
+            $storage_config = \App\Services\StorageConfigService::getStorageConfig();
+            $max_size  = $storage_config['max_file_size_kb'];
+            $mimes     = $storage_config['allowed_file_types'];
             if ($storage_settings['storage_type'] == 'wasabi') {
                 config(['filesystems.disks.wasabi.driver'=>'s3','filesystems.disks.wasabi.key'=>$storage_settings['wasabi_access_key'],'filesystems.disks.wasabi.secret'=>$storage_settings['wasabi_secret_key'],'filesystems.disks.wasabi.region'=>$storage_settings['wasabi_region']??'us-east-1','filesystems.disks.wasabi.bucket'=>$storage_settings['wasabi_bucket'],'filesystems.disks.wasabi.endpoint'=>$storage_settings['wasabi_url'],'filesystems.disks.wasabi.root'=>$storage_settings['wasabi_root'],'filesystems.disks.wasabi.visibility'=>'public']);
             } elseif ($storage_settings['storage_type'] == 'aws_s3') {

@@ -33,18 +33,14 @@ class TaskController extends Controller
     {
         $this->googleCalendarService = $googleCalendarService;
     }
-    public function index(Request $request): Response
+
+    /**
+     * The Tasks page's list with its filters and sort, shared by the page and
+     * its Excel export so a download is exactly what the page shows.
+     */
+    private function filteredTasks(Request $request)
     {
-        $this->authorizePermission('task_view_any');
-
         $user = auth()->user();
-        $workspace = $user->currentWorkspace;
-
-        if (!$workspace) {
-            abort(404, __('No workspace found. Please select a workspace.'));
-        }
-
-        $userWorkspaceRole = $workspace->getMemberRole($user);
 
         // Members only see their own tasks, except when viewing a specific project
         $query = Task::with(['project', 'taskStage', 'assignedTo', 'creator', 'milestone'])
@@ -79,23 +75,53 @@ class TaskController extends Controller
         // Add sorting functionality
         $sortField = $request->get('sort_field', 'created_at');
         $sortDirection = $request->get('sort_direction', 'desc');
-        
+
         // Define allowed sort fields to prevent SQL injection
         $allowedSortFields = [
             'title',
-            'priority', 
+            'priority',
             'end_date',
             'start_date',
             'created_at',
             'updated_at',
             'progress'
         ];
-        
+
         if (in_array($sortField, $allowedSortFields)) {
             $query->orderBy($sortField, $sortDirection);
         } else {
             $query->latest(); // Default sorting
         }
+
+        return $query;
+    }
+
+    /** The Tasks page's current list (filters included) as an Excel file. */
+    public function export(Request $request)
+    {
+        $this->authorizePermission('task_view_any');
+        abort_unless(auth()->user()->currentWorkspace, 404, __('No workspace found. Please select a workspace.'));
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\TaskExport($this->filteredTasks($request)),
+            'tasks_' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }
+
+    public function index(Request $request): Response
+    {
+        $this->authorizePermission('task_view_any');
+
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+
+        if (!$workspace) {
+            abort(404, __('No workspace found. Please select a workspace.'));
+        }
+
+        $userWorkspaceRole = $workspace->getMemberRole($user);
+
+        $query = $this->filteredTasks($request);
 
         // The same three views as a project's Board: Detail and Plain cards by stage
         // (every project at once, at most BOARD_LIMIT items), or the Sheet, this

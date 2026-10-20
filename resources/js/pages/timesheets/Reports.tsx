@@ -14,6 +14,7 @@ import { usePage } from '@inertiajs/react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { isDemoMode } from '@/utils/cookie-utils';
 import { toast } from '@/components/custom-toast';
+import { ReportExportActions } from '@/components/reports/report-export-actions';
 
 interface User {
     id: number;
@@ -45,18 +46,27 @@ export default function TimesheetReports({ members, projects, defaultFilters, de
     const userPermissions = auth?.permissions || [];
     const [filters, setFilters] = useState(defaultFilters);
     const [reportData, setReportData] = useState<any>(defaultReportData);
+    // The filters the report on screen was generated with - what Download and
+    // Email use, so editing a filter without regenerating can't export a
+    // different report from the one being shown.
+    const [appliedFilters, setAppliedFilters] = useState(defaultFilters);
     const [isLoading, setIsLoading] = useState(false);
 
     const handleGenerateReport = async () => {
         setIsLoading(true);
+        const requested = filters;
         try {
             const response = await fetch(route('timesheet-reports.generate'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    // Without these Laravel answers a validation error with a redirect
+                    // to an HTML page instead of JSON, so the real error was never shown.
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                 },
-                body: JSON.stringify(filters)
+                body: JSON.stringify(requested)
             });
             const data = await response.json();
             if (!response.ok) {
@@ -65,6 +75,7 @@ export default function TimesheetReports({ members, projects, defaultFilters, de
                 return;
             }
             setReportData(data);
+            setAppliedFilters(requested);
             if (data === null) {
                 toast.error(t('No timesheet entries found for the selected filters.'));
             }
@@ -90,16 +101,12 @@ export default function TimesheetReports({ members, projects, defaultFilters, de
         <PageTemplate 
             title={t('Reports')} 
             breadcrumbs={breadcrumbs}
-            action={
-                <Button 
-                    variant="outline" 
-                    onClick={() => router.visit(route('customer-reports.index'))}
-                    className="flex items-center gap-2"
-                >
-                    <FileText className="h-4 w-4" />
-                    Customer Report
-                </Button>
-            }
+            actions={hasPermission(userPermissions, 'report_customer') ? [{
+                label: t('Customer Report'),
+                icon: <FileText className="h-4 w-4 mr-2" />,
+                variant: 'outline' as const,
+                onClick: () => router.visit(route('customer-reports.index'))
+            }] : []}
         >
             <Head title={t('Timesheet Reports')} />
             
@@ -203,6 +210,7 @@ export default function TimesheetReports({ members, projects, defaultFilters, de
                             onClick={() => {
                                 setFilters(defaultFilters);
                                 setReportData(defaultReportData);
+                                setAppliedFilters(defaultFilters);
                             }}
                             disabled={isLoading}
                             title="Reset to latest reports"
@@ -216,16 +224,22 @@ export default function TimesheetReports({ members, projects, defaultFilters, de
             {/* Report Results */}
             {reportData && (
                 <Card>
-                    <CardHeader>
+                    <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
                         <div>
                             <CardTitle className="flex items-center gap-2 text-xl">
                                 {t('Report Results')}
                                 {isLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>}
                             </CardTitle>
-                            {JSON.stringify(filters) === JSON.stringify(defaultFilters) && (
+                            {JSON.stringify(appliedFilters) === JSON.stringify(defaultFilters) && (
                                 <p className="text-sm text-gray-500 mt-1">{t('Showing latest reports (Last 30 days)')}</p>
                             )}
                         </div>
+                        <ReportExportActions
+                            exportUrl={route('timesheet-reports.export')}
+                            emailUrl={route('timesheet-reports.email')}
+                            params={appliedFilters}
+                            disabled={isLoading}
+                        />
                     </CardHeader>
                     <CardContent>
                         {/* Summary Section */}

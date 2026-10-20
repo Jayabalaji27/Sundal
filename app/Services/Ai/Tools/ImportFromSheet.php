@@ -2,11 +2,11 @@
 
 namespace App\Services\Ai\Tools;
 
+use App\Imports\Concerns\InterpretsSheetValues;
 use App\Models\AiAttachment;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\Ai\Attachments\AttachmentContext;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -22,6 +22,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 abstract class ImportFromSheet extends AiTool implements EditableCard
 {
+    use InterpretsSheetValues;
+
     public function __construct(protected readonly RecordResolver $resolver) {}
 
     /** 'bugs' or 'tasks'. */
@@ -297,42 +299,7 @@ abstract class ImportFromSheet extends AiTool implements EditableCard
         return $mapping;
     }
 
-    private function key(string $name): string
-    {
-        return preg_replace('/[^a-z0-9]/', '', mb_strtolower($name));
-    }
-
-    // ── Values ───────────────────────────────────────────────────────────────
-
-    private const PRIORITY_WORDS = [
-        'low' => ['low', 'lowest', 'minor', 'trivial', 'p4', 'p5', '4', '5'],
-        'medium' => ['medium', 'normal', 'moderate', 'med', 'p3', '3'],
-        'high' => ['high', 'major', 'important', 'p2', '2'],
-        'critical' => ['critical', 'urgent', 'highest', 'blocker', 'immediate', 'p0', 'p1', '0', '1'],
-    ];
-
-    private const SEVERITY_WORDS = [
-        'minor' => ['minor', 'low', 'trivial', 'cosmetic', 's4', 'sev4', '4'],
-        'major' => ['major', 'medium', 'normal', 'moderate', 's3', 'sev3', '3'],
-        'critical' => ['critical', 'high', 'severe', 's2', 'sev2', '2'],
-        'blocker' => ['blocker', 'showstopper', 'urgent', 'highest', 'crash', 's1', 'sev1', '1'],
-    ];
-
-    private function choice(string $value, array $valid, array $words, string $default, string $label, array &$problems): string
-    {
-        $key = $this->key($value);
-        if ($key === '') {
-            return $default;
-        }
-        foreach ($words as $choice => $list) {
-            if (in_array($choice, $valid, true) && in_array($key, $list, true)) {
-                return $choice;
-            }
-        }
-        $problems[] = __('":value" is not a known :label; :default is used', ['value' => $value, 'label' => $label, 'default' => ucfirst($default)]);
-
-        return $default;
-    }
+    // ── Values (key, choice, date and member matching: InterpretsSheetValues) ──
 
     /** @return array{0: ?int, 1: ?string} [member id, name] */
     private function assignee(array $edits, string $cell, Collection $members, User $user, array &$problems): array
@@ -352,44 +319,9 @@ abstract class ImportFromSheet extends AiTool implements EditableCard
             return [null, null];
         }
 
-        // Only a sure match: the email, the full name, or a first name only one person has.
-        $lower = mb_strtolower($cell);
-        $match = $members->first(fn ($m) => mb_strtolower($m->email) === $lower || mb_strtolower($m->name) === $lower);
-        if (!$match) {
-            $byFirst = $members->filter(fn ($m) => mb_strtolower(strtok($m->name, ' ')) === $lower);
-            $match = $byFirst->count() === 1 ? $byFirst->first() : null;
-        }
-        if (!$match) {
-            $problems[] = __('":name" is not in this workspace; left unassigned', ['name' => $cell]);
+        $match = $this->matchMember($cell, $members, $problems);
 
-            return [null, null];
-        }
-
-        return [$match->id, $match->name];
-    }
-
-    private function date(string $value, array &$problems): ?string
-    {
-        if ($value === '') {
-            return null;
-        }
-        foreach (['!Y-m-d', '!d/m/Y', '!d-m-Y', '!d.m.Y', '!Y/m/d'] as $format) {
-            try {
-                $date = Carbon::createFromFormat($format, $value);
-            } catch (\Throwable) {
-                continue;
-            }
-            if ($date && $date->format(ltrim($format, '!')) === $value) {
-                return $date->toDateString();
-            }
-        }
-        try {
-            return Carbon::parse($value)->toDateString();
-        } catch (\Throwable) {
-            $problems[] = __('":value" is not a date; left empty', ['value' => $value]);
-
-            return null;
-        }
+        return $match ? [$match->id, $match->name] : [null, null];
     }
 
     private function project(User $user, string $ref): ?Project

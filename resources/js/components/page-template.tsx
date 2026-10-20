@@ -24,6 +24,8 @@ export interface PageTemplateProps {
   description?: string;
   url?: string;
   actions?: PageAction[];
+  /** Custom header controls shown before the action buttons (e.g. a download menu). */
+  toolbar?: ReactNode;
   children: ReactNode;
   noPadding?: boolean;
   breadcrumbs?: BreadcrumbItem[];
@@ -107,6 +109,7 @@ export function PageTemplate({
   description,
   url,
   actions,
+  toolbar,
   children,
   noPadding = false,
   breadcrumbs
@@ -127,7 +130,14 @@ export function PageTemplate({
         {/* Header with action buttons */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold truncate">{title}</h1>
-          <PageActions actions={actions} />
+          {toolbar ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {toolbar}
+              <PageActions actions={actions} />
+            </div>
+          ) : (
+            <PageActions actions={actions} />
+          )}
         </div>
 
         {/* Content */}
