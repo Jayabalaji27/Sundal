@@ -21,9 +21,13 @@ function Input({ className, type, ref, onClick, ...props }: React.ComponentProps
       type={type}
       data-slot="input"
       className={cn(
-        "border-input file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-        "focus-visible:border-primary",
-        "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+        // 16px text below md keeps iOS from zooming into the field on focus.
+        "flex h-9 w-full min-w-0 rounded-md border border-ds-border-strong bg-ds-surface px-3 py-2 text-base text-ds-fg shadow-ds-xs outline-none transition-[border-color,box-shadow] duration-150 ease-out md:text-sm",
+        "placeholder:text-ds-fg-placeholder selection:bg-primary selection:text-primary-foreground",
+        "file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-ds-fg",
+        "hover:border-ds-border-hover focus-visible:border-ds-border-focus focus-visible:ring-[3px] focus-visible:ring-brand-500/12",
+        "disabled:cursor-not-allowed disabled:border-ds-border disabled:bg-ds-surface-sunken disabled:text-ds-fg-disabled disabled:shadow-none",
+        "aria-invalid:border-ds-danger-input aria-invalid:hover:border-ds-danger-input aria-invalid:focus-visible:border-ds-danger-input aria-invalid:focus-visible:ring-ds-danger-input/12",
         (type === "date" || type === "datetime-local" || type === "time" || type === "month") && !props.disabled ? "cursor-pointer" : "",
         className
       )}

@@ -6,12 +6,18 @@ use App\Models\Timesheet;
 use App\Models\TimesheetEntry;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\Reports\RenderedReport;
+use App\Services\Reports\ReportDocument;
+use App\Services\Reports\ReportRenderer;
+use App\Traits\ExportsReports;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
 
 class TimesheetReportController extends Controller
 {
+    use ExportsReports;
+
     /**
      * Timesheet statuses each report filter includes. "counted" is the default
      * and matches the project page: rejected and draft time is not logged time.
@@ -78,38 +84,7 @@ class TimesheetReportController extends Controller
 
     public function generate(Request $request)
     {
-        // after_or_equal (not after): a single-day report has start_date === end_date,
-        // which the old 'after' rule rejected with a 422 that the frontend swallowed
-        // (it never checked response.ok), making "Generate Report" appear to just do
-        // nothing whenever both dates matched.
-        $validated = $request->validate([
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
-            'user_id' => 'nullable|string',
-            'project_id' => 'nullable|string',
-            'status' => 'nullable|in:' . implode(',', array_keys(self::STATUS_FILTERS)),
-        ]);
-        $statuses = self::STATUS_FILTERS[$validated['status'] ?? 'counted'];
-
-        $user = auth()->user();
-        $workspace = $user->currentWorkspace;
-        
-        $query = $this->visibleEntries($user)
-            ->whereHas('timesheet', function($q) use ($workspace, $statuses) {
-                $q->where('workspace_id', $workspace->id)
-                    ->when($statuses, fn ($q) => $q->whereIn('status', $statuses));
-            })
-            ->whereBetween('date', [$validated['start_date'], $validated['end_date']]);
-
-        if (isset($validated['user_id']) && $validated['user_id'] !== 'all') {
-            $query->where('user_id', $validated['user_id']);
-        }
-
-        if (isset($validated['project_id']) && $validated['project_id'] !== 'all') {
-            $query->where('project_id', $validated['project_id']);
-        }
-
-        $entries = $query->get();
+        $entries = $this->filteredEntries($this->validateFilters($request));
 
         if ($entries->count() === 0) {
             return response()->json(null);
@@ -121,6 +96,136 @@ class TimesheetReportController extends Controller
             'projects' => $this->generateProjectReport($entries),
             'members' => $this->generateMemberReport($entries)
         ]);
+    }
+
+    /** Download the report for the given filters as PDF, Excel or Word. */
+    public function export(Request $request)
+    {
+        $format = $this->reportFormat($request);
+
+        return $this->renderReport($this->validateFilters($request), $format)->download();
+    }
+
+    /** Email the report for the given filters to the signed-in user or another address. */
+    public function email(Request $request)
+    {
+        $filters = $this->validateFilters($request);
+
+        return $this->emailReport($request, __('Timesheet Report'), fn (string $format) => $this->renderReport($filters, $format));
+    }
+
+    private function validateFilters(Request $request): array
+    {
+        // after_or_equal (not after): a single-day report has start_date === end_date,
+        // which the old 'after' rule rejected with a 422 that the frontend swallowed
+        // (it never checked response.ok), making "Generate Report" appear to just do
+        // nothing whenever both dates matched.
+        return $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'user_id' => 'nullable|string',
+            'project_id' => 'nullable|string',
+            'status' => 'nullable|in:' . implode(',', array_keys(self::STATUS_FILTERS)),
+        ]);
+    }
+
+    private function filteredEntries(array $filters)
+    {
+        $statuses = self::STATUS_FILTERS[$filters['status'] ?? 'counted'];
+
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+
+        $query = $this->visibleEntries($user)
+            ->whereHas('timesheet', function($q) use ($workspace, $statuses) {
+                $q->where('workspace_id', $workspace->id)
+                    ->when($statuses, fn ($q) => $q->whereIn('status', $statuses));
+            })
+            ->whereBetween('date', [$filters['start_date'], $filters['end_date']]);
+
+        if (isset($filters['user_id']) && $filters['user_id'] !== 'all') {
+            $query->where('user_id', $filters['user_id']);
+        }
+
+        if (isset($filters['project_id']) && $filters['project_id'] !== 'all') {
+            $query->where('project_id', $filters['project_id']);
+        }
+
+        return $query->get();
+    }
+
+    private function renderReport(array $filters, string $format): RenderedReport
+    {
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+        $entries = $this->filteredEntries($filters)->sortBy('date')->values();
+        $currency = $this->reportCurrency();
+        $amount = fn ($entry) => (float) $entry->hours * (float) ($entry->hourly_rate ?? 0);
+
+        $projectName = isset($filters['project_id']) && $filters['project_id'] !== 'all'
+            ? Project::forWorkspace($workspace->id)->whereKey($filters['project_id'])->value('title')
+            : null;
+        $memberName = isset($filters['user_id']) && $filters['user_id'] !== 'all'
+            ? User::whereKey($filters['user_id'])->value('name')
+            : null;
+        $statusLabels = ['counted' => __('Submitted & approved'), 'approved' => __('Approved only'), 'all' => __('All (incl. draft & rejected)')];
+
+        $doc = (new ReportDocument(
+            __('Timesheet Report'),
+            'Timesheet Report ' . $filters['start_date'] . ' to ' . $filters['end_date'],
+            $workspace->name
+        ))
+            ->meta(__('Period'), $this->reportDate($filters['start_date']) . ' - ' . $this->reportDate($filters['end_date']))
+            ->meta(__('Project'), $projectName ?? __('All projects'))
+            ->meta(__('Member'), $memberName ?? __('All members'))
+            ->meta(__('Timesheet status'), $statusLabels[$filters['status'] ?? 'counted'])
+            ->meta(__('Generated by'), $user->name)
+            ->summary(__('Total hours'), round((float) $entries->sum('hours'), 2))
+            ->summary(__('Billable hours'), round((float) $entries->where('is_billable', true)->sum('hours'), 2))
+            ->summary(__('Total amount') . " ($currency)", round($entries->sum($amount), 2))
+            ->summary(__('Entries'), $entries->count());
+
+        $doc->table(
+            __('Projects'),
+            [__('Project'), __('Status'), __('Progress %'), __('Total hours'), __('Billable hours'), __('Amount') . " ($currency)"],
+            $entries->groupBy('project_id')->map(fn ($rows) => [
+                $rows->first()->project?->title ?? __('Unknown Project'),
+                ucfirst(str_replace('_', ' ', (string) $rows->first()->project?->status)),
+                (int) ($rows->first()->project?->progress ?? 0),
+                round((float) $rows->sum('hours'), 2),
+                round((float) $rows->where('is_billable', true)->sum('hours'), 2),
+                round($rows->sum($amount), 2),
+            ])->values()
+        );
+
+        $doc->table(
+            __('Team Members'),
+            [__('Member'), __('Total hours'), __('Billable hours'), __('Amount') . " ($currency)"],
+            $entries->groupBy('user_id')->map(fn ($rows) => [
+                $rows->first()->user?->name ?? __('Unknown User'),
+                round((float) $rows->sum('hours'), 2),
+                round((float) $rows->where('is_billable', true)->sum('hours'), 2),
+                round($rows->sum($amount), 2),
+            ])->sortByDesc(1)->values()
+        );
+
+        $doc->table(
+            __('Time Entries'),
+            [__('Date'), __('Member'), __('Project'), __('Task'), __('Description'), __('Hours'), __('Billable'), __('Amount') . " ($currency)"],
+            $entries->map(fn ($entry) => [
+                $this->reportDate($entry->date),
+                $entry->user?->name ?? __('Unknown User'),
+                $entry->project?->title ?? __('Unknown Project'),
+                $entry->task?->title,
+                $entry->description,
+                round((float) $entry->hours, 2),
+                (bool) $entry->is_billable,
+                round($amount($entry), 2),
+            ]),
+            __('No timesheet entries found for the selected filters.')
+        );
+
+        return app(ReportRenderer::class)->render($doc, $format);
     }
 
 

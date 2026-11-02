@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import {
     Search, FolderKanban, CheckSquare, Bug, Clock, FileText,
     MessageSquare, BookOpen, Users, Settings, LayoutDashboard,
-    Plus, Activity, AlertTriangle, Radio, ArrowRight, History
+    Plus, Activity, AlertTriangle, Radio, ArrowRight, History, Calendar
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { hasPermission } from '@/utils/authorization';
@@ -29,10 +29,12 @@ interface CommandItem {
 
 export function CommandPalette() {
     const { t } = useTranslation();
-    const { auth } = usePage().props as any;
+    const { auth, features } = usePage().props as any;
     const permissions = auth?.permissions || [];
     // Chat, Knowledge Base and AI tools need the Pro Add-on (same rule as the sidebar)
     const modulesLocked = !!auth?.modulesLocked;
+    // Modules switched off in config/features.php are left out, as in the sidebar.
+    const flags = features ?? {};
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [selected, setSelected] = useState(0);
@@ -100,27 +102,28 @@ export function CommandPalette() {
         ...(hasPermission(permissions, 'task_view_any') ? [
             { id: 'tasks', label: t('Tasks'), icon: <CheckSquare className="h-4 w-4" />, group: t('Navigate'), shortcut: 'T', action: () => navigate(route('tasks.index')) },
         ] : []),
-        ...(hasPermission(permissions, 'bug_view_any') ? [
+        ...(flags.bugs_menu && hasPermission(permissions, 'bug_view_any') ? [
             { id: 'bugs', label: t('Bugs'), icon: <Bug className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('tasks.index', { type: 'bug' })) },
         ] : []),
         ...(hasPermission(permissions, 'timesheet_view_any') ? [
             { id: 'timesheets', label: t('Timesheets'), icon: <Clock className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('timesheets.index')) },
         ] : []),
-        ...(!modulesLocked && hasPermission(permissions, 'chat_view') ? [
+        ...(flags.calendar && hasPermission(permissions, 'task_calendar_view') ? [
+            { id: 'calendar', label: t('Calendar'), icon: <Calendar className="h-4 w-4" />, group: t('Navigate'), keywords: 'calendar deadlines schedule', action: () => navigate(route('task-calendar.index')) },
+        ] : []),
+        ...(flags.chat && !modulesLocked && hasPermission(permissions, 'chat_view') ? [
             { id: 'chat', label: t('Chat'), icon: <MessageSquare className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('chat.index')) },
         ] : []),
         ...(hasPermission(permissions, 'invoice_view_any') ? [
             { id: 'invoices', label: t('Invoices'), icon: <FileText className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('invoices.index')) },
         ] : []),
-        ...(!modulesLocked && hasPermission(permissions, 'kb_view_any') ? [
+        ...(flags.knowledge_base && !modulesLocked && hasPermission(permissions, 'kb_view_any') ? [
             { id: 'kb', label: t('Knowledge Base'), icon: <BookOpen className="h-4 w-4" />, group: t('Navigate'), action: () => navigate(route('kb.index')) },
         ] : []),
 
-        // AI Tools
-        ...(!modulesLocked && (hasPermission(permissions, 'agent_use') || hasPermission(permissions, 'agent_view_any')) ? [
+        // AI Tools: owners and managers (agent_advanced_insights), as on the AI page
+        ...(flags.ai && !modulesLocked && hasPermission(permissions, 'agent_advanced_insights') ? [
             { id: 'standup', label: t('Standup Bot'), description: t('Daily team standup'), icon: <Activity className="h-4 w-4" />, group: t('AI Tools'), action: () => navigate(route('standup.index')) },
-        ] : []),
-        ...(!modulesLocked && hasPermission(permissions, 'agent_advanced_insights') ? [
             { id: 'risk-radar', label: t('Risk Radar'), description: t('Project health overview'), icon: <Radio className="h-4 w-4" />, group: t('AI Tools'), action: () => navigate(route('risk-radar.index')) },
             { id: 'conflicts', label: t('Resource Conflicts'), description: t('Workload analysis'), icon: <AlertTriangle className="h-4 w-4" />, group: t('AI Tools'), action: () => navigate(route('resource-conflicts.index')) },
         ] : []),

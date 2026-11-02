@@ -94,6 +94,11 @@ class Contract extends BaseModel
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
     public function notes(): HasMany
     {
         return $this->hasMany(ContractNote::class);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Project;
 use App\Traits\HasPermissionChecks;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -31,11 +32,15 @@ class ResourceConflictController extends Controller
         $workspace = $user->currentWorkspace;
         if (!$workspace) return [];
 
+        // Only projects this person may see: a manager sees the load on their own projects.
+        $visibleProjects = Project::forWorkspace($workspace->id)->visibleTo($user)->select('id');
+
         // Users with more than 3 concurrent active tasks (overlapping end dates within 7 days)
         $overloaded = DB::table('tasks as t')
             ->join('projects as p', 'p.id', '=', 't.project_id')
             ->join('users as u', 'u.id', '=', 't.assigned_to')
             ->where('p.workspace_id', $workspace->id)
+            ->whereIn('p.id', $visibleProjects)
             ->where('t.progress', '<', 100)
             ->whereNotNull('t.assigned_to')
             ->whereDate('t.end_date', '>=', now())
@@ -60,6 +65,7 @@ class ResourceConflictController extends Controller
                 ->join('projects as p', 'p.id', '=', 't.project_id')
                 ->where('t.assigned_to', $row->user_id)
                 ->where('p.workspace_id', $workspace->id)
+                ->whereIn('p.id', $visibleProjects)
                 ->where('t.progress', '<', 100)
                 ->whereDate('t.end_date', '>=', now())
                 ->whereDate('t.end_date', '<=', now()->addDays(14))

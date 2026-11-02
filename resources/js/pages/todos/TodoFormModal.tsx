@@ -336,7 +336,7 @@ export default function TodoFormModal({ isOpen, onClose, todo, workspaceMembers 
                                                             {comment.can_update && (
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button
+                                                                        <Button aria-label={t('Edit')}
                                                                             variant="ghost"
                                                                             size="icon"
                                                                             onClick={() => {
@@ -354,7 +354,7 @@ export default function TodoFormModal({ isOpen, onClose, todo, workspaceMembers 
                                                             {comment.can_delete && (
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button
+                                                                        <Button aria-label={t('Delete')}
                                                                             variant="ghost"
                                                                             size="icon"
                                                                             onClick={() => {

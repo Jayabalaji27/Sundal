@@ -226,7 +226,7 @@ export default function Index({ ownedWorkspaces, memberWorkspaces, currentWorksp
                                                     {hasPermission(permissions, 'workspace_view') && (
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit(route('workspaces.show', workspace.id))}>
+                                                                <Button aria-label={t('View Details')} variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit(route('workspaces.show', workspace.id))}>
                                                                     <Eye className="w-4 h-4" />
                                                                 </Button>
                                                             </TooltipTrigger>
@@ -284,7 +284,7 @@ export default function Index({ ownedWorkspaces, memberWorkspaces, currentWorksp
                                             <div className="flex gap-1">
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit(route('workspaces.show', workspace.id))}>
+                                                        <Button aria-label={t('View Details')} variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit(route('workspaces.show', workspace.id))}>
                                                             <Eye className="w-4 h-4" />
                                                         </Button>
                                                     </TooltipTrigger>
@@ -370,7 +370,7 @@ export default function Index({ ownedWorkspaces, memberWorkspaces, currentWorksp
                                                     {hasPermission(permissions, 'workspace_view') && (
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
-                                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit(route('workspaces.show', workspace.id))}>
+                                                                <Button aria-label={t('View Details')} variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit(route('workspaces.show', workspace.id))}>
                                                                     <Eye className="w-4 h-4" />
                                                                 </Button>
                                                             </TooltipTrigger>
@@ -428,7 +428,7 @@ export default function Index({ ownedWorkspaces, memberWorkspaces, currentWorksp
                                             <div className="flex gap-1">
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit(route('workspaces.show', workspace.id))}>
+                                                        <Button aria-label={t('View Details')} variant="ghost" size="icon" className="h-8 w-8" onClick={() => router.visit(route('workspaces.show', workspace.id))}>
                                                             <Eye className="w-4 h-4" />
                                                         </Button>
                                                     </TooltipTrigger>

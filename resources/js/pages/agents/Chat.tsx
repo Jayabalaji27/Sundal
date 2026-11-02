@@ -62,7 +62,7 @@ export default function AgentChat() {
 
                 {/* Header */}
                 <div className="flex items-center gap-3 border-b px-6 py-3">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                    <Button aria-label={t('Back')} variant="ghost" size="icon" className="h-8 w-8 shrink-0"
                         onClick={() => window.history.back()}>
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
@@ -133,7 +133,7 @@ export default function AgentChat() {
                                 <Input value={input} onChange={e => setInput(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
                                     placeholder={`${t('Message')} ${agent.name}…`} className="flex-1" />
-                                <Button onClick={send} disabled={!input.trim() || loading} size="icon">
+                                <Button aria-label={t('Send')} onClick={send} disabled={!input.trim() || loading} size="icon">
                                     <Send className="h-4 w-4" />
                                 </Button>
                             </div>

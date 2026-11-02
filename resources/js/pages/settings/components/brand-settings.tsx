@@ -40,9 +40,9 @@ export const DEFAULT_BRAND_SETTINGS: BrandSettings = {
   favicon: 'images/logos/favicon.png',
   titleText: 'Sundal',
   footerText: `© ${new Date().getFullYear()} Sundal. All rights reserved.`,
-  themeColor: 'green',
-  customColor: '#10B77f',
-  sidebarVariant: 'inset',
+  themeColor: 'purple',
+  customColor: '#4f46e5',
+  sidebarVariant: 'sidebar',
   sidebarStyle: 'plain',
   layoutDirection: 'left',
   themeMode: 'light',
@@ -614,7 +614,7 @@ export default function BrandSettings({ userSettings }: BrandSettingsProps) {
                       <Separator className="my-2" />
 
                       <div className="grid grid-cols-6 gap-2">
-                        {Object.entries({ blue: '#3b82f6', green: '#10B77F', purple: '#8b5cf6', orange: '#f97316', red: '#ef4444' }).map(([color, hex]) => (
+                        {Object.entries({ blue: '#3b82f6', green: '#10B77F', purple: '#4f46e5', orange: '#f97316', red: '#ef4444' }).map(([color, hex]) => (
                           <Button
                             key={color}
                             type="button"

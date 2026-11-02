@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import TimeEntryForm from './TimeEntryForm';
 import CalendarDayView from './CalendarDayView';
+import { useTranslation } from 'react-i18next';
 
 interface TimeEntry {
     id: number;
@@ -45,6 +46,7 @@ export default function TimesheetCalendar({
     onMonthChange,
     permissions 
 }: Props) {
+    const { t } = useTranslation();
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [isDayViewOpen, setIsDayViewOpen] = useState(false);
@@ -85,7 +87,7 @@ export default function TimesheetCalendar({
             <CardHeader>
                 <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-4">
-                        <Button
+                        <Button aria-label={t('Previous')}
                             variant="outline"
                             size="icon"
                             onClick={() => navigateMonth('prev')}
@@ -95,7 +97,7 @@ export default function TimesheetCalendar({
                         
                         <span>{formatMonth()}</span>
                         
-                        <Button
+                        <Button aria-label={t('Next')}
                             variant="outline"
                             size="icon"
                             onClick={() => navigateMonth('next')}

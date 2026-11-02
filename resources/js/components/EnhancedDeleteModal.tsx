@@ -30,33 +30,33 @@ export function EnhancedDeleteModal({
   
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent role="alertdialog">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-600">
-            <AlertTriangle className="h-5 w-5" />
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-ds-danger" aria-hidden="true" />
             {t("Delete")} {entityName}
           </DialogTitle>
           {/* Rendered as a div: the description holds block content, which a <p> can't */}
           <DialogDescription asChild>
             <div className="space-y-3">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-red-800 font-medium">
+              <div className="rounded-lg border border-ds-danger-border/60 bg-ds-danger-bg p-3">
+                <p className="font-medium text-ds-danger-fg">
                   {t("Are you sure you want to delete")} "{itemName}"?
                 </p>
-                <p className="text-red-700 text-sm mt-1">
+                <p className="mt-1 text-sm text-ds-danger-fg/90">
                   {warningMessage || t("This action cannot be undone.")}
                 </p>
               </div>
             
               {additionalInfo.length > 0 && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <p className="text-yellow-800 font-medium text-sm mb-2">
+                <div className="rounded-lg border border-ds-warning/25 bg-ds-warning-bg p-3">
+                  <p className="mb-2 text-sm font-medium text-ds-warning-fg">
                     {t("This will also delete:")}
                   </p>
-                  <ul className="text-yellow-700 text-sm space-y-1">
+                  <ul className="space-y-1 text-sm text-ds-warning-fg">
                     {additionalInfo.map((info, index) => (
                       <li key={index} className="flex items-center gap-2">
-                        <span className="w-1 h-1 bg-yellow-600 rounded-full"></span>
+                        <span className="size-1 shrink-0 rounded-full bg-ds-warning" aria-hidden="true"></span>
                         {info}
                       </li>
                     ))}
@@ -66,7 +66,7 @@ export function EnhancedDeleteModal({
             </div>
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="sm:justify-end gap-2">
+        <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
             {t("Cancel")}
           </Button>
@@ -74,11 +74,12 @@ export function EnhancedDeleteModal({
             type="button"
             variant="destructive"
             onClick={onConfirm}
-            disabled={isSubmitting || confirmDisabled}
-            className="bg-red-600 hover:bg-red-700"
+            disabled={confirmDisabled}
+            loading={isSubmitting}
+            loadingText={t("Deleting...")}
           >
-            <Trash2 className="h-4 w-4 mr-2" />
-            {isSubmitting ? t("Deleting...") : `${t("Delete")} ${entityName}`}
+            <Trash2 />
+            {`${t("Delete")} ${entityName}`}
           </Button>
         </DialogFooter>
       </DialogContent>

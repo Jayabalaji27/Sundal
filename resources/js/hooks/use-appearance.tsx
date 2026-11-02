@@ -11,15 +11,15 @@ export interface ThemeSettings {
 
 const DEFAULT_THEME: ThemeSettings = {
     appearance: 'light',
-    themeColor: 'green',
-    customColor: '#10b981',
+    themeColor: 'purple',
+    customColor: '#4f46e5',
 };
 
-// Preset theme colors
+// Preset theme colors ("purple" is the design system's brand colour, the default)
 export const THEME_COLORS = {
     blue: '#3b82f6',
     green: '#10b981',
-    purple: '#8b5cf6',
+    purple: '#4f46e5',
     orange: '#f97316',
     red: '#ef4444',
 };

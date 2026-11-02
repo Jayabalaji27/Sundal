@@ -46,7 +46,7 @@ export function GlobalCreateMenu() {
         <>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button size="sm" className="h-9 gap-1.5 px-2.5 sm:px-3" aria-label={t('Create')}>
+                    <Button variant="outline" className="gap-1.5 px-3" aria-label={t('Create')}>
                         <Plus className="h-4 w-4" />
                         <span className="hidden sm:inline">{t('Create')}</span>
                     </Button>
@@ -54,7 +54,7 @@ export function GlobalCreateMenu() {
                 <DropdownMenuContent align="end" className="min-w-44">
                     {items.map(item => (
                         <DropdownMenuItem key={item.key} onClick={() => item.href ? router.get(item.href) : setPickingProject(true)}>
-                            <item.icon className="mr-2 h-4 w-4" />
+                            <item.icon />
                             {item.label}
                         </DropdownMenuItem>
                     ))}
@@ -96,8 +96,8 @@ function SprintProjectPicker({ open, onClose }: { open: boolean; onClose: () => 
                     <DialogDescription>{t('Choose the project the sprint belongs to.')}</DialogDescription>
                 </DialogHeader>
                 <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search projects...')} className="pl-9" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 size-[18px] -translate-y-1/2 text-ds-fg-muted" aria-hidden="true" />
+                    <Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Search projects...')} className="pl-10" />
                 </div>
                 <div className="max-h-72 space-y-1 overflow-y-auto">
                     {projects.map(project => (
@@ -105,9 +105,9 @@ function SprintProjectPicker({ open, onClose }: { open: boolean; onClose: () => 
                             key={project.id}
                             type="button"
                             onClick={() => router.get(route('sprints.index', { project: project.id, create: 1 }))}
-                            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm hover:bg-muted"
+                            className="flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-ds-surface-hover focus-visible:bg-ds-surface-hover focus-visible:outline-none"
                         >
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-soft text-xs font-semibold text-brand-soft-fg">
                                 {project.title.charAt(0).toUpperCase()}
                             </span>
                             <span className="min-w-0 flex-1 truncate">{project.title}</span>

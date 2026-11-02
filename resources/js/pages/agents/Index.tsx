@@ -128,10 +128,10 @@ export default function AgentsIndex() {
                                         </div>
                                     </div>
                                     <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(a)}>
+                                        <Button aria-label={t('Edit')} size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(a)}>
                                             <Pencil className="h-3.5 w-3.5" />
                                         </Button>
-                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
+                                        <Button aria-label={t('Delete')} size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
                                             onClick={() => { setCurrent(a); setDeleteModal(true); }}>
                                             <Trash2 className="h-3.5 w-3.5" />
                                         </Button>

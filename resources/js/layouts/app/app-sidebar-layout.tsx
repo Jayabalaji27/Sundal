@@ -22,14 +22,15 @@ export default function AppSidebarLayout({ children, breadcrumbs = [] }: PropsWi
             <AppSidebar />
             <AppContent id="main-content" variant="sidebar">
                 {isImpersonating && (
-                    <div className="flex items-center justify-between bg-amber-500 text-white text-sm px-4 py-2 sticky top-0 z-50">
+                    <div role="status" className="sticky top-0 z-50 flex items-center justify-between gap-3 border-b border-ds-warning/30 bg-ds-warning-bg px-4 py-2 text-sm text-ds-warning-fg sm:px-6 lg:px-8">
                         <div className="flex items-center gap-2">
-                            <ShieldAlert className="h-4 w-4" />
+                            <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
                             <span>{t('You are currently impersonating this company.')}</span>
                         </div>
                         <button
+                            type="button"
                             onClick={() => router.post(route('impersonate.leave'))}
-                            className="underline font-semibold hover:opacity-80"
+                            className="cursor-pointer rounded-sm font-semibold underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus"
                         >
                             {t('Back to Admin')}
                         </button>

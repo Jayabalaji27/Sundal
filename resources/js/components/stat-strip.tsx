@@ -29,18 +29,18 @@ const TONE_DOT: Record<StatTone, string> = {
  */
 export function StatStrip({ items, className }: { items: StatItem[]; className?: string }) {
     return (
-        <div className={cn('flex overflow-x-auto rounded-xl border bg-card', className)}>
+        <div className={cn('flex overflow-x-auto rounded-xl border border-ds-border bg-ds-surface shadow-ds-xs', className)}>
             {items.map((item) => {
                 const content = (
                     <>
-                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5 text-xs text-ds-fg-muted">
                             {item.tone && <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', TONE_DOT[item.tone])} />}
                             <span className="truncate">{item.label}</span>
                         </span>
                         <span
                             className={cn(
-                                'text-2xl font-semibold tabular-nums leading-tight',
-                                item.tone === 'danger' && Number(item.value) > 0 && 'text-red-600 dark:text-red-400',
+                                'text-xl font-semibold tabular-nums leading-tight text-ds-fg',
+                                item.tone === 'danger' && Number(item.value) > 0 && 'text-ds-danger-fg',
                             )}
                         >
                             {item.value}
@@ -49,7 +49,7 @@ export function StatStrip({ items, className }: { items: StatItem[]; className?:
                 );
 
                 const cellClass = cn(
-                    'relative flex min-w-[7.5rem] flex-1 flex-col gap-0.5 border-r px-4 py-3 text-left last:border-r-0',
+                    'relative flex min-w-[7.5rem] flex-1 flex-col gap-0.5 border-r border-ds-border-subtle px-4 py-3 text-left last:border-r-0',
                     item.active && 'bg-muted/60 after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full after:bg-primary',
                 );
 
@@ -59,7 +59,7 @@ export function StatStrip({ items, className }: { items: StatItem[]; className?:
                         type="button"
                         onClick={item.onClick}
                         aria-pressed={!!item.active}
-                        className={cn(cellClass, 'transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset')}
+                        className={cn(cellClass, 'transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus focus-visible:ring-inset')}
                     >
                         {content}
                     </button>

@@ -4,6 +4,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import MediaLibraryModal from './MediaLibraryModal';
 import { Image as ImageIcon, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface MediaPickerProps {
   label?: string;
@@ -22,6 +23,7 @@ export default function MediaPicker({
   placeholder = 'Select image...',
   showPreview = true
 }: MediaPickerProps) {
+  const { t } = useTranslation();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleSelect = (selectedUrl: string, mediaIds?: number[]) => {
@@ -70,7 +72,7 @@ export default function MediaPicker({
           Browse
         </Button>
         {value && (
-          <Button
+          <Button aria-label={t('Clear')}
             type="button"
             variant="outline"
             size="icon"

@@ -221,7 +221,7 @@ const successMessage = page.props.flash?.success;
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-500 hover:text-amber-700" onClick={() => handleEdit(tax)}>
+                            <Button aria-label={t('Edit')} variant="ghost" size="icon" className="h-8 w-8 text-amber-500 hover:text-amber-700" onClick={() => handleEdit(tax)}>
                               <Edit className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
@@ -231,7 +231,7 @@ const successMessage = page.props.flash?.success;
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => handleDelete(tax)}>
+                            <Button aria-label={t('Delete')} variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => handleDelete(tax)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>

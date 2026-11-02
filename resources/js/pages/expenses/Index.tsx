@@ -561,7 +561,7 @@ export default function ExpenseIndex() {
                                         <div className="flex gap-1">
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <Button
+                                                    <Button aria-label={t('View')}
                                                         variant="ghost"
                                                         size="icon"
                                                         onClick={() => handleAction('view', expense)}
@@ -575,7 +575,7 @@ export default function ExpenseIndex() {
                                             {expensePermissions?.update && expense.status !== 'approved' && (
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <Button
+                                                        <Button aria-label={t('Edit')}
                                                             variant="ghost"
                                                             size="icon"
                                                             onClick={(e) => {
@@ -593,7 +593,7 @@ export default function ExpenseIndex() {
                                             {expensePermissions?.delete && (
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <Button
+                                                        <Button aria-label={t('Delete')}
                                                             variant="ghost"
                                                             size="icon"
                                                             className="text-red-500 hover:text-red-700 h-7 w-7"

@@ -1,5 +1,7 @@
 @import 'tailwindcss';
 @import './rtl.css';
+@import './design-system/tokens.css';
+@import './design-system/theme.css';
 
 @plugin 'tailwindcss-animate';
 @plugin 'tailwind-scrollbar';
@@ -11,7 +13,8 @@
 
 @theme {
     --font-sans:
-        'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+        'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
@@ -79,75 +82,59 @@
     }
 }
 
+/*
+  The shadcn/ui variables every component reads, mapped onto the design tokens
+  (design-system/tokens.css). Declared on .dark as well so a .dark subtree picks
+  up the dark tokens. `--background` is the white surface (inputs, dialogs and
+  outline buttons use it); the grey page canvas is --ds-canvas.
+*/
+:root,
+.dark {
+    --background: var(--ds-surface);
+    --foreground: var(--ds-text-primary);
+    --card: var(--ds-surface);
+    --card-foreground: var(--ds-text-primary);
+    --popover: var(--ds-surface);
+    --popover-foreground: var(--ds-text-primary);
+    --primary: var(--theme-color);
+    --primary-foreground: var(--ds-text-on-brand);
+    --secondary: var(--ds-neutral-bg);
+    --secondary-foreground: var(--ds-text-control);
+    --muted: var(--ds-neutral-bg);
+    --muted-foreground: var(--ds-text-muted);
+    --accent: var(--ds-surface-hover);
+    --accent-foreground: var(--ds-text-primary);
+    --destructive: var(--ds-danger);
+    --destructive-foreground: var(--ds-danger-fg);
+    --border: var(--ds-border-default);
+    --input: var(--ds-border-strong);
+    --ring: var(--ds-brand-500);
+    --radius: 0.625rem;
+    --sidebar: var(--ds-surface);
+    --sidebar-foreground: var(--ds-text-control);
+    --sidebar-primary: var(--ds-brand-600);
+    --sidebar-primary-foreground: var(--ds-text-on-brand);
+    --sidebar-accent: var(--ds-nav-hover);
+    --sidebar-accent-foreground: var(--ds-text-primary);
+    --sidebar-border: var(--ds-border-subtle);
+    --sidebar-ring: var(--ds-brand-500);
+}
+
+/* Chart series colours; the first series follows the brand colour. */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.985 0 0);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.87 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
+    --chart-1: var(--theme-color);
     --chart-2: oklch(0.6 0.118 184.704);
     --chart-3: oklch(0.398 0.07 227.392);
     --chart-4: oklch(0.828 0.189 84.429);
     --chart-5: oklch(0.769 0.188 70.08);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
 }
 
 .dark {
-    --background: oklch(0 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
-    --border: oklch(0.269 0 0);
-    --input: oklch(0.269 0 0);
-    --ring: oklch(0.439 0 0);
-    --chart-1: oklch(0.488 0.243 264.376);
+    --chart-1: var(--theme-color);
     --chart-2: oklch(0.696 0.17 162.48);
     --chart-3: oklch(0.769 0.188 70.08);
     --chart-4: oklch(0.627 0.265 303.9);
     --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
-    --sidebar-ring: oklch(0.439 0 0);
 }
 
 @layer base {
@@ -156,13 +143,17 @@
     }
 
     body {
-        @apply bg-background text-foreground;
+        @apply bg-ds-canvas text-foreground;
     }
 
-    /* Custom thin scrollbar */
+    ::selection {
+        background-color: var(--ds-selection);
+    }
+
+    /* Thin, quiet scrollbars */
     * {
         scrollbar-width: thin;
-        scrollbar-color: #9ca3af #f3f4f6;
+        scrollbar-color: var(--ds-border-strong) transparent;
     }
 
     *::-webkit-scrollbar {
@@ -171,146 +162,98 @@
     }
 
     *::-webkit-scrollbar-track {
-        background: #f3f4f6;
-        border-radius: 3px;
+        background: transparent;
     }
 
     *::-webkit-scrollbar-thumb {
-        background: #9ca3af;
-        border-radius: 3px;
+        background: var(--ds-border-strong);
+        border-radius: 999px;
     }
 
     *::-webkit-scrollbar-thumb:hover {
-        background: #6b7280;
-    }
-
-    /* Dark mode scrollbar */
-    .dark * {
-        scrollbar-color: #4b5563 #1f2937;
-    }
-
-    .dark *::-webkit-scrollbar-track {
-        background: #1f2937;
-    }
-
-    .dark *::-webkit-scrollbar-thumb {
-        background: #4b5563;
-    }
-
-    .dark *::-webkit-scrollbar-thumb:hover {
-        background: #6b7280;
+        background: var(--ds-border-hover);
     }
 }
 
-/* Theme color variables */
-:root {
-  --theme-color: #10b981;
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
-/* Apply theme color to various elements */
+/* Brand colour helpers */
 .theme-color {
-  color: var(--theme-color);
+    color: var(--theme-color);
 }
 
 .theme-bg {
-  background-color: var(--theme-color);
+    background-color: var(--theme-color);
 }
 
 .theme-border {
-  border-color: var(--theme-color);
+    border-color: var(--theme-color);
 }
 
 .theme-ring {
-  --tw-ring-color: var(--theme-color);
-}
-
-/* Override primary colors with theme color */
-:root {
-  --primary: var(--theme-color);
-  --chart-1: var(--theme-color);
-}
-
-.dark {
-  --primary: var(--theme-color);
-  --chart-1: var(--theme-color);
-}
-
-/* Apply theme color to buttons and interactive elements */
-.btn-primary,
-.bg-primary,
-button[type="submit"],
-.active-nav-item {
-  background-color: var(--theme-color);
-}
-
-a:hover,
-.text-primary {
-  color: var(--theme-color);
-}
-
-.border-primary {
-  border-color: var(--theme-color);
-}
-
-.ring-primary {
-  --tw-ring-color: var(--theme-color);
+    --tw-ring-color: var(--theme-color);
 }
 
 /* Iyzipay Checkout Form Styles */
 .iyzipay-checkout-form {
-  width: 100%;
-  min-height: 400px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  overflow: hidden;
+    width: 100%;
+    min-height: 400px;
+    border: 1px solid var(--ds-border-default);
+    border-radius: 8px;
+    overflow: hidden;
 }
 
 .iyzipay-checkout-form iframe {
-  width: 100%;
-  min-height: 600px;
-  height: 600px;
-  border: none;
-  border-radius: 8px;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .iyzipay-checkout-form {
-    border-color: #374151;
-    background-color: #1f2937;
-  }
+    width: 100%;
+    min-height: 600px;
+    height: 600px;
+    border: none;
+    border-radius: 8px;
 }
 
 /* Responsive design */
 @media (max-width: 768px) {
-  .iyzipay-checkout-form {
-    min-height: 500px;
-  }
+    .iyzipay-checkout-form {
+        min-height: 500px;
+    }
 
-  .iyzipay-checkout-form iframe {
-    min-height: 500px;
-  }
+    .iyzipay-checkout-form iframe {
+        min-height: 500px;
+    }
 }
 
 /* Loading state */
 .iyzipay-checkout-form.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--ds-surface-subtle);
 }
 
 .iyzipay-checkout-form.loading::before {
-  content: '';
-  width: 40px;
-  height: 40px;
-  border: 4px solid #e2e8f0;
-  border-top: 4px solid #10b981;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+    content: '';
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--ds-border-default);
+    border-top: 4px solid var(--theme-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }

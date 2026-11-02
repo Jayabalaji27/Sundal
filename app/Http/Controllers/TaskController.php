@@ -9,6 +9,7 @@ use App\Models\ProjectMilestone;
 use App\Models\User;
 use App\Services\GoogleCalendarService;
 use App\Traits\HasPermissionChecks;
+use App\Traits\PresentsAgileBoard;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -16,7 +17,15 @@ use Inertia\Response;
 
 class TaskController extends Controller
 {
-    use HasPermissionChecks;
+    use HasPermissionChecks, PresentsAgileBoard;
+
+    /** Views of the Tasks page; the cookie keeps the last one picked. */
+    private const VIEWS = ['detail', 'plain', 'sheet'];
+
+    public const VIEW_COOKIE = 'sundal_tasks_view';
+
+    /** The most cards the Detail and Plain views show at once. */
+    private const BOARD_LIMIT = 300;
     
     protected $googleCalendarService;
 
@@ -24,18 +33,14 @@ class TaskController extends Controller
     {
         $this->googleCalendarService = $googleCalendarService;
     }
-    public function index(Request $request): Response
+
+    /**
+     * The Tasks page's list with its filters and sort, shared by the page and
+     * its Excel export so a download is exactly what the page shows.
+     */
+    private function filteredTasks(Request $request)
     {
-        $this->authorizePermission('task_view_any');
-
         $user = auth()->user();
-        $workspace = $user->currentWorkspace;
-
-        if (!$workspace) {
-            abort(404, __('No workspace found. Please select a workspace.'));
-        }
-
-        $userWorkspaceRole = $workspace->getMemberRole($user);
 
         // Members only see their own tasks, except when viewing a specific project
         $query = Task::with(['project', 'taskStage', 'assignedTo', 'creator', 'milestone'])
@@ -70,49 +75,86 @@ class TaskController extends Controller
         // Add sorting functionality
         $sortField = $request->get('sort_field', 'created_at');
         $sortDirection = $request->get('sort_direction', 'desc');
-        
+
         // Define allowed sort fields to prevent SQL injection
         $allowedSortFields = [
             'title',
-            'priority', 
+            'priority',
             'end_date',
             'start_date',
             'created_at',
             'updated_at',
             'progress'
         ];
-        
+
         if (in_array($sortField, $allowedSortFields)) {
             $query->orderBy($sortField, $sortDirection);
         } else {
             $query->latest(); // Default sorting
         }
 
-        // The Tasks page is a paginated list; the Kanban board lives on each project's Board.
-        // (view=kanban still returns every task for callers that ask for it.)
-        $view = $request->get('view', 'list');
+        return $query;
+    }
 
-        if ($view === 'kanban') {
-            $tasks = $query->get();
+    /** The Tasks page's current list (filters included) as an Excel file. */
+    public function export(Request $request)
+    {
+        $this->authorizePermission('task_view_any');
+        abort_unless(auth()->user()->currentWorkspace, 404, __('No workspace found. Please select a workspace.'));
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\TaskExport($this->filteredTasks($request)),
+            'tasks_' . now()->format('Y-m-d') . '.xlsx'
+        );
+    }
+
+    public function index(Request $request): Response
+    {
+        $this->authorizePermission('task_view_any');
+
+        $user = auth()->user();
+        $workspace = $user->currentWorkspace;
+
+        if (!$workspace) {
+            abort(404, __('No workspace found. Please select a workspace.'));
+        }
+
+        $userWorkspaceRole = $workspace->getMemberRole($user);
+
+        $query = $this->filteredTasks($request);
+
+        // The same three views as a project's Board: Detail and Plain cards by stage
+        // (every project at once, at most BOARD_LIMIT items), or the Sheet, this
+        // paginated table.
+        $view = $this->tasksView($request);
+        $tasks = $board = null;
+
+        if ($view !== 'sheet') {
+            $total = (clone $query)->count();
+            $board = [
+                'cards' => $query->with('epic:id,name,color')->limit(self::BOARD_LIMIT)->get()
+                    ->map(fn (Task $task) => $this->taskCard($task) + ['project' => $task->project?->only('id', 'title')])
+                    ->values(),
+                'total' => $total,
+                'limit' => self::BOARD_LIMIT,
+            ];
         } else {
             // Same choices as the list view's "Per Page" select - a value it doesn't
             // offer (the old default 10) left that select blank.
             $perPage = (int) $request->get('per_page', 20);
             $perPage = in_array($perPage, [20, 50, 100], true) ? $perPage : 20;
             $tasks = $query->paginate($perPage);
-        }
 
-        // Process avatars for tasks
-        $taskCollection = ($tasks instanceof \Illuminate\Pagination\LengthAwarePaginator) ? $tasks->getCollection() : $tasks;
-        $taskCollection->each(function ($task) {
-            foreach (['assignedTo', 'creator'] as $relation) {
-                if ($task->$relation) {
-                    $task->$relation->avatar = check_file($task->$relation->avatar)
-                        ? get_file($task->$relation->avatar)
-                        : get_file('avatars/avatar.png');
+            $tasks->getCollection()->each(function ($task) {
+                foreach (['assignedTo', 'creator'] as $relation) {
+                    if ($task->$relation) {
+                        $task->$relation->avatar = check_file($task->$relation->avatar)
+                            ? get_file($task->$relation->avatar)
+                            : get_file('avatars/avatar.png');
+                    }
                 }
-            }
-        });
+            });
+        }
 
         // Apply same access control to projects dropdown as used for task filtering
         $projectsQuery = Project::forWorkspace($user->current_workspace_id)
@@ -143,6 +185,7 @@ class TaskController extends Controller
 
         return Inertia::render('tasks/Index', [
             'tasks' => $tasks,
+            'board' => $board,
             'projects' => $projects,
             'stages' => $stages,
             'members' => $members,
@@ -166,6 +209,16 @@ class TaskController extends Controller
             ],
             'googleCalendarEnabled' => $googleCalendarEnabled
         ]);
+    }
+
+    /** ?view= wins (links from the AI assistant and the dashboard); then the last view picked. */
+    private function tasksView(Request $request): string
+    {
+        $view = $request->query('view') ?? $request->cookie(self::VIEW_COOKIE);
+        // Older links: "kanban" was the board, "list" the table.
+        $view = ['kanban' => 'detail', 'list' => 'sheet'][$view] ?? $view;
+
+        return in_array($view, self::VIEWS, true) ? $view : 'sheet';
     }
 
     public function show(Task $task)

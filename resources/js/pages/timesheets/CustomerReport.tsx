@@ -18,6 +18,7 @@ import { hasPermission } from '@/utils/authorization';
 import { usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import { toast } from '@/components/custom-toast';
+import { ReportExportActions } from '@/components/reports/report-export-actions';
 
 interface Project {
     id: number;
@@ -45,7 +46,11 @@ export default function CustomerReport({ projects, members }: Props) {
         member_id: ''
     });
     const [reportData, setReportData] = useState<any>(null);
+    // Filters the report on screen was generated with; Download and Email use these.
+    const [appliedFilters, setAppliedFilters] = useState<Record<string, string | null>>({});
     const [isLoading, setIsLoading] = useState(false);
+
+    const formatDate = (date?: string | null) => date ? window.appSettings.formatDateTime(new Date(date), false) : t('Not set');
 
     const handleGenerateReport = async () => {
         if (!filters.project_id) return;
@@ -63,6 +68,10 @@ export default function CustomerReport({ projects, members }: Props) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    // Without these Laravel answers a validation error with a redirect
+                    // to an HTML page instead of JSON, so the real error was never shown.
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                 },
                 body: JSON.stringify(payload)
@@ -74,6 +83,7 @@ export default function CustomerReport({ projects, members }: Props) {
                 return;
             }
             setReportData(data);
+            setAppliedFilters(payload as Record<string, string | null>);
         } catch (error) {
             console.error('Failed to generate report:', error);
             toast.error(t('Failed to generate report.'));
@@ -177,11 +187,17 @@ export default function CustomerReport({ projects, members }: Props) {
                 <div className="space-y-6">
                     {/* Project Overview */}
                     <Card>
-                        <CardHeader>
+                        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
                             <CardTitle className="flex items-center gap-2">
                                 <FileText className="h-5 w-5" />
                                 Project Overview
                             </CardTitle>
+                            <ReportExportActions
+                                exportUrl={route('customer-reports.export')}
+                                emailUrl={route('customer-reports.email')}
+                                params={appliedFilters}
+                                disabled={isLoading}
+                            />
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -211,11 +227,11 @@ export default function CustomerReport({ projects, members }: Props) {
                                     <div className="space-y-2">
                                         <div className="flex justify-between">
                                             <span className="text-sm text-gray-600">Start Date:</span>
-                                            <span className="text-sm">{reportData.project.start_date || 'Not set'}</span>
+                                            <span className="text-sm">{formatDate(reportData.project.start_date)}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-sm text-gray-600">Deadline:</span>
-                                            <span className="text-sm">{reportData.project.deadline || 'Not set'}</span>
+                                            <span className="text-sm">{formatDate(reportData.project.deadline)}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-sm text-gray-600">Estimated Hours:</span>
@@ -272,14 +288,14 @@ export default function CustomerReport({ projects, members }: Props) {
                                                 <div key={task.id} className="border rounded-lg p-4">
                                                     <div className="flex justify-between items-start mb-2">
                                                         <h4 className="font-semibold">{task.title}</h4>
-                                                        <Badge variant={task.stage?.name === 'Done' ? 'default' : 'secondary'}>
-                                                            {task.stage?.name || 'No Stage'}
+                                                        <Badge variant={task.task_stage?.is_completed || task.progress >= 100 ? 'default' : 'secondary'}>
+                                                            {task.task_stage?.name || 'No Stage'}
                                                         </Badge>
                                                     </div>
                                                     <p className="text-sm text-gray-600 mb-2">{task.description}</p>
                                                     <div className="flex justify-between text-xs text-gray-500">
                                                         <span>Priority: {task.priority}</span>
-                                                        <span>Due: {task.due_date || 'Not set'}</span>
+                                                        <span>Due: {formatDate(task.end_date)}</span>
                                                     </div>
                                                 </div>
                                             ))}
@@ -351,7 +367,7 @@ export default function CustomerReport({ projects, members }: Props) {
                                                     <p className="text-sm text-gray-600 mb-2">{milestone.description}</p>
                                                     <div className="flex justify-between items-center">
                                                         <span className="text-sm text-gray-500">
-                                                            Due: {milestone.due_date || 'Not set'}
+                                                            Due: {formatDate(milestone.due_date)}
                                                         </span>
                                                         <div className="flex items-center gap-2">
                                                             <div className="w-20 bg-gray-200 rounded-full h-2">

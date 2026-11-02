@@ -17,7 +17,7 @@ export interface SidebarSettings {
 
 // Default sidebar settings
 const DEFAULT_SIDEBAR_SETTINGS: SidebarSettings = {
-  variant: 'inset',
+  variant: 'sidebar',
   collapsible: 'icon',
 };
 

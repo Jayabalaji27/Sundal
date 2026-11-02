@@ -985,7 +985,7 @@ export default function Plans({ plans: initialPlans, billingCycle: initialBillin
                         <div className="flex items-center gap-1">
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Button
+                              <Button aria-label={t('Edit')}
                                 variant="ghost"
                                 size="icon"
                                 className="text-amber-500 hover:text-amber-700"
@@ -1000,7 +1000,7 @@ export default function Plans({ plans: initialPlans, billingCycle: initialBillin
                           {!plan.is_default && (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Button
+                                <Button aria-label={t('Delete')}
                                   variant="ghost"
                                   size="icon"
                                   className="text-red-500 hover:text-red-700"

@@ -4,7 +4,9 @@ import { toast } from '@/components/custom-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react';
+import { AlertCircle, ChevronLeft, ChevronRight, Plus, Clock, Send } from 'lucide-react';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { EmptyState } from '@/components/EmptyState';
 import { PageTemplate } from '@/components/page-template';
 import TimeEntryForm from '@/components/timesheets/TimeEntryForm';
 import { useTranslation } from 'react-i18next';
@@ -43,13 +45,6 @@ interface Props {
     permissions?: any;
 }
 
-const STATUS_STYLES: Record<string, string> = {
-    draft: 'bg-slate-100 text-slate-700 ring-slate-500/30',
-    submitted: 'bg-yellow-50 text-yellow-700 ring-yellow-600/20',
-    approved: 'bg-green-50 text-green-700 ring-green-600/20',
-    rejected: 'bg-red-50 text-red-700 ring-red-600/20',
-};
-
 // Weeks run Monday-Sunday to match the backend (Carbon's default week start).
 const getMondayOfWeek = (date: Date): Date => {
     const d = new Date(date);
@@ -76,7 +71,7 @@ const parseLocalDate = (dateStr: string): Date => {
 };
 
 export default function WeeklyView({ weekData, projects, weekStart, weekEnd, timesheetId, timesheetStatus, rejectionReason, permissions }: Props) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { flash, auth } = usePage().props as any;
     const userPermissions = auth?.permissions || [];
     // Derived from the prop, not kept in state: visits use preserveState, so a
@@ -121,12 +116,12 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
     const formatWeekRange = () => {
         const start = parseLocalDate(weekStart);
         const end = parseLocalDate(weekEnd);
-        const formatDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const formatDay = (d: Date) => d.toLocaleDateString(i18n.language || undefined, { month: 'short', day: 'numeric' });
         return `${formatDay(start)} - ${formatDay(end)}`;
     };
 
     const getDayName = (dateStr: string) => {
-        return parseLocalDate(dateStr).toLocaleDateString('en-US', { weekday: 'short' });
+        return parseLocalDate(dateStr).toLocaleDateString(i18n.language || undefined, { weekday: 'short' });
     };
 
     const getDayDate = (dateStr: string) => {
@@ -159,136 +154,154 @@ export default function WeeklyView({ weekData, projects, weekStart, weekEnd, tim
         { title: t('Timesheet') }
     ];
 
+    const statusTone: Record<string, 'neutral' | 'warning' | 'success' | 'danger'> = {
+        draft: 'neutral', submitted: 'warning', approved: 'success', rejected: 'danger',
+    };
+    const canAdd = hasPermission(userPermissions, 'timesheet_create');
+    // "Log time" from the empty state goes to today when it's in this week, else the week's first day.
+    const defaultDay = weekData.find(day => isToday(day.date))?.date ?? weekData[0]?.date;
+
     return (
-        <PageTemplate 
-            title={t('Timesheet')} 
+        <PageTemplate
+            title={t('Timesheet')}
             breadcrumbs={breadcrumbs}
+            noPadding
         >
             <Head title={`${t('Timesheet')} - ${formatWeekRange()}`} />
-            
-            {/* Week Navigation */}
+
+            {/* Week navigation, totals and the week's status */}
             <Card className="mb-6">
-                <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <Button
+                <CardHeader className="pb-5">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <Button aria-label={t('Previous week')}
                                 variant="outline"
                                 size="icon"
                                 onClick={() => navigateWeek('prev')}
                             >
-                                <ChevronLeft className="h-4 w-4" />
+                                <ChevronLeft />
                             </Button>
-                            
-                            <div className="text-center">
-                                <CardTitle className="text-lg">
-                                    {formatWeekRange()}
-                                    {isCurrentWeek() && <span className="ml-2 inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">{t('Current Week')}</span>}
-                                </CardTitle>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                <CardTitle className="text-lg">{formatWeekRange()}</CardTitle>
+                                {isCurrentWeek() && <Badge>{t('Current Week')}</Badge>}
                             </div>
-                            
-                            <Button
+
+                            <Button aria-label={t('Next week')}
                                 variant="outline"
                                 size="icon"
                                 onClick={() => navigateWeek('next')}
                             >
-                                <ChevronRight className="h-4 w-4" />
+                                <ChevronRight />
                             </Button>
-                        </div>
-                        
-                        <div className="flex flex-wrap items-center gap-3">
                             {!isCurrentWeek() && (
-                                <Button variant="outline" size="sm" onClick={goToCurrentWeek}>
+                                <Button variant="ghost" onClick={goToCurrentWeek}>
                                     {t('This week')}
                                 </Button>
                             )}
-                            <span className="text-sm text-muted-foreground">
-                                <span className="font-semibold text-foreground">{getWeekTotal().toFixed(1)}h</span> {t('total')} · {getWeekBillable().toFixed(1)}h {t('billable')}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                            <span className="text-sm text-ds-fg-secondary">
+                                <span className="font-semibold tabular-nums text-ds-fg">{getWeekTotal().toFixed(1)}h</span> {t('total')} · <span className="tabular-nums">{getWeekBillable().toFixed(1)}h</span> {t('billable')}
                             </span>
                             {timesheetStatus && (
-                                <span className={`inline-flex rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${STATUS_STYLES[timesheetStatus] || ''}`}>
+                                <StatusBadge
+                                    tone={statusTone[timesheetStatus] ?? 'neutral'}
+                                    icon={timesheetStatus === 'submitted' ? <Clock aria-hidden="true" /> : undefined}
+                                >
                                     {statusLabels[timesheetStatus] || timesheetStatus}
-                                </span>
+                                </StatusBadge>
                             )}
+                            {/* The page's one primary action, once there is something to submit. */}
                             {canSubmit && (
-                                <Button size="sm" onClick={submitWeek}>{t('Submit week')}</Button>
+                                <Button onClick={submitWeek}><Send />{t('Submit week')}</Button>
                             )}
                         </div>
                     </div>
                     {timesheetStatus === 'rejected' && rejectionReason && (
-                        <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-                            <span className="font-medium">{t('Rejected')}:</span> {rejectionReason}
-                        </p>
+                        <div role="alert" className="mt-4 flex items-start gap-2 rounded-lg border border-ds-danger-border/60 bg-ds-danger-bg px-3 py-2.5 text-sm text-ds-danger-fg">
+                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                            <p><span className="font-medium">{t('Rejected')}:</span> {rejectionReason}</p>
+                        </div>
                     )}
                 </CardHeader>
             </Card>
 
             {/* Daily Breakdown */}
-            <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
-                {weekData.map((day) => (
-                    <Card key={day.date} className={`${isToday(day.date) ? 'ring-2 ring-blue-500' : ''}`}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-7">
+                {weekData.map((day) => {
+                    const today = isToday(day.date);
+                    return (
+                    <Card key={day.date} className={today ? 'border-brand-300 ring-1 ring-brand-500/30' : ''} aria-current={today ? 'date' : undefined}>
                         <CardHeader className="pb-2">
                             <div className="text-center">
-                                <div className="text-sm font-medium text-muted-foreground">
+                                <div className="text-sm font-medium text-ds-fg-muted">
                                     {getDayName(day.date)}
                                 </div>
-                                <div className="text-lg font-bold">
+                                <div className="flex items-center justify-center gap-1.5 text-lg font-bold text-ds-fg">
                                     {getDayDate(day.date)}
-                                    {isToday(day.date) && <Badge variant="secondary" className="ml-1 text-xs">{t('Today')}</Badge>}
+                                    {today && <Badge>{t('Today')}</Badge>}
                                 </div>
                             </div>
                         </CardHeader>
-                        
-                        <CardContent className="space-y-2">
+
+                        <CardContent className="space-y-3">
                             <div className="text-center">
-                                <div className="text-2xl font-bold text-blue-600">
+                                <div className={`text-2xl font-bold tabular-nums ${day.totalHours > 0 ? 'text-ds-fg' : 'text-ds-fg-placeholder'}`}>
                                     {day.totalHours.toFixed(1)}h
                                 </div>
-                                <div className="text-xs text-muted-foreground">
+                                <div className="text-xs text-ds-fg-muted">
                                     {day.billableHours.toFixed(1)}h {t('billable')}
                                 </div>
                             </div>
-                            
-                            <div className="space-y-1">
+
+                            <div className="space-y-1.5">
                                 {day.entries.slice(0, 3).map((entry, index) => (
-                                    <div key={index} className="text-xs p-2 bg-gray-50 rounded">
-                                        <div className="font-medium truncate">{entry.project?.title ?? 'Unknown Project'}</div>
-                                        <div className="text-muted-foreground">
-                                            {entry.hours}h {entry.is_billable && <span className="ml-2 inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20">{t('Billable')}</span>}
+                                    <div key={index} className="rounded-md border border-ds-border-subtle bg-ds-surface-subtle p-2 text-xs">
+                                        <div className="truncate font-medium text-ds-fg">{entry.project?.title ?? t('Unknown Project')}</div>
+                                        <div className="mt-0.5 flex items-center gap-1.5 text-ds-fg-muted">
+                                            <span className="tabular-nums">{entry.hours}h</span>
+                                            {entry.is_billable && <Badge variant="success" className="px-1.5 py-0 text-[11px]">{t('Billable')}</Badge>}
                                         </div>
                                     </div>
                                 ))}
-                                
+
                                 {day.entries.length > 3 && (
-                                    <div className="text-xs text-center text-muted-foreground">
+                                    <div className="text-center text-xs text-ds-fg-muted">
                                         +{day.entries.length - 3} {t('more')}
                                     </div>
                                 )}
                             </div>
-                            
-                            {hasPermission(userPermissions, 'timesheet_create') && (
-                                <Button 
-                                    size="sm" 
-                                    variant="outline" 
+
+                            {canAdd && (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
                                     className="w-full"
                                     onClick={() => addTimeEntry(day.date)}
+                                    aria-label={t('Add time for {{day}}', { day: `${getDayName(day.date)} ${getDayDate(day.date)}` })}
                                 >
-                                    <Plus className="h-3 w-3 mr-1" />
+                                    <Plus />
                                     {t('Add')}
                                 </Button>
                             )}
                         </CardContent>
                     </Card>
-                ))}
+                    );
+                })}
             </div>
 
             {/* Empty State */}
             {getWeekEntries() === 0 && (
                 <Card className="mt-6">
-                    <CardContent className="p-8 text-center">
-                        <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-lg font-semibold mb-2">{t('No time entries this week')}</h3>
-                        <p className="text-gray-500">{t('Use Add on a day to log time, then submit the week.')}</p>
-                    </CardContent>
+                    <EmptyState
+                        compact
+                        icon={Clock}
+                        title={t('No time entries this week')}
+                        description={t('Use Add on a day to log time, then submit the week.')}
+                        action={canAdd && defaultDay ? { label: t('Log time'), icon: <Plus className="h-4 w-4" />, onClick: () => addTimeEntry(defaultDay) } : undefined}
+                    />
                 </Card>
             )}
 

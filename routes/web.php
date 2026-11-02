@@ -433,7 +433,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return $redirectToFirstPermittedTab($req, $tabs);
         })->middleware('permission:kb_view_any|note_view_any')->name('docs.index');
 
-        // AI page — shows preset tools + custom agents
+        // AI page — shows preset tools + custom agents. Owners and managers only
+        // (agent_advanced_insights), like the tools on it.
         // Gated behind the Pro Add-on plan (AI/Knowledge Base/Chat/Meetings bundle).
         // module.access is appended AFTER the permission check on each route (not
         // as a group-level middleware) so a role without the permission still gets
@@ -445,7 +446,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                   ->orWhereNull('workspace_id');
             })->orderBy('name')->get(['id', 'name', 'description']);
             return \Inertia\Inertia::render('ai/index', ['agents' => $agents]);
-        })->middleware(['permission:agent_view_any', 'module.access'])->name('ai.index');
+        })->middleware(['permission:agent_advanced_insights', 'module.access'])->name('ai.index');
 
         // Chat routes
         Route::get('chat', [ChatController::class, 'index'])->middleware(['permission:chat_view', 'module.access'])->name('chat.index');
@@ -693,8 +694,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Gated behind the Pro Add-on plan. ai/projects/* (Projects → AI Generate)
         // has no Spatie permission of its own (the controller checks
         // project_create) but is plan-gated the same way.
-        Route::get('standup', [\App\Http\Controllers\StandupController::class, 'index'])->middleware(['permission:agent_use', 'module.access'])->name('standup.index');
-        Route::get('api/standup', [\App\Http\Controllers\StandupController::class, 'api'])->middleware(['permission:agent_use', 'module.access'])->name('standup.api');
+        // Standup shows other people's work, so it is an owner/manager tool like the others.
+        Route::get('standup', [\App\Http\Controllers\StandupController::class, 'index'])->middleware(['permission:agent_advanced_insights', 'module.access'])->name('standup.index');
+        Route::get('api/standup', [\App\Http\Controllers\StandupController::class, 'api'])->middleware(['permission:agent_advanced_insights', 'module.access'])->name('standup.api');
 
         Route::get('risk-radar', [\App\Http\Controllers\RiskRadarController::class, 'index'])->middleware(['permission:agent_advanced_insights', 'module.access'])->name('risk-radar.index');
         Route::get('api/risk-radar', [\App\Http\Controllers\RiskRadarController::class, 'api'])->middleware(['permission:agent_advanced_insights', 'module.access'])->name('risk-radar.api');
@@ -783,8 +785,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // column-mapping fields for whichever `table` the modal was opened
         // for. Actual per-entity authorization happens in the entity-specific
         // `{type}.import` route (e.g. companies.import, projects.import).
-        Route::post('csv/import', [\App\Http\Controllers\ExportImportController::class, 'fileImport'])->name('csv.import');
-        Route::get('csv/import/modal', [\App\Http\Controllers\ExportImportController::class, 'fileImportModal'])->name('csv.import.modal');
+        // The platform admin's Companies import uses these two steps too (they hold
+        // no workspace data), so they are open to it like companies.template.
+        Route::post('csv/import', [\App\Http\Controllers\ExportImportController::class, 'fileImport'])->withoutMiddleware('block.superadmin.workspace')->name('csv.import');
+        Route::get('csv/import/modal', [\App\Http\Controllers\ExportImportController::class, 'fileImportModal'])->withoutMiddleware('block.superadmin.workspace')->name('csv.import.modal');
 
         // Project routes
         Route::get('projects', [\App\Http\Controllers\ProjectController::class, 'index'])->middleware('permission:project_view_any')->name('projects.index');
@@ -839,6 +843,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Task routes (create/edit are modal-based, no dedicated pages)
         Route::get('tasks', [\App\Http\Controllers\TaskController::class, 'index'])->middleware('permission:task_view_any')->name('tasks.index');
+        // Export / import must stay before tasks/{task}, or "export" is read as a task id.
+        Route::get('tasks/export', [\App\Http\Controllers\TaskController::class, 'export'])->middleware('permission:task_view_any')->name('tasks.export');
+        Route::post('tasks/import', [\App\Http\Controllers\ExportImportController::class, 'import'])->middleware('permission:task_create')->defaults('type', 'tasks')->name('tasks.import');
+        Route::get('tasks/template', [\App\Http\Controllers\ExportImportController::class, 'getTemplate'])->middleware('permission:task_create')->defaults('type', 'tasks')->name('tasks.template');
         Route::post('tasks', [\App\Http\Controllers\TaskController::class, 'store'])->middleware('permission:task_create')->name('tasks.store');
         Route::get('tasks/{task}', [\App\Http\Controllers\TaskController::class, 'show'])->middleware('permission:task_view')->name('tasks.show');
         Route::put('tasks/{task}', [\App\Http\Controllers\TaskController::class, 'update'])->middleware('permission:task_update')->name('tasks.update');
@@ -928,11 +936,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Timesheet reports
         Route::get('timesheet-reports', [\App\Http\Controllers\TimesheetReportController::class, 'index'])->middleware('permission:report_timesheet')->name('timesheet-reports.index');
         Route::post('timesheet-reports/generate', [\App\Http\Controllers\TimesheetReportController::class, 'generate'])->middleware('permission:report_timesheet')->name('timesheet-reports.generate');
+        Route::get('timesheet-reports/export', [\App\Http\Controllers\TimesheetReportController::class, 'export'])->middleware('permission:report_timesheet')->name('timesheet-reports.export');
+        Route::post('timesheet-reports/email', [\App\Http\Controllers\TimesheetReportController::class, 'email'])->middleware(['permission:report_timesheet', 'throttle:10,1'])->name('timesheet-reports.email');
         Route::get('timesheet-reports/dashboard-widgets', [\App\Http\Controllers\TimesheetReportController::class, 'dashboardWidgets'])->middleware('permission:report_dashboard_widgets')->name('timesheet-reports.dashboard-widgets');
 
         // Customer reports
         Route::get('customer-reports', [\App\Http\Controllers\CustomerReportController::class, 'index'])->middleware('permission:report_customer')->name('customer-reports.index');
         Route::post('customer-reports/generate', [\App\Http\Controllers\CustomerReportController::class, 'generate'])->middleware('permission:report_customer')->name('customer-reports.generate');
+        Route::get('customer-reports/export', [\App\Http\Controllers\CustomerReportController::class, 'export'])->middleware('permission:report_customer')->name('customer-reports.export');
+        Route::post('customer-reports/email', [\App\Http\Controllers\CustomerReportController::class, 'email'])->middleware(['permission:report_customer', 'throttle:10,1'])->name('customer-reports.email');
 
         // Budget & Expense routes
         Route::get('budgets/dashboard', [\App\Http\Controllers\BudgetDashboardController::class, 'index'])->middleware('permission:budget_dashboard_view')->name('budgets.dashboard');
@@ -1134,6 +1146,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Contracts routes
         Route::get('contracts', [\App\Http\Controllers\ContractController::class, 'index'])->middleware('permission:contract_view_any')->name('contracts.index');
+        // Before contracts/{contract}, or "export" is read as a contract id.
+        Route::get('contracts/export', [\App\Http\Controllers\ContractController::class, 'export'])->middleware('permission:contract_view_any')->name('contracts.export');
         Route::post('contracts', [\App\Http\Controllers\ContractController::class, 'store'])->middleware('permission:contract_create')->name('contracts.store');
         Route::get('contracts/{contract}', [\App\Http\Controllers\ContractController::class, 'show'])->middleware('permission:contract_view')->name('contracts.show');
         Route::put('contracts/{contract}', [\App\Http\Controllers\ContractController::class, 'update'])->middleware('permission:contract_update')->name('contracts.update');
@@ -1159,6 +1173,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('project-reports/{project}', [\App\Http\Controllers\ProjectReportController::class, 'show'])->middleware('permission:project_report_view')->name('project-reports.show');
         Route::post('project-reports/{project}/tasks', [\App\Http\Controllers\ProjectReportController::class, 'getTasksData'])->middleware('permission:project_report_view')->name('project-reports.tasks');
         Route::get('project-reports/{project}/export', [\App\Http\Controllers\ProjectReportController::class, 'export'])->middleware('permission:project_report_export')->name('project-reports.export');
+        Route::post('project-reports/{project}/email', [\App\Http\Controllers\ProjectReportController::class, 'email'])->middleware(['permission:project_report_export', 'throttle:10,1'])->name('project-reports.email');
 
     }); // End plan.access middleware group
 });

@@ -5,28 +5,22 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { avatarTone } from '@/lib/avatar-tone';
 import { cn } from '@/lib/utils';
 
-const STATUS_STYLES: Record<string, { pill: string; dot: string; bar: string }> = {
-    planning: { pill: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300', dot: 'bg-blue-500', bar: 'bg-blue-500' },
-    active: { pill: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300', dot: 'bg-emerald-500', bar: 'bg-emerald-500' },
-    on_hold: { pill: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300', dot: 'bg-amber-500', bar: 'bg-amber-500' },
-    completed: { pill: 'bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300', dot: 'bg-violet-500', bar: 'bg-violet-500' },
-    cancelled: { pill: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300', dot: 'bg-gray-400', bar: 'bg-gray-400' },
+// Project status -> status pill tone and progress bar colour.
+const STATUS_STYLES: Record<string, { tone: 'info' | 'success' | 'warning' | 'brand' | 'neutral'; bar: string }> = {
+    planning: { tone: 'info', bar: 'bg-ds-info' },
+    active: { tone: 'success', bar: 'bg-ds-success' },
+    on_hold: { tone: 'warning', bar: 'bg-ds-warning' },
+    completed: { tone: 'brand', bar: 'bg-brand-500' },
+    cancelled: { tone: 'neutral', bar: 'bg-ds-fg-placeholder' },
 };
 
 // Stable colour per project / person, so the same name always looks the same.
-const TILE_COLORS = [
-    'bg-blue-100 text-blue-700', 'bg-violet-100 text-violet-700', 'bg-emerald-100 text-emerald-700',
-    'bg-amber-100 text-amber-700', 'bg-rose-100 text-rose-700', 'bg-cyan-100 text-cyan-700',
-];
-const colorFor = (key: string | number) => {
-    const text = String(key);
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
-    return TILE_COLORS[hash % TILE_COLORS.length];
-};
+const colorFor = (key: string | number) => avatarTone(String(key));
 const initials = (name?: string) => (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase();
 
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -73,7 +67,7 @@ export function ProjectCard({ project, canView, canEdit, canDelete, showClient =
         else if (days <= 7) due = { label: days === 1 ? t('Due tomorrow') : t('Due in {{count}} days', { count: days }), tone: 'warning' };
         else due = { label: t('Due {{date}}', { date: short }), tone: 'muted' };
     }
-    const barColor = due.tone === 'danger' && !isClosed ? 'bg-red-500' : status.bar;
+    const barColor = due.tone === 'danger' && !isClosed ? 'bg-ds-danger' : status.bar;
 
     const subtitle = clients.length > 0
         ? (clients.length === 1 ? clients[0].name : t('{{name}} and {{count}} more', { name: clients[0].name, count: clients.length - 1 }))
@@ -82,8 +76,8 @@ export function ProjectCard({ project, canView, canEdit, canDelete, showClient =
     return (
         <Card
             className={cn(
-                'group flex flex-col gap-4 p-5 transition-all hover:border-primary/30 hover:shadow-md',
-                canView && 'cursor-pointer',
+                'group flex flex-col gap-4 p-5 transition-[border-color,box-shadow] duration-150',
+                canView && 'cursor-pointer hover:border-ds-border-strong hover:shadow-ds-sm',
             )}
             onClick={canView ? () => onAction('view', project) : undefined}
         >
@@ -93,40 +87,48 @@ export function ProjectCard({ project, canView, canEdit, canDelete, showClient =
                     {initials(project.title)}
                 </div>
                 <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-semibold leading-tight group-hover:text-primary" title={project.title}>{project.title}</h3>
-                    <div className="mt-1.5 flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-                        <span className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium', status.pill)}>
-                            <span className={cn('h-1.5 w-1.5 rounded-full', status.dot)} />
-                            {statusLabel}
-                        </span>
+                    <h3 className="truncate font-semibold leading-tight text-ds-fg" title={project.title}>
+                        {canView ? (
+                            // The whole card is clickable with a mouse; the title is its keyboard target.
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onAction('view', project); }}
+                                className="max-w-full cursor-pointer truncate rounded-sm text-left group-hover:text-ds-fg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus"
+                            >
+                                {project.title}
+                            </button>
+                        ) : project.title}
+                    </h3>
+                    <div className="mt-1.5 flex min-w-0 items-center gap-2 text-sm text-ds-fg-muted">
+                        <StatusBadge tone={status.tone} className="h-5 px-2">{statusLabel}</StatusBadge>
                         {subtitle && <span className="truncate" title={clients.length > 0 ? `${t('Client')}: ${subtitle}` : subtitle}>{subtitle}</span>}
                     </div>
                 </div>
-                <div className="-mr-1 -mt-1 shrink-0">
+                <div className="-mr-2 -mt-2 shrink-0">
                     {(canView || canEdit || canDelete) && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" aria-label={t('Project actions')}>
-                                    <MoreHorizontal className="h-4 w-4" />
+                                <Button variant="ghost" size="icon" className="text-ds-fg-muted" aria-label={t('Actions for {{name}}', { name: project.title })}>
+                                    <MoreHorizontal />
                                 </Button>
                             </DropdownMenuTrigger>
                             {/* Menu clicks must not also open the card. */}
                             <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
                                 {canView && (
                                     <DropdownMenuItem onClick={() => onAction('view', project)}>
-                                        <Eye className="mr-2 h-4 w-4" />{t('View')}
+                                        <Eye />{t('View')}
                                     </DropdownMenuItem>
                                 )}
                                 {canEdit && (
                                     <DropdownMenuItem onClick={() => onAction('edit', project)}>
-                                        <Edit className="mr-2 h-4 w-4" />{t('Edit')}
+                                        <Edit />{t('Edit')}
                                     </DropdownMenuItem>
                                 )}
                                 {canDelete && (
                                     <>
                                         {(canView || canEdit) && <DropdownMenuSeparator />}
-                                        <DropdownMenuItem onClick={() => onAction('delete', project)} className="text-red-600 focus:text-red-600">
-                                            <Trash2 className="mr-2 h-4 w-4" />{t('Delete')}
+                                        <DropdownMenuItem onClick={() => onAction('delete', project)} variant="destructive">
+                                            <Trash2 />{t('Delete')}
                                         </DropdownMenuItem>
                                     </>
                                 )}
@@ -139,21 +141,21 @@ export function ProjectCard({ project, canView, canEdit, canDelete, showClient =
             {/* How far along, in tasks */}
             <div className="space-y-2">
                 <div className="flex items-baseline justify-between text-sm">
-                    <span className="text-muted-foreground">
+                    <span className="text-ds-fg-secondary">
                         {total > 0 ? t('{{done}} of {{total}} tasks done', { done, total }) : t('No tasks yet')}
                     </span>
-                    <span className="font-semibold tabular-nums">{progress}%</span>
+                    <span className="font-semibold tabular-nums text-ds-fg">{progress}%</span>
                 </div>
-                <Progress value={progress} className="h-2" indicatorClassName={barColor} />
+                <Progress value={progress} className="h-2" indicatorClassName={barColor} aria-label={t('{{title}} progress', { title: project.title })} />
             </div>
 
             {/* Who's on it, priority and due date */}
-            <div className="mt-auto flex items-center justify-between gap-2 border-t pt-4">
+            <div className="mt-auto flex items-center justify-between gap-2 border-t border-ds-border-subtle pt-4">
                 <div className="flex -space-x-2">
                     {members.slice(0, 4).map((member, index) => (
                         <Tooltip key={index}>
                             <TooltipTrigger asChild>
-                                <Avatar className="h-7 w-7 border-2 border-background">
+                                <Avatar className="h-7 w-7 border-2 border-ds-surface">
                                     {member.user?.avatar && <AvatarImage src={member.user.avatar} />}
                                     <AvatarFallback className={cn('text-[10px] font-semibold', colorFor(member.user?.name || index))}>
                                         {initials(member.user?.name)}
@@ -166,27 +168,27 @@ export function ProjectCard({ project, canView, canEdit, canDelete, showClient =
                     {members.length > 4 && (
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-medium">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-ds-surface bg-ds-neutral-bg text-[10px] font-medium text-ds-fg-secondary">
                                     +{members.length - 4}
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent>{members.slice(4).map(m => m.user?.name).join(', ')}</TooltipContent>
                         </Tooltip>
                     )}
-                    {members.length === 0 && <span className="text-sm text-muted-foreground">{t('No team yet')}</span>}
+                    {members.length === 0 && <span className="text-sm text-ds-fg-muted">{t('No team yet')}</span>}
                 </div>
 
                 <div className="flex min-w-0 items-center gap-3 text-sm">
                     {!!project.is_public && (
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Globe className="h-4 w-4 shrink-0 text-muted-foreground" aria-label={t('Public')} />
+                                <Globe className="h-4 w-4 shrink-0 text-ds-fg-muted" aria-label={t('Public')} />
                             </TooltipTrigger>
                             <TooltipContent>{t('Public')}</TooltipContent>
                         </Tooltip>
                     )}
                     {showPriority && (
-                        <span className={cn('inline-flex shrink-0 items-center gap-1 text-xs font-medium', project.priority === 'urgent' ? 'text-red-600' : 'text-orange-600')}>
+                        <span className={cn('inline-flex shrink-0 items-center gap-1 text-xs font-medium', project.priority === 'urgent' ? 'text-ds-danger-fg' : 'text-orange-600')}>
                             <Flag className="h-3.5 w-3.5" />
                             {project.priority === 'urgent' ? t('Urgent') : t('High')}
                         </span>
@@ -194,7 +196,7 @@ export function ProjectCard({ project, canView, canEdit, canDelete, showClient =
                     <span
                         className={cn(
                             'inline-flex items-center gap-1.5 truncate',
-                            due.tone === 'danger' ? 'font-medium text-red-600' : due.tone === 'warning' ? 'font-medium text-amber-600' : 'text-muted-foreground',
+                            due.tone === 'danger' ? 'font-medium text-ds-danger-fg' : due.tone === 'warning' ? 'font-medium text-ds-warning-fg' : 'text-ds-fg-muted',
                         )}
                         title={fullDate || undefined}
                     >

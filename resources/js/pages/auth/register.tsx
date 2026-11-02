@@ -61,10 +61,10 @@ export default function Register({ referralCode, planId }: { referralCode?: stri
             <form className="space-y-5" onSubmit={submit}>
                 <div className="space-y-4">
                     <div className="relative">
-                        <Label htmlFor="name" className="text-gray-700 dark:text-gray-300 font-medium mb-1 block">{t("Full name")}</Label>
+                        <Label htmlFor="name" className="mb-1.5 block">{t("Full name")}</Label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <User className="h-5 w-5 text-gray-400" />
+                                <User className="h-[18px] w-[18px] text-ds-fg-muted" aria-hidden="true" />
                             </div>
                             <Input
                                 id="name"
@@ -76,18 +76,17 @@ export default function Register({ referralCode, planId }: { referralCode?: stri
                                 value={data.name}
                                 onChange={(e) => setData('name', e.target.value)}
                                 placeholder={t("John Doe")}
-                                className="pl-10 w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg transition-all duration-200"
-                                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                                className="pl-10"
                             />
                         </div>
                         <InputError message={errors.name} />
                     </div>
 
                     <div className="relative">
-                        <Label htmlFor="email" className="text-gray-700 dark:text-gray-300 font-medium mb-1 block">{t("Email address")}</Label>
+                        <Label htmlFor="email" className="mb-1.5 block">{t("Email address")}</Label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Mail className="h-5 w-5 text-gray-400" />
+                                <Mail className="h-[18px] w-[18px] text-ds-fg-muted" aria-hidden="true" />
                             </div>
                             <Input
                                 id="email"
@@ -98,18 +97,17 @@ export default function Register({ referralCode, planId }: { referralCode?: stri
                                 value={data.email}
                                 onChange={(e) => setData('email', e.target.value)}
                                 placeholder="email@example.com"
-                                className="pl-10 w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg transition-all duration-200"
-                                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                                className="pl-10"
                             />
                         </div>
                         <InputError message={errors.email} />
                     </div>
 
                     <div>
-                        <Label htmlFor="password" className="text-gray-700 dark:text-gray-300 font-medium mb-1 block">{t("Password")}</Label>
+                        <Label htmlFor="password" className="mb-1.5 block">{t("Password")}</Label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Lock className="h-5 w-5 text-gray-400" />
+                                <Lock className="h-[18px] w-[18px] text-ds-fg-muted" aria-hidden="true" />
                             </div>
                             <Input
                                 id="password"
@@ -120,18 +118,17 @@ export default function Register({ referralCode, planId }: { referralCode?: stri
                                 value={data.password}
                                 onChange={(e) => setData('password', e.target.value)}
                                 placeholder="••••••••"
-                                className="pl-10 w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg transition-all duration-200"
-                                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                                className="pl-10"
                             />
                         </div>
                         <InputError message={errors.password} />
                     </div>
 
                     <div>
-                        <Label htmlFor="password_confirmation" className="text-gray-700 dark:text-gray-300 font-medium mb-1 block">{t("Confirm password")}</Label>
+                        <Label htmlFor="password_confirmation" className="mb-1.5 block">{t("Confirm password")}</Label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Lock className="h-5 w-5 text-gray-400" />
+                                <Lock className="h-[18px] w-[18px] text-ds-fg-muted" aria-hidden="true" />
                             </div>
                             <Input
                                 id="password_confirmation"
@@ -142,8 +139,7 @@ export default function Register({ referralCode, planId }: { referralCode?: stri
                                 value={data.password_confirmation}
                                 onChange={(e) => setData('password_confirmation', e.target.value)}
                                 placeholder="••••••••"
-                                className="pl-10 w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg transition-all duration-200"
-                                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                                className="pl-10"
                             />
                         </div>
                         <InputError message={errors.password_confirmation} />
@@ -156,10 +152,9 @@ export default function Register({ referralCode, planId }: { referralCode?: stri
                             checked={data.terms}
                             onCheckedChange={(checked) => setData('terms', checked)}
                             tabIndex={5}
-                            className="mt-1 border-gray-300 rounded"
-                            style={{ '--tw-ring-color': primaryColor, color: primaryColor } as React.CSSProperties}
+                            className="mt-0.5"
                         />
-                        <Label htmlFor="terms" className="ml-2 text-gray-600 dark:text-gray-400 text-sm">
+                        <Label htmlFor="terms" className="ml-2 text-sm font-normal leading-5 text-ds-fg-secondary">
                             {t("I agree to the")}{' '}
                             <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: primaryColor }}>
                                 {t("Terms and Conditions")}
@@ -192,7 +187,7 @@ export default function Register({ referralCode, planId }: { referralCode?: stri
                     {t("Create account")}
                 </AuthButton>
 
-                <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-6">
+                <div className="text-center text-sm text-ds-fg-secondary mt-6">
                     {t("Already have an account?")}{' '}
                     <TextLink 
                         href={route('login')} 

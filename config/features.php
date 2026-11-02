@@ -16,14 +16,15 @@ return [
     'contract_types'   => false,   // moved to Settings → General dropdown
 
     'bugs_menu'        => false,   // bugs are tasks of type bug: Board, Backlog, Sprints, Tasks list (Bugs switch) and the Create menu
-    'calendar'         => false,   // task calendar
+    'calendar'         => true,    // task calendar: deadlines and meetings, each role sees what it may (Task::visibleOnCalendarTo)
     'chat'             => false,   // most teams already use Slack / Teams (Slack integration exists)
     'meetings'         => true,    // Meetings menu and project tab; they say so until Zoom or Google Meet is connected
-    'knowledge_base'   => false,
+    'knowledge_base'   => true,    // owners and managers write, members read; custom AI agents answer from it
     'notes'            => false,   // duplicates task comments and project files
     'forms'            => false,   // intake forms
     'ai_assistant'     => true,    // "AI mode" switch, AI Assistant conversations and voice (owners and managers)
-    'ai'               => false,   // AI Tools page (Risk Radar, Resource Conflicts, agents) and the floating generator
+    'ai'               => true,    // AI Tools page (Risk Radar, Resource Conflicts, Standup Bot, custom agents): owners and managers
+    'ai_writer'        => false,   // floating ChatGPT text writer on every page; the AI Assistant covers it
     'project_reports'  => false,   // same columns as the Projects list
     'budgets_page'     => false,   // budgets live in each project's Budget tab
     'contracts'        => true,    // owner and client (e-signature); off for managers and members

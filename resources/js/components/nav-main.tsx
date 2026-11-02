@@ -187,7 +187,7 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain', collapsi
                                         isActive={isChildActive(child.children)}
                                         onClick={() => toggleExpand(`${level}-${child.title}`)}
                                         className={activeClass}>
-                                        <div className={`flex items-center gap-2 ${position === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}>
+                                        <div className={`flex items-center gap-2.5 ${position === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}>
                                             <span>{child.title}</span>
                                             {state !== "collapsed" && (
                                                 expandedItems[`${level}-${child.title}`] ?
@@ -209,7 +209,7 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain', collapsi
                                         href={child.href || '#'}
                                         prefetch
                                         target={child.target}
-                                        className={`flex items-center gap-2 ${position === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}
+                                        className={`flex items-center gap-2.5 ${position === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}
                                     >
                                         <span>{child.title}</span>
                                     </Link>
@@ -281,7 +281,7 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain', collapsi
                                                     tooltip={{ children: item.title }}
                                                     className={activeClass}
                                                 >
-                                                    {item.icon && <item.icon className="h-4 w-4" />}
+                                                    {item.icon && <item.icon className="h-[18px] w-[18px] shrink-0" />}
                                                 </SidebarMenuButton>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent side="right" align="start" className="w-48">
@@ -301,16 +301,16 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain', collapsi
                                             onClick={() => toggleExpand(item.title)}
                                             className={activeClass}
                                         >
-                                            <div className={`flex items-center gap-2 w-full ${position === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}>
+                                            <div className={`flex items-center gap-2.5 w-full ${position === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}>
                                                 {position === 'right' ? (
                                                     <>
                                                         {expandedItems[item.title] ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                                                        {item.icon && <item.icon className="h-4 w-4" />}
+                                                        {item.icon && <item.icon className="h-[18px] w-[18px] shrink-0" />}
                                                         <span>{item.title}</span>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        {item.icon && <item.icon className="h-4 w-4" />}
+                                                        {item.icon && <item.icon className="h-[18px] w-[18px] shrink-0" />}
                                                         <div className="flex items-center gap-1">
                                                             <span>{item.title}</span>
                                                             {item.badge && (
@@ -338,11 +338,11 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain', collapsi
                                         <a
                                             href={item.href || '#'}
                                             {...(item.target === '_blank' ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                                            className={`flex items-center gap-2 ${position === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}
+                                            className={`flex items-center gap-2.5 ${position === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}
                                         >
                                             {position === 'right' ? (
                                                 <>
-                                                    {item.icon && <item.icon className="h-4 w-4" />}
+                                                    {item.icon && <item.icon className="h-[18px] w-[18px] shrink-0" />}
                                                     {state !== "collapsed" && <span>{item.title}</span>}
                                                     {state !== "collapsed" && item.badge && (
                                                         <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">{item.badge.label}</span>
@@ -350,7 +350,7 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain', collapsi
                                                 </>
                                             ) : (
                                                 <>
-                                                    {item.icon && <item.icon className="h-4 w-4" />}
+                                                    {item.icon && <item.icon className="h-[18px] w-[18px] shrink-0" />}
                                                     {state !== "collapsed" && <span>{item.title}</span>}
                                                     {state !== "collapsed" && item.badge && (
                                                         <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">{item.badge.label}</span>
@@ -362,11 +362,11 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain', collapsi
                                         <Link
                                             href={item.href || '#'}
                                             prefetch
-                                            className={`flex items-center gap-2 ${position === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}
+                                            className={`flex items-center gap-2.5 ${position === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}
                                         >
                                             {position === 'right' ? (
                                                 <>
-                                                    {item.icon && <item.icon className="h-4 w-4" />}
+                                                    {item.icon && <item.icon className="h-[18px] w-[18px] shrink-0" />}
                                                     {state !== "collapsed" && <span>{item.title}</span>}
                                                     {state !== "collapsed" && item.badge && (
                                                         <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">{item.badge.label}</span>
@@ -374,7 +374,7 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain', collapsi
                                                 </>
                                             ) : (
                                                 <>
-                                                    {item.icon && <item.icon className="h-4 w-4" />}
+                                                    {item.icon && <item.icon className="h-[18px] w-[18px] shrink-0" />}
                                                     {state !== "collapsed" && <span>{item.title}</span>}
                                                     {state !== "collapsed" && item.badge && (
                                                         <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold leading-none text-primary-foreground">{item.badge.label}</span>

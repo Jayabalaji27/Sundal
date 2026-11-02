@@ -179,9 +179,9 @@ class HandleInertiaRequests extends Middleware
             ],
             'globalSettings' => $globalSettings,
             'userLanguage' => $request->user()?->lang ?? config('app.locale', 'en'),
-            'storageSettings' => $this->getStorageSettings($request),
-            'allowed_file_types' => getSetting('storage_file_types', 'jpg,jpeg,png,svg,gif,zip,txt,pdf,docx', null, null),
-            'max_file_size' => (int) getSetting('storage_max_file_size', 2048, null, null),
+            'storageSettings' => $storageSettings = $this->getStorageSettings($request),
+            'allowed_file_types' => $storageSettings['allowed_file_types'],
+            'max_file_size' => $storageSettings['max_file_size_kb'],
             'is_demo' => config('app.is_demo', false),
             'isDemoMode' => config('app.is_demo', false),
             'isSaasMode' => isSaasMode(),
@@ -204,15 +204,24 @@ class HandleInertiaRequests extends Middleware
 
     private function getStorageSettings(Request $request): array
     {
+        // allowed_file_types / max_file_size_kb are the exact limits the upload
+        // endpoint validates against, so file pickers offer what will be accepted.
+        // (Without them the Media Library fell back to images only.)
+        $config = \App\Services\StorageConfigService::getStorageConfig();
+        $limits = [
+            'allowed_file_types' => $config['allowed_file_types'],
+            'max_file_size_kb' => $config['max_file_size_kb'],
+        ];
+
         try {
             $user = $request->user();
-            if (!$user) return ['storage_type' => 'local'];
+            if (!$user) return ['storage_type' => 'local'] + $limits;
             $adminSettings = getAdminAllSetting();
             return [
                 'storage_type' => $adminSettings['storage_type'] ?? 'local',
-            ];
+            ] + $limits;
         } catch (\Exception $e) {
-            return ['storage_type' => 'local'];
+            return ['storage_type' => 'local'] + $limits;
         }
     }
 

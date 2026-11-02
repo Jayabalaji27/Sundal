@@ -24,6 +24,8 @@ export interface PageTemplateProps {
   description?: string;
   url?: string;
   actions?: PageAction[];
+  /** Custom header controls shown before the action buttons (e.g. a download menu). */
+  toolbar?: ReactNode;
   children: ReactNode;
   noPadding?: boolean;
   breadcrumbs?: BreadcrumbItem[];
@@ -52,8 +54,8 @@ export function PageActions({ actions = [] }: { actions?: PageAction[] }) {
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="h-8 w-8" aria-label={t('More actions')}>
-                  <MoreHorizontal className="h-4 w-4" />
+                <Button variant="outline" size="icon" aria-label={t('More actions')}>
+                  <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -74,9 +76,10 @@ export function PageActions({ actions = [] }: { actions?: PageAction[] }) {
           <Button
             key={index}
             variant={action.variant || 'outline'}
-            size={action.size || 'sm'}
+            size={action.size || 'default'}
             className={action.className}
             onClick={action.onClick}
+            aria-label={action.size === 'icon' ? action.label : undefined}
           >
             {action.icon}
             {action.size !== 'icon' && action.label}
@@ -107,6 +110,7 @@ export function PageTemplate({
   description,
   url,
   actions,
+  toolbar,
   children,
   noPadding = false,
   breadcrumbs
@@ -123,15 +127,25 @@ export function PageTemplate({
     <AppLayout breadcrumbs={pageBreadcrumbs}>
       <Head title={`${title} - ${(usePage().props as any).globalSettings?.titleText || (usePage().props as any).name}`} />
 
-      <div className="flex flex-1 flex-col gap-4 p-4 px-4 pb-[50px] sm:px-6 lg:px-[50px]">
-        {/* Header with action buttons */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold truncate">{title}</h1>
-          <PageActions actions={actions} />
+      <div className="flex flex-1 flex-col gap-5 px-4 pt-5 pb-10 sm:px-6 lg:px-8">
+        {/* Header: title and description on the left, the page's actions on the right */}
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-bold tracking-tight text-ds-fg sm:text-ds-page-title">{title}</h1>
+            {description && <p className="mt-1 text-sm text-ds-fg-secondary">{description}</p>}
+          </div>
+          {toolbar ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {toolbar}
+              <PageActions actions={actions} />
+            </div>
+          ) : (
+            <PageActions actions={actions} />
+          )}
         </div>
 
         {/* Content */}
-        <div className={noPadding ? "" : "rounded-xl border p-6"}>
+        <div className={noPadding ? "" : "rounded-xl border border-ds-border bg-ds-surface px-5 py-4 shadow-ds-xs"}>
           {children}
         </div>
       </div>

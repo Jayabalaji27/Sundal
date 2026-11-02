@@ -128,9 +128,9 @@ export function AiModeToggle() {
                 aria-pressed={open}
                 aria-label={t('AI mode')}
                 title={open ? t('Close AI mode') : t('Open the AI Assistant in its own tab')}
-                className={cn('h-9 gap-1.5 px-2.5', open && 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200')}
+                className={cn('gap-1.5 px-3', open && 'border-brand-soft-border bg-brand-soft text-brand-soft-fg hover:bg-ds-surface-selected hover:text-brand-soft-fg')}
             >
-                <Sparkles className="h-4 w-4 text-violet-500" />
+                <Sparkles className="h-4 w-4 text-brand-500" aria-hidden="true" />
                 <span className="hidden md:inline">{t('AI')}</span>
             </Button>
             {blocked && (

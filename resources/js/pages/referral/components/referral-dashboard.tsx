@@ -291,7 +291,7 @@ export default function ReferralDashboard({ userType, stats, referralLink, recen
                 readOnly
                 className="flex-1 font-mono text-sm"
               />
-              <Button
+              <Button aria-label={t('Copy link')}
                 onClick={copyReferralLink}
                 variant="outline"
                 size="icon"

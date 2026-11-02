@@ -70,10 +70,9 @@ class MediaController extends Controller
                     $originalUrl = $this->getFullUrl($media->getUrl());
                     $thumbUrl = $originalUrl;
 
-                    try {
+                    // Documents never get a thumbnail; keep the original URL for them.
+                    if ($media->hasGeneratedConversion('thumb')) {
                         $thumbUrl = $this->getFullUrl($media->getUrl('thumb'));
-                    } catch (\Exception $e) {
-                        // If thumb conversion fails, use original
                     }
 
                     return [
@@ -217,10 +216,9 @@ class MediaController extends Controller
                 $originalUrl = $this->getFullUrl($media->getUrl());
                 $thumbUrl = $originalUrl; // Default to original
 
-                try {
+                // Documents never get a thumbnail; keep the original URL for them.
+                if ($media->fresh()?->hasGeneratedConversion('thumb')) {
                     $thumbUrl = $this->getFullUrl($media->getUrl('thumb'));
-                } catch (\Exception $e) {
-                    // If thumb conversion fails, use original
                 }
 
                 $uploadedMedia[] = [

@@ -116,17 +116,17 @@ export default function NavigationTimer() {
 
     const buttonClass = timerState.active 
         ? (timerState.is_paused 
-            ? 'bg-yellow-50 border-yellow-200 hover:bg-yellow-100' 
-            : 'bg-green-50 border-green-200 hover:bg-green-100')
-        : 'bg-blue-50 border-blue-200 hover:bg-blue-100';
+            ? 'bg-ds-warning-bg border-ds-warning/30 hover:bg-ds-warning-bg hover:border-ds-warning/50' 
+            : 'bg-ds-success-bg border-ds-success/30 hover:bg-ds-success-bg hover:border-ds-success/50')
+        : 'bg-ds-info-bg border-ds-info/25 hover:bg-ds-info-bg hover:border-ds-info/40';
 
     const iconClass = timerState.active 
-        ? (timerState.is_paused ? 'text-yellow-600' : 'text-green-600')
-        : 'text-blue-600';
+        ? (timerState.is_paused ? 'text-ds-warning' : 'text-ds-success')
+        : 'text-ds-info';
 
     const textClass = timerState.active
-        ? (timerState.is_paused ? 'text-yellow-800' : 'text-green-800')
-        : 'text-blue-800';
+        ? (timerState.is_paused ? 'text-ds-warning-fg' : 'text-ds-success-fg')
+        : 'text-ds-info-fg';
 
     if (!canUseTimer) {
         return null;
@@ -142,7 +142,7 @@ export default function NavigationTimer() {
         <Button 
             variant="outline" 
             size="sm" 
-            className={`h-9 gap-2 ${buttonClass}`}
+            className={`gap-2 ${buttonClass}`}
             onClick={navigateToTimer}
             title={timerState.is_paused ? 'Timer paused' : 'Timer running'}
         >

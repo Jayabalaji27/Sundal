@@ -608,7 +608,7 @@ export default function Users() {
                   {hasPermission(permissions, 'view-users') && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
+                        <Button aria-label={t("View")} 
                           variant="ghost" 
                           size="icon" 
                           onClick={() => handleAction('view', user)}
@@ -623,7 +623,7 @@ export default function Users() {
                   {hasPermission(permissions, 'edit-users') && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
+                        <Button aria-label={t("Edit")} 
                           variant="ghost" 
                           size="icon" 
                           onClick={() => handleAction('edit', user)}
@@ -638,7 +638,7 @@ export default function Users() {
                   {hasPermission(permissions, 'edit-users') && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
+                        <Button aria-label={t("Reset Password")} 
                           variant="ghost" 
                           size="icon" 
                           onClick={() => handleAction('reset-password', user)}
@@ -653,7 +653,7 @@ export default function Users() {
                   {hasPermission(permissions, 'edit-users') && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
+                        <Button aria-label={t('Toggle status')} 
                           variant="ghost" 
                           size="icon" 
                           onClick={() => handleAction('toggle-status', user)}
@@ -668,7 +668,7 @@ export default function Users() {
                   {hasPermission(permissions, 'delete-users') && (
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
+                        <Button aria-label={t("Delete")} 
                           variant="ghost" 
                           size="icon"
                           className="text-red-500 hover:text-red-700"

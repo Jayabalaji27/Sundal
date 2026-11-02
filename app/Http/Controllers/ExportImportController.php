@@ -18,6 +18,7 @@ class ExportImportController extends Controller
     protected $importClasses = [
         'companies' => \App\Imports\CompanyImport::class,
         'projects' => \App\Imports\ProjectImport::class,
+        'tasks' => \App\Imports\TaskImport::class,
     ];
 
     public function export(Request $request, $type = null)
@@ -85,10 +86,29 @@ class ExportImportController extends Controller
             return response()->json(['error' => 'No import data found. Please upload a file first.'], 400);
         }
 
+        // The upload step (csv.import) has no permission check of its own; the
+        // file must be for the kind this route is authorized for, or a user
+        // allowed to import tasks could create companies through it.
+        $table = session('import_table', $type);
+        if ($table !== $type) {
+            return response()->json(['error' => __('This file was uploaded for a different import. Upload it again.')], 400);
+        }
+
+        if ($type === 'tasks') {
+            $result = app(\App\Imports\TaskImport::class)->import(
+                $request->user(),
+                $csvData,
+                array_map('intval', array_filter((array) $mappingData, fn ($column) => $column !== null && $column !== '')),
+                $request->integer('project_id') ?: null,
+            );
+            session()->forget(['file_data', 'file_header', 'import_table']);
+
+            return $this->importResult('tasks', $result['imported'], $result['skipped'], $result['errors'], $result['warnings']);
+        }
+
         try {
             $imported = 0;
             $errors = [];
-            $table = session('import_table', $type);
 
             $seen = [];
             $skipped = 0;
@@ -121,22 +141,7 @@ class ExportImportController extends Controller
 
             session()->forget(['file_data', 'file_header', 'import_table']);
 
-            if (count($errors) > 0) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Import completed with errors',
-                    'errors' => $errors
-                ], 422);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => "{$imported} {$type} imported successfully" . ($skipped > 0 ? ", {$skipped} duplicates skipped" : ""),
-                'data' => [
-                    'imported_count' => $imported,
-                    'skipped_count' => $skipped
-                ]
-            ], 200);
+            return $this->importResult($type, $imported, $skipped, $errors);
         } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
             $failures = $e->failures();
             $errors = [];
@@ -147,6 +152,34 @@ class ExportImportController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => 'Import failed: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * What happened to the rows, for ImportModal's summary. Always 200 once the
+     * rows were processed: rows that failed are listed by row number, the
+     * others were imported.
+     */
+    private function importResult(string $type, int $imported, int $skipped, array $errors, array $warnings = [])
+    {
+        $parts = [trans_choice(':count row imported|:count rows imported', $imported)];
+        if ($skipped > 0) {
+            $parts[] = trans_choice(':count duplicate skipped|:count duplicates skipped', $skipped);
+        }
+        if (count($errors) > 0) {
+            $parts[] = trans_choice(':count row failed|:count rows failed', count($errors));
+        }
+
+        return response()->json([
+            'success' => count($errors) === 0,
+            'message' => implode(', ', $parts),
+            'data' => [
+                'imported_count' => $imported,
+                'skipped_count' => $skipped,
+                'failed_count' => count($errors),
+            ],
+            'errors' => $errors,
+            'warnings' => $warnings,
+        ]);
     }
 
     public function getTemplate($type = null)
@@ -173,10 +206,17 @@ class ExportImportController extends Controller
 
             $fields = $tableFields['fields'];
             $filename = 'sample_' . $type . '.csv';
+            // An example row shows the formats people get wrong (dates, names).
+            $example = $type === 'tasks'
+                ? ['Website Redesign', 'Design the home page', 'Hero, features and pricing sections', 'task', 'high', '', 'To Do', 'name@company.com', now()->toDateString(), now()->addWeek()->toDateString(), '3', '']
+                : null;
 
-            return response()->streamDownload(function () use ($fields) {
+            return response()->streamDownload(function () use ($fields, $example) {
                 $file = fopen('php://output', 'w');
                 fputcsv($file, $fields);
+                if ($example) {
+                    fputcsv($file, $example);
+                }
                 fclose($file);
             }, $filename, [
                 'Content-Type' => 'text/csv',
@@ -201,6 +241,10 @@ class ExportImportController extends Controller
             'invoices' => [
                 'view' => 'invoice_view_any',
                 'create' => 'invoice_create'
+            ],
+            'tasks' => [
+                'view' => 'task_create',
+                'create' => 'task_create'
             ]
         ];
 
@@ -280,11 +324,37 @@ class ExportImportController extends Controller
             $fields = json_encode($tableFields['fields']);
         }
 
+        $headers = session('file_header', []);
+
         return response()->json([
             'fields' => $fields,
-            'headers' => session('file_header', []),
-            'data' => session('file_data', [])
+            'headers' => $headers,
+            'data' => session('file_data', []),
+            // Columns already matched to fields by their names, so the user only
+            // fixes what wasn't recognised. field => column index
+            'suggested' => (object) $this->suggestMapping((string) $request->table, (array) $headers),
         ]);
+    }
+
+    private function suggestMapping(string $table, array $headers): array
+    {
+        if ($table === 'tasks') {
+            return app(\App\Imports\TaskImport::class)->suggestMapping($headers);
+        }
+
+        $key = fn ($name) => preg_replace('/[^a-z0-9]/', '', mb_strtolower((string) $name));
+        $byKey = [];
+        foreach ($headers as $index => $header) {
+            $byKey[$key($header)] ??= $index;
+        }
+        $suggested = [];
+        foreach ($this->getTableWiseFields($table)['fields'] as $field) {
+            if (isset($byKey[$key($field)])) {
+                $suggested[$field] = $byKey[$key($field)];
+            }
+        }
+
+        return $suggested;
     }
 
     public function importData(Request $request)
@@ -361,6 +431,9 @@ class ExportImportController extends Controller
                 break;
             case 'projects':
                 $tableFields = ['title', 'description', 'status', 'priority', 'start_date', 'deadline', 'estimated_hours', 'is_public', 'created_at', 'updated_at'];
+                break;
+            case 'tasks':
+                $tableFields = array_keys(app(\App\Imports\TaskImport::class)->fields());
                 break;
             default:
                 $error = 'Something went wrong!';

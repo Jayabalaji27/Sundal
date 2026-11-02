@@ -1,21 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, router, usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
-import { Check, CheckCircle2, ChevronDown, Columns3, LayoutGrid, ListTodo, Rocket, Rows3, Search, Sheet as SheetIcon, UserRound } from 'lucide-react';
+import { CheckCircle2, ListTodo, Rocket, Search, UserRound } from 'lucide-react';
 import { ProjectShell, daysLeftLabel } from '@/components/projects/project-shell';
 import { AgileSprint, AgileTask, TypeIcon } from '@/components/tasks/agile-bits';
 import { KanbanBoard, KanbanStage } from '@/components/tasks/kanban-board';
 import { BoardSheet } from '@/components/tasks/board-sheet';
+import { BOARD_VIEWS, BoardView, BoardViewMenu } from '@/components/tasks/board-view-menu';
 import { useTaskDetail } from '@/components/tasks/use-task-detail';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { hasPermission } from '@/utils/authorization';
 import { cn } from '@/lib/utils';
 
-type BoardView = 'detail' | 'plain' | 'sheet';
-const BOARD_VIEWS: BoardView[] = ['detail', 'plain', 'sheet'];
 const VIEW_KEY = 'sundal.board.view';
 
 /** The view each person last picked (a per-browser convenience; the board works without it). */
@@ -52,12 +50,6 @@ export default function ProjectBoard() {
         setView(next);
         try { window.localStorage.setItem(VIEW_KEY, next); } catch { /* private window: keep it for this visit */ }
     };
-    const views: Record<BoardView, { label: string; hint: string; icon: typeof Rows3 }> = {
-        detail: { label: t('Detail view'), hint: t('Cards with priority, severity, points and due date'), icon: LayoutGrid },
-        plain: { label: t('Plain view'), hint: t('Compact cards: title and owner'), icon: Rows3 },
-        sheet: { label: t('Sheet view'), hint: t('A table you can sort, and change stages in'), icon: SheetIcon },
-    };
-    const CurrentViewIcon = views[view].icon;
     const { openTask, taskDialog } = useTaskDetail({ members: taskForm?.members || [], stages, milestones: taskForm?.projects?.[0]?.milestones || [] });
 
     const reload = (changes: Record<string, unknown>) => {
@@ -181,42 +173,7 @@ export default function ProjectBoard() {
                         </button>
                     </div>
                 )}
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button size="sm" variant="outline" className={cn('h-9', !activeSprint && 'sm:ml-auto')} aria-label={t('Board view')}>
-                            <CurrentViewIcon className="h-4 w-4" />
-                            {views[view].label}
-                            <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-72">
-                        {BOARD_VIEWS.map(key => {
-                            const option = views[key];
-                            return (
-                                <DropdownMenuItem key={key} onClick={() => chooseView(key)} className="items-start gap-3 py-2">
-                                    <option.icon className="mt-0.5 h-4 w-4 shrink-0" />
-                                    <span className="min-w-0 flex-1">
-                                        <span className="block font-medium">{option.label}</span>
-                                        <span className="block text-xs text-muted-foreground">{option.hint}</span>
-                                    </span>
-                                    {view === key && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
-                                </DropdownMenuItem>
-                            );
-                        })}
-                        {/* The columns are the workspace's stages (for tasks and bugs alike). */}
-                        {hasPermission(permissions, 'task_manage_stages') && (
-                            <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem asChild className="gap-3 py-2">
-                                    <Link href={route('task-stages.index')}>
-                                        <Columns3 className="h-4 w-4 shrink-0" />
-                                        <span className="font-medium">{t('Manage stages')}</span>
-                                    </Link>
-                                </DropdownMenuItem>
-                            </>
-                        )}
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <BoardViewMenu view={view} onChange={chooseView} className={cn(!activeSprint && 'sm:ml-auto')} />
             </div>
 
             {stages.length === 0 ? (

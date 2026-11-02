@@ -130,7 +130,7 @@ export default function ChatbotPage() {
                                 <Input value={input} onChange={e => setInput(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
                                     placeholder={t('Ask anything about your workspace…')} className="flex-1" />
-                                <Button onClick={send} disabled={!input.trim() || loading} size="icon">
+                                <Button aria-label={t('Send')} onClick={send} disabled={!input.trim() || loading} size="icon">
                                     <Send className="h-4 w-4" />
                                 </Button>
                             </div>

@@ -473,7 +473,7 @@ export default function Newsletters() {
                     <div className="flex justify-end gap-1">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button 
+                          <Button aria-label={t('Toggle status')} 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleToggleStatus(newsletter)}
@@ -489,7 +489,7 @@ export default function Newsletters() {
                       
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button 
+                          <Button aria-label={t("Edit")} 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleEdit(newsletter)}
@@ -503,7 +503,7 @@ export default function Newsletters() {
                       
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button 
+                          <Button aria-label={t("Delete")} 
                             variant="ghost" 
                             size="icon"
                             className="text-red-500 hover:text-red-700"

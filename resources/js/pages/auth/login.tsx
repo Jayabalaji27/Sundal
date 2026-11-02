@@ -96,10 +96,10 @@ export default function Login({ status, canResetPassword, demoLogins }: LoginPro
             <form className="space-y-5" onSubmit={submit}>
                 <div className="space-y-4">
                     <div className="relative">
-                        <Label htmlFor="email" className="text-gray-700 dark:text-gray-300 font-medium mb-1 block">{t("Email address")}</Label>
+                        <Label htmlFor="email" className="mb-1.5 block">{t("Email address")}</Label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Mail className="h-5 w-5 text-gray-400" />
+                                <Mail className="h-[18px] w-[18px] text-ds-fg-muted" aria-hidden="true" />
                             </div>
                             <Input
                                 id="email"
@@ -111,8 +111,7 @@ export default function Login({ status, canResetPassword, demoLogins }: LoginPro
                                 value={data.email}
                                 onChange={(e) => setData('email', e.target.value)}
                                 placeholder="email@example.com"
-                                className="pl-10 w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg transition-all duration-200"
-                                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                                className="pl-10"
                             />
                         </div>
                         <InputError message={errors.email} />
@@ -120,7 +119,7 @@ export default function Login({ status, canResetPassword, demoLogins }: LoginPro
 
                     <div>
                         <div className="flex items-center justify-between mb-1">
-                            <Label htmlFor="password" className="text-gray-700 dark:text-gray-300 font-medium">{t("Password")}</Label>
+                            <Label htmlFor="password">{t("Password")}</Label>
                             {canResetPassword && (
                                 <TextLink 
                                     href={route('password.request')} 
@@ -134,7 +133,7 @@ export default function Login({ status, canResetPassword, demoLogins }: LoginPro
                         </div>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Lock className="h-5 w-5 text-gray-400" />
+                                <Lock className="h-[18px] w-[18px] text-ds-fg-muted" aria-hidden="true" />
                             </div>
                             <Input
                                 id="password"
@@ -145,8 +144,7 @@ export default function Login({ status, canResetPassword, demoLogins }: LoginPro
                                 value={data.password}
                                 onChange={(e) => setData('password', e.target.value)}
                                 placeholder="••••••••"
-                                className="pl-10 w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg transition-all duration-200"
-                                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                                className="pl-10"
                             />
                         </div>
                         <InputError message={errors.password} />
@@ -159,10 +157,9 @@ export default function Login({ status, canResetPassword, demoLogins }: LoginPro
                             checked={data.remember}
                             onClick={() => setData('remember', !data.remember)}
                             tabIndex={3}
-                            className="border-gray-300 rounded"
-                            style={{ '--tw-ring-color': primaryColor, color: primaryColor } as React.CSSProperties}
+                           
                         />
-                        <Label htmlFor="remember" className="ml-2 text-gray-600 dark:text-gray-400">{t("Remember me")}</Label>
+                        <Label htmlFor="remember" className="ml-2 font-normal text-ds-fg-secondary">{t("Remember me")}</Label>
                     </div>
                 </div>
 
@@ -201,7 +198,7 @@ export default function Login({ status, canResetPassword, demoLogins }: LoginPro
                 )}
 
                 {(pageProps.isSaasMode && isRegistrationEnabled(pageProps)) && (
-                    <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-6">
+                    <div className="text-center text-sm text-ds-fg-secondary mt-6">
                         {t("Don't have an account?")}{' '}
                         <TextLink 
                             href={route('register')} 

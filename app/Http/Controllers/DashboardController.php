@@ -145,6 +145,8 @@ class DashboardController extends Controller
                 'weekHours' => $this->checkPermission('timesheet_view_any') ? $this->getWeekHours($workspace, $user) : null,
                 // Owner home: active projects whose health score isn't "healthy".
                 'projectsAtRisk' => $role === 'company' && $this->checkPermission('project_view_any') ? $this->getProjectsAtRisk($workspace) : null,
+                // Trends, workload and what's coming up, per role (DashboardInsights).
+                'insights' => $workspace ? $this->roleInsights($workspace, $user, $role) : [],
             ];
 
             return Inertia::render('dashboard', [
@@ -166,6 +168,53 @@ class DashboardController extends Controller
         }
     }
     
+    /**
+     * The figures each role's dashboard adds to the basics: owners the business
+     * (revenue trend, delivery, team, budgets), managers their team's delivery,
+     * members their own week, clients what's coming on their projects. Each is
+     * gated by the permission of the page it links to; one failing figure is
+     * logged and left out rather than breaking the dashboard.
+     */
+    private function roleInsights($workspace, $user, string $role): array
+    {
+        $insights = app(\App\Services\DashboardInsights::class);
+        $figure = fn (bool $allowed, callable $compute) => $allowed ? rescue($compute, null) : null;
+        $canTasks = $this->checkPermission('task_view_any');
+        $canTimesheets = $this->checkPermission('timesheet_view_any');
+        $canMeetings = $this->checkPermission('zoom_meeting_view_any') || $this->checkPermission('google_meeting_view_any');
+
+        $data = match ($role) {
+            'company' => [
+                'revenueByMonth' => $figure($this->checkPermission('invoice_view_any'), fn () => $insights->revenueByMonth($workspace)),
+                'tasksByStage' => $figure($canTasks, fn () => $insights->tasksByStage($workspace, $user)),
+                'teamWorkload' => $figure($canTasks, fn () => $insights->teamWorkload($workspace, $user)),
+                'teamHours' => $figure($canTimesheets, fn () => $insights->teamHoursThisWeek($workspace, $user)),
+                'budgetBurn' => $figure($this->checkPermission('budget_view_any'), fn () => $insights->budgetBurn($workspace)),
+                'dueSoon' => $figure($canTasks, fn () => $insights->dueSoon($user)),
+                'meetings' => $figure($canMeetings, fn () => $insights->upcomingMeetings($user)),
+            ],
+            'manager' => [
+                'tasksByStage' => $figure($canTasks, fn () => $insights->tasksByStage($workspace, $user)),
+                'teamWorkload' => $figure($canTasks, fn () => $insights->teamWorkload($workspace, $user)),
+                'teamHours' => $figure($canTimesheets, fn () => $insights->teamHoursThisWeek($workspace, $user)),
+                'dueSoon' => $figure($canTasks, fn () => $insights->dueSoon($user)),
+                'meetings' => $figure($canMeetings, fn () => $insights->upcomingMeetings($user)),
+            ],
+            'client' => [
+                'milestones' => $figure(true, fn () => $insights->clientMilestones($workspace, $user)),
+                'contractsToSign' => $figure($this->checkPermission('contract_view_any'), fn () => $insights->contractsToSign($workspace, $user)),
+                'meetings' => $figure($canMeetings, fn () => $insights->upcomingMeetings($user)),
+            ],
+            default => [
+                'myWeek' => $figure($canTimesheets, fn () => $insights->myWeek($workspace, $user)),
+                'completedThisWeek' => $figure($canTasks, fn () => $insights->myCompletedThisWeek($user)),
+                'meetings' => $figure($canMeetings, fn () => $insights->upcomingMeetings($user)),
+            ],
+        };
+
+        return array_filter($data, fn ($value) => $value !== null);
+    }
+
     private function getCurrentWorkspace($user)
     {
         try {
@@ -816,6 +865,19 @@ class DashboardController extends Controller
         ];
     }
     
+    /** Platform admin: revenue and sign-ups by month, plan mix, trials and renewals coming up. */
+    private function platformInsights(): array
+    {
+        $insights = app(\App\Services\DashboardInsights::class);
+
+        return array_filter([
+            'revenueByMonth' => rescue(fn () => $insights->platformRevenueByMonth(), null),
+            'signupsByMonth' => rescue(fn () => $insights->signupsByMonth(), null),
+            'planMix' => rescue(fn () => $insights->planMix(), null),
+            'expiringSoon' => rescue(fn () => $insights->expiringSoon(), null),
+        ], fn ($value) => $value !== null);
+    }
+
     private function renderSuperAdminDashboard()
     {
         try {
@@ -870,6 +932,8 @@ class DashboardController extends Controller
                 'recentActivities' => $recentActivities,
                 'recentCompanies' => $this->getRecentCompanies(),
                 'subscriptions' => isSaasMode() ? $this->getSubscriptionStats() : null,
+                // SaaS: the subscription business over time, plan mix and what's expiring.
+                'insights' => isSaasMode() ? $this->platformInsights() : [],
             ];
 
             return Inertia::render('dashboard', [

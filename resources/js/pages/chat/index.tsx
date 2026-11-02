@@ -355,7 +355,7 @@ export default function ChatIndex({ conversations: initialConversations, workspa
                         <>
                             {/* Compose header */}
                             <div className="flex items-center gap-2 border-b px-3 py-3">
-                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full flex-shrink-0" onClick={closeCompose}>
+                                <Button aria-label={t('Back')} variant="ghost" size="icon" className="h-8 w-8 rounded-full flex-shrink-0" onClick={closeCompose}>
                                     <ArrowLeft className="h-4 w-4" />
                                 </Button>
                                 <h2 className="font-semibold text-base">{t('New Message')}</h2>
@@ -542,7 +542,7 @@ export default function ChatIndex({ conversations: initialConversations, workspa
                                 </div>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button size="icon" variant="outline" onClick={() => setNewChatOpen(true)} className="h-8 w-8 rounded-full">
+                                        <Button aria-label={t('New Message')} size="icon" variant="outline" onClick={() => setNewChatOpen(true)} className="h-8 w-8 rounded-full">
                                             <Edit3 className="h-3.5 w-3.5" />
                                         </Button>
                                     </TooltipTrigger>
@@ -651,7 +651,7 @@ export default function ChatIndex({ conversations: initialConversations, workspa
                             {/* Chat header */}
                             <div className="flex items-center justify-between border-b bg-background px-4 py-3 shadow-sm">
                                 <div className="flex items-center gap-3">
-                                    <Button variant="ghost" size="icon" className="sm:hidden h-8 w-8" onClick={() => setMobileShowChat(false)}>
+                                    <Button aria-label={t('Back')} variant="ghost" size="icon" className="sm:hidden h-8 w-8" onClick={() => setMobileShowChat(false)}>
                                         <ArrowLeft className="h-4 w-4" />
                                     </Button>
                                     {(() => {
@@ -792,7 +792,7 @@ export default function ChatIndex({ conversations: initialConversations, workspa
                                         onChange={(e) => setMessageInput(e.target.value)}
                                         onKeyDown={handleKeyDown}
                                     />
-                                    <Button
+                                    <Button aria-label={t('Send')}
                                         size="icon"
                                         className={cn(
                                             'h-8 w-8 rounded-full flex-shrink-0 transition-all',

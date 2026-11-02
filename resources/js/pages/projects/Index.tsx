@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { router, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
@@ -10,12 +9,14 @@ import { Progress } from '@/components/ui/progress';
 import { ProjectCard } from '@/components/projects/project-card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Plus, Search, Eye, Edit, Trash2, LayoutGrid, List, CalendarDays, FileDown, Globe, MoreHorizontal, Sparkles } from 'lucide-react';
+import { Plus, LayoutGrid, List, FileDown, Sparkles, FolderOpen, SearchX, AlertCircle } from 'lucide-react';
+import { SearchInput } from '@/components/ui/search-input';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { StatStrip } from '@/components/stat-strip';
 import { FilterPopover } from '@/components/filter-popover';
 import { consumeCreateIntent } from '@/utils/create-intent';
 import { AiProjectModal } from '@/components/AiProjectModal';
-import { EmptyState, EMPTY_STATES } from '@/components/EmptyState';
+import { EmptyState } from '@/components/EmptyState';
 import { PageTemplate } from '@/components/page-template';
 import { CrudFormModal } from '@/components/CrudFormModal';
 import { EnhancedDeleteModal } from '@/components/EnhancedDeleteModal';
@@ -267,25 +268,18 @@ export default function ProjectIndex() {
         navigate(params);
     };
 
-    const getStatusColor = (status: string) => {
-        const colors = {
-            planning: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20',
-            active: 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20',
-            on_hold: 'bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20',
-            completed: 'bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-600/20',
-            cancelled: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
-        };
-        return colors[status as keyof typeof colors] || 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20';
+    const STATUS_TONE: Record<string, 'info' | 'success' | 'warning' | 'brand' | 'neutral'> = {
+        planning: 'info', active: 'success', on_hold: 'warning', completed: 'brand', cancelled: 'neutral',
     };
 
     const getPriorityColor = (priority: string) => {
         const colors = {
-            low: 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20',
-            medium: 'bg-yellow-50 text-yellow-700 ring-1 ring-inset ring-yellow-600/20',
-            high: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20',
-            urgent: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20'
+            low: 'bg-ds-neutral-bg text-ds-neutral-fg',
+            medium: 'bg-ds-info-bg text-ds-info-fg',
+            high: 'bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300',
+            urgent: 'bg-ds-danger-bg text-ds-danger-fg'
         };
-        return colors[priority as keyof typeof colors] || 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20';
+        return colors[priority as keyof typeof colors] || 'bg-ds-neutral-bg text-ds-neutral-fg';
     };
 
     // A missing date used to render as 1970-01-01 (new Date(null)).
@@ -307,7 +301,7 @@ export default function ProjectIndex() {
     if (hasPermission(permissions, 'project_view_any') && !['client', 'member'].includes(userWorkspaceRole)) {
         pageActions.push({
             label: t('Export'),
-            icon: <FileDown className="h-4 w-4 mr-2" />,
+            icon: <FileDown className="h-4 w-4" />,
             variant: 'outline',
             onClick: async () => {
                 try {
@@ -364,14 +358,14 @@ export default function ProjectIndex() {
         if (canUseAiGenerate) {
             pageActions.push({
                 label: t('AI Generate'),
-                icon: <Sparkles className="h-4 w-4 mr-2" />,
+                icon: <Sparkles className="h-4 w-4" />,
                 variant: 'outline',
                 onClick: () => setIsAiModalOpen(true)
             });
         }
         pageActions.push({
             label: t('Add Project'),
-            icon: <Plus className="h-4 w-4 mr-2" />,
+            icon: <Plus className="h-4 w-4" />,
             variant: 'default',
             onClick: handleAddNew
         });
@@ -389,14 +383,14 @@ export default function ProjectIndex() {
             label: t('Project'),
             sortable: true,
             render: (value: string, row: any) => (
-                <div>
-                    <div 
-                        className="text-sm font-medium text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
-                        onClick={() => router.get(route('projects.show', row.id))}
+                <div className="min-w-0">
+                    <Link
+                        href={route('projects.show', row.id)}
+                        className="rounded-sm text-sm font-medium text-ds-fg transition-colors hover:text-ds-fg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus"
                     >
                         {value}
-                    </div>
-                    <div className="text-sm text-gray-500 truncate max-w-xs">{row.description}</div>
+                    </Link>
+                    {row.description && <div className="max-w-xs truncate text-sm text-ds-fg-muted">{row.description}</div>}
                 </div>
             )
         },
@@ -404,9 +398,7 @@ export default function ProjectIndex() {
             key: 'status',
             label: t('Status'),
             render: (value: string) => (
-                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${getStatusColor(value)}`}>
-                    {formatText(value)}
-                </span>
+                <StatusBadge tone={STATUS_TONE[value] ?? 'neutral'}>{t(formatText(value))}</StatusBadge>
             )
         },
         {
@@ -414,8 +406,8 @@ export default function ProjectIndex() {
             label: t('Priority'),
             sortable: true,
             render: (value: string) => (
-                <span className={`inline-flex items-center capitalize rounded-md px-2 py-1 text-xs font-medium ${getPriorityColor(value)}`}>
-                    {value}
+                <span className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium capitalize ${getPriorityColor(value)}`}>
+                    {t(formatText(value))}
                 </span>
             )
         },
@@ -423,11 +415,9 @@ export default function ProjectIndex() {
             key: 'progress',
             label: t('Progress'),
             render: (value: number) => (
-                <div className="flex items-center">
-                    <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
-                        <div className="bg-blue-600 h-2 rounded-full" style={{width: `${value}%`}}></div>
-                    </div>
-                    <span className="text-sm text-gray-900">{value}%</span>
+                <div className="flex items-center gap-2">
+                    <Progress value={value} className="h-2 w-16" aria-label={t('Progress')} />
+                    <span className="text-sm tabular-nums text-ds-fg-secondary">{value}%</span>
                 </div>
             )
         },
@@ -439,9 +429,9 @@ export default function ProjectIndex() {
                     {value?.slice(0, 3).map((member: any, index: number) => (
                         <Tooltip key={index}>
                             <TooltipTrigger asChild>
-                                <Avatar className="h-6 w-6 border-2 border-white cursor-pointer">
+                                <Avatar className="h-7 w-7 border-2 border-ds-surface">
                                     <AvatarImage src={member.user?.avatar} />
-                                    <AvatarFallback className="text-xs">
+                                    <AvatarFallback seed={member.user?.name} className="text-[10px]">
                                         {member.user?.name?.charAt(0)}
                                     </AvatarFallback>
                                 </Avatar>
@@ -454,7 +444,7 @@ export default function ProjectIndex() {
                     {value?.length > 3 && (
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <div className="h-6 w-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs cursor-pointer">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-ds-surface bg-ds-neutral-bg text-[10px] font-medium text-ds-fg-secondary">
                                     +{value.length - 3}
                                 </div>
                             </TooltipTrigger>
@@ -471,8 +461,14 @@ export default function ProjectIndex() {
             label: t('Deadline'),
             sortable: true,
             render: (value: string, row: any) => value ? (
-                <span className={isOverdue(row) ? 'font-medium text-red-600' : ''}>{formatDate(value)}</span>
-            ) : <span className="text-muted-foreground">—</span>
+                isOverdue(row) ? (
+                    <span className="inline-flex items-center gap-1 font-medium text-ds-danger-fg">
+                        <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                        {formatDate(value)}
+                        <span className="sr-only">({t('Overdue')})</span>
+                    </span>
+                ) : <span className="text-ds-fg-secondary">{formatDate(value)}</span>
+            ) : <span className="text-ds-fg-placeholder">—</span>
         }
     ];
 
@@ -481,21 +477,18 @@ export default function ProjectIndex() {
             label: t('View'),
             icon: 'Eye',
             action: 'view',
-            className: 'text-blue-500 hover:text-blue-700',
             condition: () => hasPermission(permissions, 'project_view')
         },
         {
             label: t('Edit'),
             icon: 'Edit',
             action: 'edit',
-            className: 'text-amber-500 hover:text-amber-700',
             condition: () => hasPermission(permissions, 'project_update')
         },
         {
             label: t('Delete'),
             icon: 'Trash2',
             action: 'delete',
-            className: 'text-red-500 hover:text-red-700',
             condition: () => hasPermission(permissions, 'project_delete')
         }
     ];
@@ -522,14 +515,11 @@ export default function ProjectIndex() {
 
             {/* Toolbar: search, the rest of the filters behind one button, view switch */}
             <div className="mb-4 flex flex-wrap items-center gap-2">
-                <form onSubmit={handleSearch} className="relative w-full sm:w-72">
-                    <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                        type="search"
+                <form onSubmit={handleSearch} className="w-full sm:w-72" role="search">
+                    <SearchInput
                         placeholder={t('Search projects...')}
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="h-9 w-full pl-9"
+                        onChange={setSearchTerm}
                     />
                 </form>
 
@@ -537,7 +527,7 @@ export default function ProjectIndex() {
                         <div className="space-y-1.5">
                             <Label className="text-xs">{t('Status')}</Label>
                             <Select value={selectedStatus} onValueChange={handleStatusFilter}>
-                                <SelectTrigger className="h-9 w-full">
+                                <SelectTrigger className="w-full">
                                     <SelectValue placeholder={t('All Status')} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -553,7 +543,7 @@ export default function ProjectIndex() {
                         <div className="space-y-1.5">
                             <Label className="text-xs">{t('Priority')}</Label>
                             <Select value={selectedPriority} onValueChange={handlePriorityFilter}>
-                                <SelectTrigger className="h-9 w-full">
+                                <SelectTrigger className="w-full">
                                     <SelectValue placeholder={t('All Priority')} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -567,42 +557,55 @@ export default function ProjectIndex() {
                         </div>
                 </FilterPopover>
 
-                <div className="ml-auto flex rounded-md border p-0.5">
-                    <Button
-                        size="sm"
-                        variant={activeView === 'grid' ? 'secondary' : 'ghost'}
-                        className="h-7 px-2"
-                        onClick={() => handleViewChange('grid')}
-                        aria-label={t('Grid view')}
-                        title={t('Grid view')}
-                    >
-                        <LayoutGrid className="h-4 w-4" />
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant={activeView === 'list' ? 'secondary' : 'ghost'}
-                        className="h-7 px-2"
-                        onClick={() => handleViewChange('list')}
-                        aria-label={t('List view')}
-                        title={t('List view')}
-                    >
-                        <List className="h-4 w-4" />
-                    </Button>
+                {/* Grid / list switch: a segmented control */}
+                <div className="ml-auto inline-flex rounded-lg bg-ds-neutral-bg p-1" role="group" aria-label={t('View')}>
+                    {([['grid', LayoutGrid, t('Grid view')], ['list', List, t('List view')]] as const).map(([view, Icon, label]) => {
+                        const selected = view === 'grid' ? (activeView === 'grid' || !activeView) : activeView === view;
+                        return (
+                            <button
+                                key={view}
+                                type="button"
+                                onClick={() => handleViewChange(view)}
+                                aria-label={label}
+                                aria-pressed={selected}
+                                title={label}
+                                className={`inline-flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus ${selected ? 'bg-ds-surface text-ds-fg shadow-ds-xs' : 'text-ds-fg-muted hover:text-ds-fg'}`}
+                            >
+                                <Icon className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                        );
+                    })}
                 </div>
             </div>
 
             {/* Projects Content */}
-            {(projects?.data?.length === 0) && (
-                <EmptyState
-                    {...EMPTY_STATES.projects}
-                    // View-only users can't create projects, so don't tell them to
-                    {...(!hasPermission(permissions, 'project_create') && {
-                        description: "You haven't been added to any projects yet.",
-                    })}
-                    action={hasPermission(permissions, 'project_create') ? { label: 'Create Your First Project', onClick: handleAddNew, icon: <Plus className="h-4 w-4" /> } : undefined}
-                    secondaryAction={canUseAiGenerate ? { label: 'AI Generate', onClick: () => setIsAiModalOpen(true) } : undefined}
-                />
-            )}
+            {(projects?.data?.length === 0) && (searchTerm || hasActiveFilters() ? (
+                // A search or filter matched nothing: say so, and offer the way back.
+                <div className="rounded-xl border border-ds-border bg-ds-surface shadow-ds-xs">
+                    <EmptyState
+                        icon={SearchX}
+                        title={t('No projects found')}
+                        description={t('Try another name, or clear the filters.')}
+                        secondaryAction={{
+                            label: t('Clear search and filters'),
+                            onClick: () => { setSearchTerm(''); setSelectedStatus('all'); setSelectedPriority('all'); navigate({ page: 1, view: activeView }); },
+                        }}
+                    />
+                </div>
+            ) : (
+                <div className="rounded-xl border border-ds-border bg-ds-surface shadow-ds-xs">
+                    <EmptyState
+                        icon={FolderOpen}
+                        title={t('No projects yet')}
+                        // View-only users can't create projects, so don't tell them to
+                        description={hasPermission(permissions, 'project_create')
+                            ? t('Create your first project to start tracking tasks, timesheets, and team progress.')
+                            : t("You haven't been added to any projects yet.")}
+                        action={hasPermission(permissions, 'project_create') ? { label: t('Create Your First Project'), onClick: handleAddNew, icon: <Plus className="h-4 w-4" /> } : undefined}
+                        secondaryAction={canUseAiGenerate ? { label: t('AI Generate'), onClick: () => setIsAiModalOpen(true) } : undefined}
+                    />
+                </div>
+            ))}
             {(activeView === 'grid' || !activeView) && (projects?.data?.length ?? 0) > 0 ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {projects?.data?.map((project: any) => (
@@ -618,7 +621,7 @@ export default function ProjectIndex() {
                 ))}
                 </div>
             ) : (projects?.data?.length ?? 0) > 0 && (
-                <div className="overflow-hidden rounded-lg border bg-card">
+                <div className="overflow-hidden rounded-xl border border-ds-border bg-ds-surface shadow-ds-xs">
                     <CrudTable
                         columns={columns}
                         actions={actions}
@@ -636,7 +639,7 @@ export default function ProjectIndex() {
             {/* Pagination - only once there is more than one page's worth of projects */}
             {(projects?.total ?? 0) > 12 && (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-                    <div className="flex items-center gap-3 text-muted-foreground">
+                    <div className="flex items-center gap-3 text-ds-fg-muted">
                         <span>
                             {t('Showing')} {projects?.from || 0}–{projects?.to || 0} {t('of')} {projects?.total || 0}
                         </span>
@@ -667,7 +670,8 @@ export default function ProjectIndex() {
                                         key={i}
                                         variant={link.active ? 'default' : 'outline'}
                                         size={isTextLink ? "sm" : "icon"}
-                                        className={isTextLink ? "px-3" : "h-8 w-8"}
+                                        className={isTextLink ? "px-3" : "size-8"}
+                                        aria-current={link.active ? 'page' : undefined}
                                         disabled={!link.url}
                                         onClick={() => {
                                             if (!link.url) return;

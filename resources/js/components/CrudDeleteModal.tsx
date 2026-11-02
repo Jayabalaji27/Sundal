@@ -21,11 +21,11 @@ export function CrudDeleteModal({
   const { t } = useTranslation();
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md" style={{ zIndex: 10000 }}>
+      <DialogContent role="alertdialog" style={{ zIndex: 10000 }}>
         <DialogHeader>
           <DialogTitle>{t("Delete")} {entityName}</DialogTitle>
           <DialogDescription>
-            {t("Are you sure you want to delete")} {itemName || `this ${entityName}`}? {t("This action cannot be undone.")}
+            {t("Are you sure you want to delete")} <span className="font-medium text-ds-fg">{itemName || `this ${entityName}`}</span>? {t("This action cannot be undone.")}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="sm:justify-end">

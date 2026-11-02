@@ -338,10 +338,8 @@ class RoleSeeder extends Seeder
             // Chat: members can use chat
             'chat_view',
             'chat_create',
-            // Agents: members can use (query) agents
-            'agent_view_any',
-            'agent_view',
-            'agent_use',
+            // Agents (AI Tools page, Standup Bot, custom agents) are for owners and managers:
+            // the standup and agents show other people's work and use the owner's OpenAI key.
             // Sprints: members can view and manage tasks in sprints
             'sprint_view_any',
             'sprint_view',

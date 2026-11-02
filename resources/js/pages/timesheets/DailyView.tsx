@@ -155,7 +155,7 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <Button
+                            <Button aria-label={t('Previous')}
                                 variant="outline"
                                 size="icon"
                                 onClick={() => navigateDate('prev')}
@@ -171,7 +171,7 @@ export default function DailyView({ entries, projects, selectedDate, timesheetId
                                 </CardTitle>
                             </div>
                             
-                            <Button
+                            <Button aria-label={t('Next')}
                                 variant="outline"
                                 size="icon"
                                 onClick={() => navigateDate('next')}

@@ -26,14 +26,14 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        {{-- Inline style to set the HTML background color based on our theme in app.css --}}
+        {{-- First-paint background, matching the page canvas (--ds-canvas in design-system/tokens.css) --}}
         <style>
             html {
-                background-color: oklch(1 0 0);
+                background-color: #f8fafc;
             }
 
             html.dark {
-                background-color: oklch(0.145 0 0);
+                background-color: #0c111d;
             }
         </style>
 
@@ -58,7 +58,7 @@
         <meta name="twitter:card" content="summary_large_image">
 
         <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600" rel="stylesheet" />
+        <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap" rel="stylesheet" />
         <script src="{{ asset('js/jquery.min.js') }}"></script>
         <script>
             // IMMEDIATE blocker - must run right after jQuery loads, before DOMContentLoaded
@@ -167,7 +167,7 @@
                 
                 if (globalSettings.sidebarVariant || globalSettings.sidebarStyle) {
                     const sidebarSettings = {
-                        variant: globalSettings.sidebarVariant || 'inset',
+                        variant: globalSettings.sidebarVariant || 'sidebar',
                         style: globalSettings.sidebarStyle || 'plain',
                         collapsible: JSON.parse(localStorage.getItem('sidebarSettings') || '{}').collapsible || 'icon'
                     };

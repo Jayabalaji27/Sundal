@@ -10,6 +10,7 @@ import {
 import { PageTemplate } from '@/components/page-template';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -607,8 +608,14 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
         }
     };
 
-    const remove = async (conversation: Conversation) => {
-        if (!confirm(t('Delete this conversation? The record of actions taken stays in the audit log.'))) return;
+    // Deleting asks first (ConfirmDialog below); the delete itself runs on confirm.
+    const [conversationToDelete, setConversationToDelete] = useState<Conversation | null>(null);
+    const [deletingConversation, setDeletingConversation] = useState(false);
+    const remove = (conversation: Conversation) => setConversationToDelete(conversation);
+    const deleteConversation = async () => {
+        const conversation = conversationToDelete;
+        if (!conversation) return;
+        setDeletingConversation(true);
         try {
             await axios.delete(route('ai-assistant.conversations.destroy', conversation.id));
             setConversations(prev => prev.filter(c => c.id !== conversation.id));
@@ -616,6 +623,9 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
             refreshCounts();
         } catch (error) {
             toast.error(errorMessage(error, t('Could not delete the conversation.')));
+        } finally {
+            setDeletingConversation(false);
+            setConversationToDelete(null);
         }
     };
 
@@ -698,6 +708,15 @@ function Chat({ conversations: initial, hasMore: initialHasMore, counts: initial
             )}
 
             <SundalFilesDialog open={sundalOpen} onOpenChange={setSundalOpen} onPick={file => attach.addFromSundal(file.id, file.name, file.size)} />
+            <ConfirmDialog
+                open={conversationToDelete !== null}
+                onOpenChange={(next) => { if (!next) setConversationToDelete(null); }}
+                title={t('Delete this conversation?')}
+                description={t('Delete this conversation? The record of actions taken stays in the audit log.')}
+                confirmLabel={t('Delete')}
+                loading={deletingConversation}
+                onConfirm={deleteConversation}
+            />
             <DropZone onFiles={attach.add} className="flex min-h-0 min-w-0 flex-1 flex-col">
             <section className="relative flex min-h-0 min-w-0 flex-1 flex-col">
                 {/* Voice mode floats over Sundal from here; the AI mode tab cannot float over another tab. */}
@@ -1037,7 +1056,7 @@ function ConversationItem({ conversation: c, active, onOpen, onFavorite, onArchi
                         {c.archived ? t('Move out of archive') : t('Archive')}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={onDelete} className="text-destructive focus:text-destructive">
+                    <DropdownMenuItem onSelect={onDelete} variant="destructive">
                         <Trash2 className="mr-2 h-4 w-4" />
                         {t('Delete')}
                     </DropdownMenuItem>
@@ -1487,9 +1506,14 @@ function SettingsForm({ settings, providers, usage, retentionOptions, idleTimeou
         });
     };
 
+    const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+    const [disconnecting, setDisconnecting] = useState(false);
     const disconnect = () => {
-        if (!confirm(t('Disconnect the AI provider? The assistant stops working until a new key is saved.'))) return;
-        router.delete(route('ai-assistant.settings.destroy'), { preserveScroll: true });
+        setDisconnecting(true);
+        router.delete(route('ai-assistant.settings.destroy'), {
+            preserveScroll: true,
+            onFinish: () => { setDisconnecting(false); setConfirmDisconnect(false); },
+        });
     };
 
     const field = (name: string) => errors[name] && <p className="text-xs text-destructive">{errors[name]}</p>;
@@ -1583,7 +1607,16 @@ function SettingsForm({ settings, providers, usage, retentionOptions, idleTimeou
                             {t('Test connection')}
                         </Button>
                         <Button type="submit" disabled={saving}>{t('Save')}</Button>
-                        {configured && <Button type="button" variant="ghost" className="text-destructive" onClick={disconnect}>{t('Disconnect')}</Button>}
+                        {configured && <Button type="button" variant="danger" onClick={() => setConfirmDisconnect(true)}>{t('Disconnect')}</Button>}
+                        <ConfirmDialog
+                            open={confirmDisconnect}
+                            onOpenChange={setConfirmDisconnect}
+                            title={t('Disconnect the AI provider?')}
+                            description={t('Disconnect the AI provider? The assistant stops working until a new key is saved.')}
+                            confirmLabel={t('Disconnect')}
+                            loading={disconnecting}
+                            onConfirm={disconnect}
+                        />
                     </div>
                 </CardContent>
             </Card>

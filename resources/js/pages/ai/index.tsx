@@ -3,7 +3,7 @@ import { PageTemplate } from '@/components/page-template';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Radio, Bot, ChevronRight } from 'lucide-react';
+import { Activity, AlertTriangle, Radio, Bot, ChevronRight, Settings2 } from 'lucide-react';
 import { hasPermission } from '@/utils/authorization';
 
 declare const route: any;
@@ -37,6 +37,15 @@ const PRESET_TOOLS = [
         description: 'Detects team members over-assigned across concurrent projects and sprints.',
         permission: 'agent_advanced_insights',
     },
+    {
+        key: 'standup',
+        icon: <Activity className="h-6 w-6 text-emerald-500" />,
+        color: 'bg-emerald-50 dark:bg-emerald-900/20',
+        route: 'standup.index',
+        title: 'Standup Bot',
+        description: "Each person's yesterday, today and blockers, from their time, activity and tasks.",
+        permission: 'agent_advanced_insights',
+    },
 ] as const;
 
 export default function AiPage({ agents }: Props) {
@@ -50,8 +59,13 @@ export default function AiPage({ agents }: Props) {
         { title: t('AI') },
     ];
 
+    // With no agents yet, the empty state below offers "Create an Agent" instead.
+    const actions = agents.length > 0 && hasPermission(permissions, 'agent_create')
+        ? [{ label: t('Manage agents'), icon: <Settings2 className="h-4 w-4" />, variant: 'outline' as const, onClick: () => router.visit(route('agents.index')) }]
+        : [];
+
     return (
-        <PageTemplate title={t('AI Tools')} breadcrumbs={breadcrumbs}>
+        <PageTemplate title={t('AI Tools')} breadcrumbs={breadcrumbs} actions={actions}>
             <div className="space-y-8">
                 {/* Built-in analysis tools */}
                 {visibleTools.length > 0 && (

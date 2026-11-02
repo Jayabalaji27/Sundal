@@ -23,7 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // First, so every log line of the request carries its id.
         $middleware->prepend(\App\Http\Middleware\AssignRequestId::class);
 
-        $middleware->encryptCookies(except: ['appearance', 'themeSettings', 'sidebarSettings', 'layoutPosition']);
+        $middleware->encryptCookies(except: ['appearance', 'themeSettings', 'sidebarSettings', 'layoutPosition', 'sundal_tasks_view']);
 
         $middleware->web(append: [
             CheckInstallation::class,

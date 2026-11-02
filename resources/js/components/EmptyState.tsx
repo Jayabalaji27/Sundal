@@ -1,9 +1,11 @@
-import { type ReactNode } from 'react';
+import { type ComponentType, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 
 interface EmptyStateProps {
-    icon: string;          // emoji or icon
+    /** An emoji, or a Lucide icon component (shown in a soft circle). */
+    icon: string | ComponentType<{ className?: string }>;
     title: string;
     description: string;
     action?: {
@@ -18,22 +20,32 @@ interface EmptyStateProps {
     compact?: boolean;
 }
 
-export function EmptyState({ icon, title, description, action, secondaryAction, compact = false }: EmptyStateProps) {
+/**
+ * Explains why there is nothing here and offers the most useful next step.
+ * Never just "No data".
+ */
+export function EmptyState({ icon: Icon, title, description, action, secondaryAction, compact = false }: EmptyStateProps) {
     const { t } = useTranslation();
     return (
-        <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-10 px-4' : 'py-20 px-6'}`}>
-            <div className={`${compact ? 'text-4xl mb-3' : 'text-6xl mb-5'} select-none`}>{icon}</div>
-            <h3 className={`font-semibold text-foreground ${compact ? 'text-base mb-1' : 'text-xl mb-2'}`}>{t(title)}</h3>
-            <p className={`text-muted-foreground max-w-sm ${compact ? 'text-xs' : 'text-sm'}`}>{t(description)}</p>
+        <div className={cn('flex flex-col items-center justify-center text-center', compact ? 'px-4 py-10' : 'px-6 py-12')}>
+            {typeof Icon === 'string' ? (
+                <div className={cn('select-none', compact ? 'mb-3 text-4xl' : 'mb-4 text-5xl')} aria-hidden="true">{Icon}</div>
+            ) : (
+                <div className={cn('flex items-center justify-center rounded-full bg-brand-soft text-brand-soft-fg', compact ? 'mb-3 size-10' : 'mb-4 size-12')} aria-hidden="true">
+                    <Icon className={compact ? 'size-5' : 'size-6'} />
+                </div>
+            )}
+            <h3 className={cn('font-semibold text-ds-fg', compact ? 'mb-1 text-base' : 'mb-1.5 text-lg')}>{t(title)}</h3>
+            <p className="max-w-sm text-sm text-ds-fg-muted">{t(description)}</p>
             {(action || secondaryAction) && (
-                <div className="flex items-center gap-3 mt-6">
+                <div className={cn('flex flex-wrap items-center justify-center gap-3', compact ? 'mt-4' : 'mt-6')}>
                     {secondaryAction && (
                         <Button variant="outline" size={compact ? 'sm' : 'default'} onClick={secondaryAction.onClick}>
                             {t(secondaryAction.label)}
                         </Button>
                     )}
                     {action && (
-                        <Button size={compact ? 'sm' : 'default'} onClick={action.onClick} className="gap-2">
+                        <Button size={compact ? 'sm' : 'default'} onClick={action.onClick}>
                             {action.icon}
                             {t(action.label)}
                         </Button>

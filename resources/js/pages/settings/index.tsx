@@ -48,15 +48,15 @@ interface RoleSummary {
 /** Quick-access card for an integration/module that now lives inside Settings instead of the sidebar. */
 function LinkCard({ href, icon, title, description }: { href: string; icon: ReactNode; title: string; description: string }) {
   return (
-    <Link href={href}>
-      <Card className="cursor-pointer hover:shadow-md transition-shadow group h-full">
+    <Link href={href} className="group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus">
+      <Card className="h-full cursor-pointer transition-colors duration-150 group-hover:border-ds-border-strong group-hover:bg-ds-surface-hover">
         <CardHeader className="pb-2">
-          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+          <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-soft text-brand-soft-fg" aria-hidden="true">
             {icon}
           </div>
           <CardTitle className="flex items-center justify-between text-base">
             {title}
-            <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+            <ChevronRight className="h-4 w-4 text-ds-fg-muted transition-transform duration-150 group-hover:translate-x-0.5 rtl:rotate-180" aria-hidden="true" />
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -161,6 +161,7 @@ export default function Settings() {
       title={t('Settings')}
       url="/settings"
       breadcrumbs={breadcrumbs}
+      noPadding
     >
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="overflow-x-auto">
@@ -247,12 +248,12 @@ export default function Settings() {
         {/* ── Roles (read-only — custom role authoring is a later phase) ─── */}
         <TabsContent value="roles" className="space-y-4 mt-6">
           <div>
-            <h2 className="text-base font-semibold">{t('Roles & Permissions')}</h2>
-            <p className="text-sm text-muted-foreground">{t('The permissions granted to each built-in role. Custom roles are not available yet.')}</p>
+            <h2 className="text-ds-section-title font-semibold text-ds-fg">{t('Roles & Permissions')}</h2>
+            <p className="mt-1 text-sm text-ds-fg-secondary">{t('The permissions granted to each built-in role. Custom roles are not available yet.')}</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {roles.map((role: RoleSummary) => (
-              <Card key={role.id} className={role.is_current ? 'border-primary ring-1 ring-primary' : undefined}>
+              <Card key={role.id} className={role.is_current ? 'border-brand-300 ring-1 ring-brand-500/30' : undefined}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     {role.label}
@@ -268,7 +269,7 @@ export default function Settings() {
               </Card>
             ))}
             {roles.length === 0 && (
-              <p className="text-sm text-muted-foreground">{t('No roles found.')}</p>
+              <p className="text-sm text-ds-fg-muted">{t('No roles found.')}</p>
             )}
           </div>
         </TabsContent>

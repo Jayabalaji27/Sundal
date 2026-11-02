@@ -290,7 +290,7 @@ export default function NotesIndex() {
                 <div className="flex gap-1">
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <Button
+                            <Button aria-label={t('View')}
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => handleAction('view', note)}
@@ -304,7 +304,7 @@ export default function NotesIndex() {
                     {notePermissions?.update && (
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button
+                                <Button aria-label={t('Edit')}
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => handleAction('edit', note)}
@@ -319,7 +319,7 @@ export default function NotesIndex() {
                     {notePermissions?.delete && (
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button
+                                <Button aria-label={t('Delete')}
                                     variant="ghost"
                                     size="icon"
                                     className="text-red-500 hover:text-red-700 h-8 w-8"
