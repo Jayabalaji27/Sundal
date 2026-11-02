@@ -21,6 +21,9 @@ class HandleInertiaRequests extends Middleware
      */
     protected $rootView = 'app';
 
+    /** Approval counts per inbox tab, worked out once per request for the menu badge and link. */
+    private ?array $approvalCounts = null;
+
     /**
      * Determines the current asset version.
      *
@@ -153,6 +156,11 @@ class HandleInertiaRequests extends Middleware
                     : null,
                 // What's waiting in the Approvals inbox (owners and managers), for the menu badge.
                 'approvalsWaiting' => fn() => $this->getApprovalsWaiting($request),
+                // Where the Approvals and Meetings menu items open. Linking the page itself
+                // (not the approvals / meetings redirect routes) keeps the click an Inertia
+                // visit instead of a full page load.
+                'approvalsHref' => fn() => $this->getApprovalsHref($request),
+                'meetingsHref' => fn() => $this->getMeetingsHref($request),
                 // The voice panel: 'server' (company key transcribes), 'browser', or null.
                 'aiVoice' => fn() => \App\Services\Ai\AiAccess::canUse($request->user())
                     ? \App\Services\Ai\AiAccess::voiceMode(\App\Services\Ai\AiAccess::settings($request->user()))
@@ -193,13 +201,38 @@ class HandleInertiaRequests extends Middleware
 
     private function getApprovalsWaiting(Request $request): ?int
     {
-        $user = $request->user();
-        if (!$user || !$user->current_workspace_id || $user->type === 'superadmin') {
-            return null;
-        }
-        $counts = app(\App\Services\ApprovalQueue::class)->counts($user);
+        $counts = $this->approvalCounts($request);
 
         return $counts ? array_sum($counts) : null;
+    }
+
+    private function getApprovalsHref(Request $request): ?string
+    {
+        $route = app(\App\Services\ApprovalQueue::class)->homeRoute($this->approvalCounts($request));
+
+        return $route ? route($route) : null;
+    }
+
+    private function approvalCounts(Request $request): array
+    {
+        $user = $request->user();
+        if (!$user || !$user->current_workspace_id || $user->type === 'superadmin') {
+            return [];
+        }
+
+        return $this->approvalCounts ??= app(\App\Services\ApprovalQueue::class)->counts($user);
+    }
+
+    private function getMeetingsHref(Request $request): ?string
+    {
+        $user = $request->user();
+        if (!$user || !$user->current_workspace_id || $user->type === 'superadmin'
+            || !($user->can('zoom_meeting_view_any') || $user->can('google_meeting_view_any'))) {
+            return null;
+        }
+        $route = app(\App\Services\MeetingDirectory::class)->homeRoute($user);
+
+        return $route ? route($route) : null;
     }
 
     private function getStorageSettings(Request $request): array

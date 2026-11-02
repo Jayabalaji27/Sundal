@@ -149,6 +149,24 @@ describe('B1 approvals queue', function () {
         $this->actingAs($owner)->get(route('approvals.index'))->assertRedirect(route('expense-approvals.index'));
     });
 
+    test('the Approvals and Meetings menu items link the page itself, not a redirect', function () {
+        [$owner, $ws] = bvOwner();
+        $member = bvMember($ws, 'member');
+        $project = bvProject($ws, $owner);
+        ProjectExpense::create(['project_id' => $project->id, 'submitted_by' => $member->id, 'amount' => 10,
+            'expense_date' => now()->toDateString(), 'title' => 'Taxi', 'status' => 'pending']);
+
+        $this->actingAs($owner)->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('auth.approvalsHref', route('expense-approvals.index'))
+                ->where('auth.meetingsHref', route('zoom-meetings.index')));
+
+        $this->actingAs($member)->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('auth.approvalsHref', null)
+                ->where('auth.meetingsHref', route('zoom-meetings.index')));
+    });
+
     test('a manager cannot decide an expense outside their projects', function () {
         [$owner, $ws] = bvOwner();
         $manager = bvMember($ws, 'manager');

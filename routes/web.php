@@ -397,26 +397,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Meetings — redirects to Zoom or Google Meet, whichever the user can see
         // (the connected one first, when only Google Meet is connected).
+        // The menu links to the page itself (auth.meetingsHref); this keeps old links working.
         Route::get('meetings', function (\Illuminate\Http\Request $req) use ($redirectToFirstPermittedTab) {
-            $tabs = [
-                'zoom'   => ['permission' => 'zoom_meeting_view_any', 'route' => 'zoom-meetings.index'],
-                'google' => ['permission' => 'google_meeting_view_any', 'route' => 'google-meetings.index'],
-            ];
-            $connected = fn (string $service) => rescue(fn () => app($service)->hasValidCredentials(), false, false);
-            if (!$connected(\App\Services\ZoomService::class) && $connected(\App\Services\GoogleMeetService::class)) {
-                $tabs = ['google' => $tabs['google'], 'zoom' => $tabs['zoom']];
-            }
-            return $redirectToFirstPermittedTab($req, $tabs);
+            return $redirectToFirstPermittedTab($req, app(\App\Services\MeetingDirectory::class)->tabs());
         })->middleware('permission:zoom_meeting_view_any|google_meeting_view_any')->name('meetings.index');
 
         // Approvals — one inbox for timesheets and expenses. Opens the first tab
         // with something waiting, so the dashboard badge always lands on work.
+        // The menu links to the tab itself (auth.approvalsHref); this keeps old links working.
         Route::get('approvals', function () {
-            $counts = app(\App\Services\ApprovalQueue::class)->counts(auth()->user());
-            $tab = collect($counts)->filter()->keys()->first() ?? array_key_first($counts);
-            abort_unless($tab, 403);
+            $queue = app(\App\Services\ApprovalQueue::class);
+            $home = $queue->homeRoute($queue->counts(auth()->user()));
+            abort_unless($home, 403);
 
-            return redirect()->route($tab === 'expenses' ? 'expense-approvals.index' : 'timesheet-approvals.index');
+            return redirect()->route($home);
         })->middleware('permission:timesheet_approve|expense_approval_view_any')->name('approvals.index');
 
         // Docs — redirects to Knowledge Base or Notes (merged nav entry)

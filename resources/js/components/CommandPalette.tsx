@@ -270,7 +270,6 @@ export function CommandPalette() {
                     <span><kbd className="font-mono">↑↓</kbd> navigate</span>
                     <span><kbd className="font-mono">↵</kbd> open</span>
                     <span><kbd className="font-mono">esc</kbd> close</span>
-                    <span className="ml-auto"><kbd className="font-mono">Ctrl+K</kbd></span>
                 </div>
             </div>
         </>

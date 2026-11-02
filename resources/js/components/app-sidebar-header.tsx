@@ -23,7 +23,6 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
     const dashboardUrl = route('dashboard');
     const trail = breadcrumbs.filter((crumb, index) => !(index === 0 && (crumb.href === dashboardUrl || crumb.title === t('Dashboard'))));
     const showTrail = trail.length > 1;
-    const shortcutKey = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 
     return (
         <header className="flex h-13 shrink-0 items-center gap-2 border-b border-ds-border-subtle bg-ds-surface px-4 sm:px-6 lg:px-8">
@@ -45,9 +44,6 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                     >
                         <Search className="h-[18px] w-[18px] shrink-0 text-ds-fg-muted" aria-hidden="true" />
                         <span className="hidden flex-1 text-left md:inline">{t('Search...')}</span>
-                        <kbd className="hidden h-5 items-center rounded-sm border border-ds-border bg-ds-surface-subtle px-1.5 font-sans text-[11px] font-medium text-ds-fg-muted md:inline-flex">
-                            {shortcutKey} K
-                        </kbd>
                     </button>
                     {/* Leaving impersonation is offered by the banner above the header. */}
                     <GlobalCreateMenu />
