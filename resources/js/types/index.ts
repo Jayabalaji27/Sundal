@@ -36,9 +36,9 @@ export interface NavItem {
     // Other pages that count as this item (e.g. Approvals covers both approval lists).
     matches?: string[];
     // Forces a plain <a> (real browser navigation) instead of Inertia's
-    // <Link> (XHR-driven SPA visit). Needed for "unified shell" routes
-    // (reports/meetings in app-sidebar.tsx) that respond with
-    // a server-side redirect — a real navigation always follows an HTTP
+    // <Link> (XHR-driven SPA visit). Meant for routes that respond with a
+    // server-side redirect; prefer linking the final page instead (as the
+    // Meetings and Approvals menu items do) — a real navigation always follows an HTTP
     // redirect correctly, whereas an Inertia XHR visit can intermittently
     // lose the request the browser auto-follows the Location header with,
     // leaving the click looking like it silently did nothing.

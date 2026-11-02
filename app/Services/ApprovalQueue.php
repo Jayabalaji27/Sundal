@@ -105,6 +105,21 @@ class ApprovalQueue
         return $counts;
     }
 
+    /**
+     * The inbox page to open: the first tab with something waiting, else the first
+     * tab the user can open (null: none). Used by the Approvals route and menu item.
+     */
+    public function homeRoute(array $counts): ?string
+    {
+        $tab = collect($counts)->filter()->keys()->first() ?? array_key_first($counts);
+
+        return match ($tab) {
+            'expenses' => 'expense-approvals.index',
+            'timesheets' => 'timesheet-approvals.index',
+            default => null,
+        };
+    }
+
     public function inTimesheetQueue(User $user, TimesheetApproval $approval): bool
     {
         return $this->timesheets($user)->whereKey($approval->getKey())->exists();

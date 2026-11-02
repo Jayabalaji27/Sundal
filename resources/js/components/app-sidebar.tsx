@@ -128,17 +128,18 @@ export function AppSidebar() {
         // Meetings sit with the day-to-day work (after Timesheet, as in Zoho Sprints), for
         // everyone who may see meetings. Until Zoom or Google Meet is connected
         // (Settings → Integrations) the page says so.
+        // Meetings and Approvals link the page the server picked (auth.meetingsHref /
+        // auth.approvalsHref), so the click is an Inertia visit, not a full page load.
         if (flags.meetings && !modulesLocked && (can('zoom_meeting_view_any') || can('google_meeting_view_any'))) {
-            main.push({ title: t('Meetings'), href: route('meetings.index'), icon: Video, forceFullReload: true, matches: [route('zoom-meetings.index'), route('google-meetings.index')] });
+            main.push({ title: t('Meetings'), href: auth?.meetingsHref ?? route('meetings.index'), icon: Video, matches: [route('zoom-meetings.index'), route('google-meetings.index')] });
         }
         // Timesheets and expenses waiting for a decision, in one inbox.
         if (can('timesheet_approve') || can('expense_approval_view_any')) {
             const waiting = auth?.approvalsWaiting;
             main.push({
                 title: t('Approvals'),
-                href: route('approvals.index'),
+                href: auth?.approvalsHref ?? route('approvals.index'),
                 icon: ClipboardCheck,
-                forceFullReload: true,
                 badge: waiting ? { label: String(waiting) } : undefined,
                 matches: [route('timesheet-approvals.index'), route('expense-approvals.index')],
             });

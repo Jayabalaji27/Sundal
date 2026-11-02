@@ -28,6 +28,35 @@ class MeetingDirectory
     }
 
     /**
+     * The Meetings pages in the order to try them: Zoom first, unless only Google
+     * Meet is connected. Used by the meetings route and the Meetings menu item.
+     *
+     * @return array<string, array{permission: string, route: string}>
+     */
+    public function tabs(): array
+    {
+        $tabs = [
+            'zoom' => ['permission' => 'zoom_meeting_view_any', 'route' => 'zoom-meetings.index'],
+            'google' => ['permission' => 'google_meeting_view_any', 'route' => 'google-meetings.index'],
+        ];
+        $check = fn (string $service) => (bool) rescue(fn () => app($service)->hasValidCredentials(), false, false);
+
+        return !$check(ZoomService::class) && $check(GoogleMeetService::class) ? ['google' => $tabs['google'], 'zoom' => $tabs['zoom']] : $tabs;
+    }
+
+    /** The Meetings page this person opens from the menu, or null when they may see neither. */
+    public function homeRoute(User $user): ?string
+    {
+        foreach ($this->tabs() as $tab) {
+            if ($user->can($tab['permission'])) {
+                return $tab['route'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * The meetings this person may see, soonest first.
      *
      * @param  int|null  $projectId  only this project's meetings

@@ -1129,6 +1129,26 @@ Tests: `tests/Feature/AiToolsAccessTest.php` (7).
 
 ---
 
+### RP-28 · 2026-11-02 · Meetings and Approvals open without a full page reload; no Ctrl K label
+
+- The sidebar's Meetings and Approvals linked the `meetings` / `approvals` redirect routes as plain
+  links (`forceFullReload`, a workaround for Inertia visits that went through a redirect), so the
+  whole page reloaded. The server now shares where they go — `auth.meetingsHref` (Zoom or Google
+  Meet, `MeetingDirectory::homeRoute()`) and `auth.approvalsHref` (the tab with work waiting,
+  `ApprovalQueue::homeRoute()`) — and the menu links that page with an Inertia visit.
+- The redirect routes stay for old links and use the same helpers.
+- Search box: the "Ctrl K" badge in the header and the "Ctrl+K" label in the search window are gone
+  (the shortcut still opens it).
+- Local development moved out of OneDrive to `C:\dev\sundal`, run on the production build with
+  OPcache on: server time per sidebar click went from 1.5–3.4 s to 0.35–0.7 s.
+
+Deploy: `npm run build`; then `php artisan optimize:clear` and `php artisan optimize` (rebuilds the
+config, route, event and view caches; `optimize:clear` alone leaves the server without them).
+
+Tests: one more in `tests/Feature/BusinessValidationFixesTest.php` (B1).
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)
