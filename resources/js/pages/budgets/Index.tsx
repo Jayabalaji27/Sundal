@@ -468,7 +468,7 @@ export default function BudgetIndex() {
                                 <div className="flex gap-1">
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <Button variant="ghost" size="icon" onClick={() => handleAction('view', budget)} className="text-blue-500 hover:text-blue-700 h-8 w-8">
+                                            <Button aria-label={t('View')} variant="ghost" size="icon" onClick={() => handleAction('view', budget)} className="text-blue-500 hover:text-blue-700 h-8 w-8">
                                                 <Eye className="h-4 w-4" />
                                             </Button>
                                         </TooltipTrigger>
@@ -477,7 +477,7 @@ export default function BudgetIndex() {
                                     {budgetPermissions?.update && (
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Button variant="ghost" size="icon" onClick={() => handleAction('edit', budget)} className="text-amber-500 hover:text-amber-700 h-8 w-8">
+                                                <Button aria-label={t('Edit')} variant="ghost" size="icon" onClick={() => handleAction('edit', budget)} className="text-amber-500 hover:text-amber-700 h-8 w-8">
                                                     <Edit className="h-4 w-4" />
                                                 </Button>
                                             </TooltipTrigger>
@@ -487,7 +487,7 @@ export default function BudgetIndex() {
                                     {budgetPermissions?.delete && (
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Button variant="ghost" size="icon" onClick={() => handleAction('delete', budget)} className="text-red-500 hover:text-red-700 h-8 w-8">
+                                                <Button aria-label={t('Delete')} variant="ghost" size="icon" onClick={() => handleAction('delete', budget)} className="text-red-500 hover:text-red-700 h-8 w-8">
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </TooltipTrigger>

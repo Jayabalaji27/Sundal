@@ -433,7 +433,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             return $redirectToFirstPermittedTab($req, $tabs);
         })->middleware('permission:kb_view_any|note_view_any')->name('docs.index');
 
-        // AI page — shows preset tools + custom agents
+        // AI page — shows preset tools + custom agents. Owners and managers only
+        // (agent_advanced_insights), like the tools on it.
         // Gated behind the Pro Add-on plan (AI/Knowledge Base/Chat/Meetings bundle).
         // module.access is appended AFTER the permission check on each route (not
         // as a group-level middleware) so a role without the permission still gets
@@ -445,7 +446,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                   ->orWhereNull('workspace_id');
             })->orderBy('name')->get(['id', 'name', 'description']);
             return \Inertia\Inertia::render('ai/index', ['agents' => $agents]);
-        })->middleware(['permission:agent_view_any', 'module.access'])->name('ai.index');
+        })->middleware(['permission:agent_advanced_insights', 'module.access'])->name('ai.index');
 
         // Chat routes
         Route::get('chat', [ChatController::class, 'index'])->middleware(['permission:chat_view', 'module.access'])->name('chat.index');
@@ -693,8 +694,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Gated behind the Pro Add-on plan. ai/projects/* (Projects → AI Generate)
         // has no Spatie permission of its own (the controller checks
         // project_create) but is plan-gated the same way.
-        Route::get('standup', [\App\Http\Controllers\StandupController::class, 'index'])->middleware(['permission:agent_use', 'module.access'])->name('standup.index');
-        Route::get('api/standup', [\App\Http\Controllers\StandupController::class, 'api'])->middleware(['permission:agent_use', 'module.access'])->name('standup.api');
+        // Standup shows other people's work, so it is an owner/manager tool like the others.
+        Route::get('standup', [\App\Http\Controllers\StandupController::class, 'index'])->middleware(['permission:agent_advanced_insights', 'module.access'])->name('standup.index');
+        Route::get('api/standup', [\App\Http\Controllers\StandupController::class, 'api'])->middleware(['permission:agent_advanced_insights', 'module.access'])->name('standup.api');
 
         Route::get('risk-radar', [\App\Http\Controllers\RiskRadarController::class, 'index'])->middleware(['permission:agent_advanced_insights', 'module.access'])->name('risk-radar.index');
         Route::get('api/risk-radar', [\App\Http\Controllers\RiskRadarController::class, 'api'])->middleware(['permission:agent_advanced_insights', 'module.access'])->name('risk-radar.api');

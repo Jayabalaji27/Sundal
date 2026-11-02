@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { MessageSquare, MoreHorizontal, Edit, Trash2, Send } from 'lucide-react';
 import { Task, TaskComment, User } from '@/types';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
     task: Task;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export default function TaskComments({ task, comments, currentUser, onUpdate, canAddComments = true }: Props) {
+    const { t } = useTranslation();
     const [newComment, setNewComment] = useState('');
     const [editingComment, setEditingComment] = useState<number | null>(null);
     const [editText, setEditText] = useState('');
@@ -190,7 +192,7 @@ export default function TaskComments({ task, comments, currentUser, onUpdate, ca
                                 className="pr-12 py-3 resize-none border-gray-200 focus-visible:ring-primary focus-visible:border-primary rounded-xl"
                             />
                             <div className="absolute bottom-2 right-2">
-                                <Button 
+                                <Button aria-label={t('Send')} 
                                     type="submit" 
                                     size="icon" 
                                     disabled={!newComment.trim()}

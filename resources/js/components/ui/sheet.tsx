@@ -65,7 +65,7 @@ function SheetOverlay({
       data-slot="sheet-overlay"
       className={cn(
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0",
-        isFirstModal ? "bg-black/30" : "bg-black/25",
+        isFirstModal ? "bg-ds-overlay" : "bg-black/20",
         className
       )}
       style={{ zIndex }}
@@ -113,7 +113,7 @@ function SheetContent({
       <SheetPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
+          "bg-ds-surface text-ds-fg border-ds-border-subtle data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-50 flex flex-col gap-4 shadow-ds-md transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500",
           side === "right" &&
             "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
           side === "left" &&
@@ -152,8 +152,8 @@ function SheetContent({
         {...props}
       >
         {children}
-        <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none cursor-pointer">
-          <XIcon className="size-4" />
+        <SheetPrimitive.Close className="absolute top-3 right-3 inline-flex size-10 cursor-pointer items-center justify-center rounded-md text-ds-fg-muted transition-colors duration-150 hover:bg-ds-neutral-bg hover:text-ds-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus disabled:pointer-events-none">
+          <XIcon className="size-5" aria-hidden="true" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>
       </SheetPrimitive.Content>
@@ -188,7 +188,7 @@ function SheetTitle({
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
-      className={cn("text-foreground font-semibold", className)}
+      className={cn("text-lg font-semibold leading-7 text-ds-fg", className)}
       {...props}
     />
   )
@@ -201,7 +201,7 @@ function SheetDescription({
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
-      className={cn("text-muted-foreground text-sm", className)}
+      className={cn("text-ds-fg-secondary text-sm", className)}
       {...props}
     />
   )

@@ -1,7 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
 export interface SidebarSettings {
-  variant: 'inset' | 'floating' | 'minimal';
+  variant: 'sidebar' | 'inset' | 'floating' | 'minimal';
   collapsible: 'icon' | 'offcanvas' | 'none';
 }
 
@@ -24,7 +24,7 @@ interface ExtendedSidebarSettings extends SidebarSettings {
 
 // Default sidebar settings with style
 const DEFAULT_EXTENDED_SETTINGS: ExtendedSidebarSettings = {
-  variant: 'inset',
+  variant: 'sidebar',
   collapsible: 'icon',
   style: 'plain'
 };

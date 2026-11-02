@@ -191,7 +191,8 @@ export function AppSidebar() {
         if (flags.portfolios && can('project_view_any')) {
             try { tools.push({ title: t('Portfolios'), href: route('portfolios.index'), icon: FolderKanban, group: TOOLS_GROUP }); } catch {}
         }
-        if (flags.ai && !modulesLocked && (can('agent_use') || can('agent_view_any'))) {
+        // AI Tools (Risk Radar, Resource Conflicts, Standup Bot, custom agents): owners and managers.
+        if (flags.ai && !modulesLocked && can('agent_advanced_insights')) {
             tools.push({ title: t('AI'), href: route('ai.index'), icon: Bot, group: TOOLS_GROUP });
         }
         // AI Assistant: owners and managers only (aiAssistant is null for other roles).
@@ -264,8 +265,8 @@ export function AppSidebar() {
             className={style !== 'plain' ? 'sidebar-custom-style' : ''}
         >
             <SidebarHeader className={style !== 'plain' ? 'sidebar-styled' : ''} style={sidebarStyle}>
-                <div className="flex justify-center items-center p-2">
-                    <Link href={getFirstAvailableHref()} prefetch className="flex items-center justify-center">
+                <div className="flex h-12 items-center px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+                    <Link href={getFirstAvailableHref()} prefetch className="flex items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus">
                         {/* Logo for expanded sidebar */}
                         <div className="h-8 group-data-[collapsible=icon]:hidden flex items-center">
                             {(() => {
@@ -286,14 +287,14 @@ export function AppSidebar() {
                                         onError={() => updateBrandSettings({ [isDark ? 'logoLight' : 'logoDark']: '' })}
                                     />
                                 ) : (
-                                    <div className="h-8 flex items-center gap-1.5">
-                                        <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">
+                                    <div className="h-8 flex items-center gap-2.5">
+                                        <div className="size-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
                                             <span className="text-primary-foreground font-bold text-sm leading-none">
                                                 {(titleText || 'S')[0].toUpperCase()}
                                             </span>
                                         </div>
-                                        <span className="font-bold text-base tracking-tight text-sidebar-foreground">
-                                            {titleText || 'SUNDAL'}
+                                        <span className="text-base font-semibold tracking-tight text-ds-fg">
+                                            {titleText || 'Sundal'}
                                         </span>
                                     </div>
                                 );
@@ -318,7 +319,7 @@ export function AppSidebar() {
                                         onError={() => updateBrandSettings({ favicon: '' })}
                                     />
                                 ) : (
-                                    <div className="h-8 w-8 bg-primary text-primary-foreground rounded-lg flex items-center justify-center font-bold text-sm shadow-sm">
+                                    <div className="h-8 w-8 bg-primary text-primary-foreground rounded-lg flex items-center justify-center font-bold text-sm">
                                         {(titleText || 'S')[0].toUpperCase()}
                                     </div>
                                 );
@@ -328,7 +329,9 @@ export function AppSidebar() {
                 </div>
                 {/* Workspace picker under the logo (only for people in more than one workspace). */}
                 {!(isSaasMode && isSuperAdmin) && (
-                    <div className="px-2 pb-1">
+                    // Collapsed to icons: no side padding and centred, so the icon button
+                    // lines up with the logo and the menu icons.
+                    <div className="px-2 pb-1 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
                         <WorkspaceSwitcher variant="sidebar" />
                     </div>
                 )}

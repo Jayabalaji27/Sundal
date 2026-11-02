@@ -135,9 +135,9 @@ export default function KnowledgeBaseIndex() {
                                     <Badge variant="secondary">{cat.published_articles_count} / {cat.articles_count}</Badge>
                                 </div>
                                 <div className="flex gap-1">
-                                    {canCreateArticles && <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openArt({ kb_category_id: cat.id })}><Plus className="h-3.5 w-3.5" /></Button>}
-                                    {canManageCategories && <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openCat(cat)}><Pencil className="h-3.5 w-3.5" /></Button>}
-                                    {canManageCategories && <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => { setCurrent(cat); setDeleteType('category'); setDeleteModal(true); }}><Trash2 className="h-3.5 w-3.5" /></Button>}
+                                    {canCreateArticles && <Button aria-label={t('Add article')} size="icon" variant="ghost" className="h-7 w-7" onClick={() => openArt({ kb_category_id: cat.id })}><Plus className="h-3.5 w-3.5" /></Button>}
+                                    {canManageCategories && <Button aria-label={t('Edit')} size="icon" variant="ghost" className="h-7 w-7" onClick={() => openCat(cat)}><Pencil className="h-3.5 w-3.5" /></Button>}
+                                    {canManageCategories && <Button aria-label={t('Delete')} size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => { setCurrent(cat); setDeleteType('category'); setDeleteModal(true); }}><Trash2 className="h-3.5 w-3.5" /></Button>}
                                 </div>
                             </div>
                             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -154,8 +154,8 @@ export default function KnowledgeBaseIndex() {
                                             </div>
                                         </div>
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 ml-2">
-                                            {canUpdateArticles && <Button size="icon" variant="ghost" className="h-6 w-6" onClick={e => { e.stopPropagation(); openArt(art); }}><Pencil className="h-3 w-3" /></Button>}
-                                            {canDeleteArticles && <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive" onClick={e => { e.stopPropagation(); setCurrent(art); setDeleteType('article'); setDeleteModal(true); }}><Trash2 className="h-3 w-3" /></Button>}
+                                            {canUpdateArticles && <Button aria-label={t('Edit')} size="icon" variant="ghost" className="h-6 w-6" onClick={e => { e.stopPropagation(); openArt(art); }}><Pencil className="h-3 w-3" /></Button>}
+                                            {canDeleteArticles && <Button aria-label={t('Delete')} size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive" onClick={e => { e.stopPropagation(); setCurrent(art); setDeleteType('article'); setDeleteModal(true); }}><Trash2 className="h-3 w-3" /></Button>}
                                         </div>
                                     </div>
                                 ))}

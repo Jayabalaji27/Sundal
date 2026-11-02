@@ -2,14 +2,17 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// Standard content container: white surface, subtle border, 12px radius,
+// 16px/20px padding. Elevation is kept for floating UI (menus, dialogs).
 const Card = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
+    data-slot="card"
     className={cn(
-      "rounded-lg border bg-card text-card-foreground shadow-sm",
+      "rounded-xl border border-ds-border bg-card text-card-foreground shadow-ds-xs",
       className
     )}
     {...props}
@@ -23,7 +26,8 @@ const CardHeader = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex flex-col space-y-1.5 p-6", className)}
+    data-slot="card-header"
+    className={cn("flex flex-col gap-1 px-5 pt-4 pb-3", className)}
     {...props}
   />
 ))
@@ -35,8 +39,9 @@ const CardTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h3
     ref={ref}
+    data-slot="card-title"
     className={cn(
-      "text-2xl font-semibold leading-none tracking-tight",
+      "text-ds-card-title font-semibold text-ds-fg",
       className
     )}
     {...props}
@@ -50,7 +55,8 @@ const CardDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <p
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    data-slot="card-description"
+    className={cn("text-sm text-ds-fg-muted", className)}
     {...props}
   />
 ))
@@ -60,7 +66,7 @@ const CardContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+  <div ref={ref} data-slot="card-content" className={cn("px-5 pb-4 pt-0", className)} {...props} />
 ))
 CardContent.displayName = "CardContent"
 
@@ -70,7 +76,8 @@ const CardFooter = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
-    className={cn("flex items-center p-6 pt-0", className)}
+    data-slot="card-footer"
+    className={cn("flex items-center px-5 pb-4 pt-0", className)}
     {...props}
   />
 ))

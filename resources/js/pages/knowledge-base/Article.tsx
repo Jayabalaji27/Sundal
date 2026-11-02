@@ -2,7 +2,8 @@ import { useRef, useState, useEffect } from 'react';
 import { router, usePage } from '@inertiajs/react';
 import { PageTemplate } from '@/components/page-template';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Button, IconButton } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ArrowLeft, Eye, Calendar, User, Paperclip, Download, Trash2, Upload, FileText } from 'lucide-react';
 import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +22,17 @@ export default function KbArticle() {
     const canManageAttachments = hasPermission(permissions, 'kb_manage_attachments');
     const fileRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
+    const [attachmentToRemove, setAttachmentToRemove] = useState<{ id: number; name: string } | null>(null);
+    const [removing, setRemoving] = useState(false);
+
+    const removeAttachment = () => {
+        if (!attachmentToRemove) return;
+        setRemoving(true);
+        router.delete(route('kb.attachments.destroy', attachmentToRemove.id), {
+            preserveScroll: true,
+            onFinish: () => { setRemoving(false); setAttachmentToRemove(null); },
+        });
+    };
 
     useEffect(() => { if (flash?.success) toast.success(flash.success); if (flash?.error) toast.error(flash.error); }, [flash]);
 
@@ -96,18 +108,20 @@ export default function KbArticle() {
                                         <p className="text-xs text-muted-foreground">{formatBytes(att.size)}</p>
                                     </div>
                                     <div className="flex gap-1">
-                                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7"
+                                        <IconButton type="button"
                                             title={t('Download')}
+                                            aria-label={t('Download {{name}}', { name: att.name })}
                                             onClick={() => window.open(att.download_url, '_blank')}>
-                                            <Download className="h-3.5 w-3.5" />
-                                        </Button>
+                                            <Download />
+                                        </IconButton>
                                         {canManageAttachments && (
-                                            <Button type="button" size="icon" variant="ghost"
-                                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                            <IconButton type="button"
+                                                className="text-ds-danger-fg hover:bg-ds-danger-bg hover:text-ds-danger-fg"
                                                 title={t('Remove')}
-                                                onClick={() => { if (confirm(t('Remove this attachment?'))) router.delete(route('kb.attachments.destroy', att.id)); }}>
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </Button>
+                                                aria-label={t('Remove {{name}}', { name: att.name })}
+                                                onClick={() => setAttachmentToRemove(att)}>
+                                                <Trash2 />
+                                            </IconButton>
                                         )}
                                     </div>
                                 </div>
@@ -116,6 +130,16 @@ export default function KbArticle() {
                     )}
                 </div>
             </div>
+
+            <ConfirmDialog
+                open={attachmentToRemove !== null}
+                onOpenChange={(open) => { if (!open) setAttachmentToRemove(null); }}
+                title={t('Remove this attachment?')}
+                description={t('{{name}} is deleted from this article. Download it first if you need a copy.', { name: attachmentToRemove?.name ?? '' })}
+                confirmLabel={t('Remove')}
+                loading={removing}
+                onConfirm={removeAttachment}
+            />
         </PageTemplate>
     );
 }

@@ -364,7 +364,7 @@ export default function ZoomMeetingIndex() {
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                         <div className="flex gap-1">
                                             {hasPermission(auth?.permissions, 'zoom_meeting_view') && (
-                                                <Button
+                                                <Button aria-label={t('View')}
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={() => router.get(route('zoom-meetings.show', meeting.id))}
@@ -374,7 +374,7 @@ export default function ZoomMeetingIndex() {
                                                 </Button>
                                             )}
                                             {hasPermission(auth?.permissions, 'zoom_meeting_update') && canModify(meeting) && (
-                                                <Button
+                                                <Button aria-label={t('Edit')}
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={() => handleEditMeeting(meeting)}
@@ -384,7 +384,7 @@ export default function ZoomMeetingIndex() {
                                                 </Button>
                                             )}
                                             {hasPermission(auth?.permissions, 'zoom_meeting_delete') && canModify(meeting) && (
-                                                <Button
+                                                <Button aria-label={t('Delete')}
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={() => handleDeleteMeeting(meeting)}

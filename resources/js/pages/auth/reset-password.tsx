@@ -50,28 +50,27 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
             <form onSubmit={submit} className="space-y-5">
                 <div className="space-y-4">
                     <div className="relative">
-                        <Label htmlFor="email" className="text-gray-700 dark:text-gray-300 font-medium mb-1 block">{t("Email")}</Label>
+                        <Label htmlFor="email" className="mb-1.5 block">{t("Email")}</Label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Mail className="h-5 w-5 text-gray-400" />
+                                <Mail className="h-[18px] w-[18px] text-ds-fg-muted" aria-hidden="true" />
                             </div>
                             <Input
                                 id="email"
                                 type="email"
                                 readOnly
                                 value={data.email}
-                                className="pl-10 w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg transition-all duration-200"
-                                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                                className="pl-10"
                             />
                         </div>
                         <InputError message={errors.email} />
                     </div>
 
                     <div className="relative">
-                        <Label htmlFor="password" className="text-gray-700 dark:text-gray-300 font-medium mb-1 block">{t("Password")}</Label>
+                        <Label htmlFor="password" className="mb-1.5 block">{t("Password")}</Label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Lock className="h-5 w-5 text-gray-400" />
+                                <Lock className="h-[18px] w-[18px] text-ds-fg-muted" aria-hidden="true" />
                             </div>
                             <Input
                                 id="password"
@@ -83,18 +82,17 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                                 value={data.password}
                                 onChange={(e) => setData('password', e.target.value)}
                                 placeholder="••••••••"
-                                className="pl-10 w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg transition-all duration-200"
-                                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                                className="pl-10"
                             />
                         </div>
                         <InputError message={errors.password} />
                     </div>
 
                     <div className="relative">
-                        <Label htmlFor="password_confirmation" className="text-gray-700 dark:text-gray-300 font-medium mb-1 block">{t("Confirm password")}</Label>
+                        <Label htmlFor="password_confirmation" className="mb-1.5 block">{t("Confirm password")}</Label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Lock className="h-5 w-5 text-gray-400" />
+                                <Lock className="h-[18px] w-[18px] text-ds-fg-muted" aria-hidden="true" />
                             </div>
                             <Input
                                 id="password_confirmation"
@@ -105,8 +103,7 @@ export default function ResetPassword({ token, email }: ResetPasswordProps) {
                                 value={data.password_confirmation}
                                 onChange={(e) => setData('password_confirmation', e.target.value)}
                                 placeholder="••••••••"
-                                className="pl-10 w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg transition-all duration-200"
-                                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                                className="pl-10"
                             />
                         </div>
                         <InputError message={errors.password_confirmation} />

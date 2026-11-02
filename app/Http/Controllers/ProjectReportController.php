@@ -437,16 +437,16 @@ class ProjectReportController extends Controller
         $themeColorMap = [
             'blue'   => '#3b82f6',
             'green'  => '#10B77F',
-            'purple' => '#8b5cf6',
+            'purple' => '#4f46e5',
             'orange' => '#f97316',
             'red'    => '#ef4444',
         ];
         $exportUser = Auth::user();
         $exportWorkspace = $exportUser->currentWorkspace;
         $exportOwnerId = $exportWorkspace->owner_id ?? $exportUser->id;
-        $exportThemeColor  = \App\Models\Setting::where('user_id', $exportOwnerId)->where('workspace_id', $exportWorkspace->id)->where('key', 'themeColor')->value('value') ?? 'green';
-        $exportCustomColor = \App\Models\Setting::where('user_id', $exportOwnerId)->where('workspace_id', $exportWorkspace->id)->where('key', 'customColor')->value('value') ?? '#10B77F';
-        $primaryHex = $exportThemeColor === 'custom' ? $exportCustomColor : ($themeColorMap[$exportThemeColor] ?? '#10B77F');
+        $exportThemeColor  = \App\Models\Setting::where('user_id', $exportOwnerId)->where('workspace_id', $exportWorkspace->id)->where('key', 'themeColor')->value('value') ?? 'purple';
+        $exportCustomColor = \App\Models\Setting::where('user_id', $exportOwnerId)->where('workspace_id', $exportWorkspace->id)->where('key', 'customColor')->value('value') ?? '#4f46e5';
+        $primaryHex = $exportThemeColor === 'custom' ? $exportCustomColor : ($themeColorMap[$exportThemeColor] ?? '#4f46e5');
         $primaryHex = ltrim($primaryHex, '#');
         $pr = hexdec(substr($primaryHex, 0, 2));
         $pg = hexdec(substr($primaryHex, 2, 2));
@@ -856,16 +856,16 @@ class ProjectReportController extends Controller
         $themeColorMap = [
             'blue'   => '#3b82f6',
             'green'  => '#10B77F',
-            'purple' => '#8b5cf6',
+            'purple' => '#4f46e5',
             'orange' => '#f97316',
             'red'    => '#ef4444',
         ];
         $user = Auth::user();
         $workspace = $user->currentWorkspace;
         $ownerId = $workspace->owner_id ?? $user->id;
-        $themeColor  = \App\Models\Setting::where('user_id', $ownerId)->where('workspace_id', $workspace->id)->where('key', 'themeColor')->value('value') ?? 'green';
-        $customColor = \App\Models\Setting::where('user_id', $ownerId)->where('workspace_id', $workspace->id)->where('key', 'customColor')->value('value') ?? '#10B77F';
-        $primaryColor = $themeColor === 'custom' ? $customColor : ($themeColorMap[$themeColor] ?? '#10B77F');
+        $themeColor  = \App\Models\Setting::where('user_id', $ownerId)->where('workspace_id', $workspace->id)->where('key', 'themeColor')->value('value') ?? 'purple';
+        $customColor = \App\Models\Setting::where('user_id', $ownerId)->where('workspace_id', $workspace->id)->where('key', 'customColor')->value('value') ?? '#4f46e5';
+        $primaryColor = $themeColor === 'custom' ? $customColor : ($themeColorMap[$themeColor] ?? '#4f46e5');
 
         $html = view('pdf.project-report', compact(
             'project',

@@ -146,7 +146,7 @@ export default function InvoiceSettings({ settings = {} }: InvoiceSettingsProps)
                         {t('Browse')}
                       </Button>
                       {invoiceLogo && (
-                        <Button type="button" variant="outline" size="icon" onClick={() => setInvoiceLogo('')}>
+                        <Button aria-label={t('Remove logo')} type="button" variant="outline" size="icon" onClick={() => setInvoiceLogo('')}>
                           <X className="h-4 w-4" />
                         </Button>
                       )}

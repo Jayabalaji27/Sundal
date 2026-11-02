@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { router, usePage } from '@inertiajs/react';
 import { PageTemplate } from '@/components/page-template';
-import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/EmptyState';
+import { Button, IconButton } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Plus, Trash2, Copy, Check, Key, AlertTriangle, ToggleLeft, ToggleRight, ArrowLeft } from 'lucide-react';
+import { Plus, Trash2, Copy, Check, Key, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { toast } from '@/components/custom-toast';
 import { useTranslation } from 'react-i18next';
 
@@ -16,7 +19,10 @@ export default function ApiKeysIndex() {
     const [isOpen, setIsOpen] = useState(false);
     const [name, setName] = useState('');
     const [expiresAt, setExpiresAt] = useState('');
+    const [creating, setCreating] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [keyToRevoke, setKeyToRevoke] = useState<{ id: number; name: string } | null>(null);
+    const [revoking, setRevoking] = useState(false);
     const newKey = flash?.new_api_key;
 
     useEffect(() => { if (flash?.success) toast.success(flash.success); if (flash?.error) toast.error(flash.error); }, [flash]);
@@ -28,8 +34,20 @@ export default function ApiKeysIndex() {
     };
 
     const handleCreate = () => {
+        if (!name.trim()) return;
+        setCreating(true);
         router.post(route('api-keys.store'), { name, expires_at: expiresAt || undefined }, {
-            onSuccess: () => { setIsOpen(false); setName(''); setExpiresAt(''); }
+            onSuccess: () => { setIsOpen(false); setName(''); setExpiresAt(''); },
+            onFinish: () => setCreating(false),
+        });
+    };
+
+    const revoke = () => {
+        if (!keyToRevoke) return;
+        setRevoking(true);
+        router.delete(route('api-keys.destroy', keyToRevoke.id), {
+            preserveScroll: true,
+            onFinish: () => { setRevoking(false); setKeyToRevoke(null); },
         });
     };
 
@@ -37,24 +55,24 @@ export default function ApiKeysIndex() {
         <PageTemplate title={t('BYOA — API Keys')} description={t('Generate API keys to connect external apps to your workspace.')}
             url={route('api-keys.index')} breadcrumbs={[{ title: t('Integrations'), href: `${route('settings')}#integrations` }, { title: t('API Keys') }]}
             actions={[
-                { label: t('Back'), icon: <ArrowLeft className="mr-1.5 h-4 w-4" />, variant: 'outline', onClick: () => router.get(`${route('settings')}#integrations`) },
-                { label: t('New Key'), icon: <Plus className="mr-1.5 h-4 w-4" />, variant: 'default', onClick: () => setIsOpen(true) },
+                { label: t('Back'), icon: <ArrowLeft className="h-4 w-4" />, variant: 'outline', onClick: () => router.get(`${route('settings')}#integrations`) },
+                { label: t('New Key'), icon: <Plus className="h-4 w-4" />, variant: 'default', onClick: () => setIsOpen(true) },
             ]}>
 
             {/* New key reveal banner */}
             {newKey && (
-                <div className="mb-6 rounded-xl border border-yellow-300 bg-yellow-50 p-4 dark:border-yellow-700 dark:bg-yellow-900/20">
+                <div role="status" className="mb-6 rounded-xl border border-ds-warning/30 bg-ds-warning-bg p-4">
                     <div className="flex items-start gap-3">
-                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600" />
-                        <div className="flex-1">
-                            <p className="font-semibold text-yellow-800 dark:text-yellow-200">Save your API key now — it won't be shown again</p>
+                        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-ds-warning" aria-hidden="true" />
+                        <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-ds-warning-fg">{t("Save your API key now — it won't be shown again")}</p>
                             <div className="mt-2 flex items-center gap-2">
-                                <code className="flex-1 rounded bg-yellow-100 dark:bg-yellow-900/40 px-3 py-1.5 text-sm font-mono break-all text-yellow-900 dark:text-yellow-100">
+                                <code className="flex-1 break-all rounded-md border border-ds-border bg-ds-surface px-3 py-2 font-mono text-sm text-ds-fg">
                                     {newKey}
                                 </code>
-                                <Button size="sm" variant="outline" onClick={() => copyKey(newKey)}>
-                                    {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                                </Button>
+                                <IconButton variant="outline" onClick={() => copyKey(newKey)} aria-label={copied ? t('Copied') : t('Copy API key')}>
+                                    {copied ? <Check className="text-ds-success" /> : <Copy />}
+                                </IconButton>
                             </div>
                         </div>
                     </div>
@@ -62,65 +80,90 @@ export default function ApiKeysIndex() {
             )}
 
             {apiKeys.length === 0 ? (
-                <div className="flex flex-col items-center py-16 text-center">
-                    <Key className="mb-3 h-10 w-10 text-muted-foreground" />
-                    <p className="text-muted-foreground">{t('No API keys yet.')}</p>
-                    <Button className="mt-4" onClick={() => setIsOpen(true)}><Plus className="mr-2 h-4 w-4" />{t('Create first key')}</Button>
-                </div>
+                <EmptyState
+                    icon={Key}
+                    title={t('No API keys yet')}
+                    description={t('Create a key to let an external app read and write data in this workspace.')}
+                    action={{ label: t('Create first key'), icon: <Plus className="h-4 w-4" />, onClick: () => setIsOpen(true) }}
+                />
             ) : (
-                <div className="overflow-x-auto rounded-xl border">
-                    <table className="w-full min-w-[640px] text-sm">
-                        <thead className="bg-muted/50 text-muted-foreground">
-                            <tr>
-                                <th className="px-4 py-3 text-left font-medium">{t('Name')}</th>
-                                <th className="px-4 py-3 text-left font-medium">{t('Prefix')}</th>
-                                <th className="px-4 py-3 text-center font-medium">{t('Status')}</th>
-                                <th className="px-4 py-3 text-left font-medium">{t('Last Used')}</th>
-                                <th className="px-4 py-3 text-left font-medium">{t('Expires')}</th>
-                                <th className="px-4 py-3 text-right font-medium">{t('Actions')}</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y">
+                <div className="overflow-hidden rounded-lg">
+                    <Table className="min-w-[640px]">
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead scope="col">{t('Name')}</TableHead>
+                                <TableHead scope="col">{t('Prefix')}</TableHead>
+                                <TableHead scope="col">{t('Status')}</TableHead>
+                                <TableHead scope="col">{t('Last Used')}</TableHead>
+                                <TableHead scope="col">{t('Expires')}</TableHead>
+                                <TableHead scope="col" className="text-right">{t('Actions')}</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
                             {apiKeys.map((k: any) => (
-                                <tr key={k.id} className="bg-background hover:bg-muted/30">
-                                    <td className="px-4 py-3 font-medium">{k.name}</td>
-                                    <td className="px-4 py-3"><code className="rounded bg-muted px-2 py-0.5 text-xs">{k.key_prefix}…</code></td>
-                                    <td className="px-4 py-3 text-center">
-                                        <button onClick={() => router.patch(route('api-keys.toggle', k.id))}>
-                                            <Badge variant={k.is_active ? 'default' : 'secondary'}>
-                                                {k.is_active ? t('Active') : t('Inactive')}
-                                            </Badge>
-                                        </button>
-                                    </td>
-                                    <td className="px-4 py-3 text-muted-foreground text-xs">{k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : '—'}</td>
-                                    <td className="px-4 py-3 text-muted-foreground text-xs">{k.expires_at ? new Date(k.expires_at).toLocaleDateString() : t('Never')}</td>
-                                    <td className="px-4 py-3 text-right">
-                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
-                                            onClick={() => { if (confirm(t('Revoke this API key?'))) router.delete(route('api-keys.destroy', k.id)); }}>
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                    </td>
-                                </tr>
+                                <TableRow key={k.id}>
+                                    <TableCell className="font-medium">{k.name}</TableCell>
+                                    <TableCell><code className="rounded-sm bg-ds-neutral-bg px-2 py-0.5 font-mono text-xs text-ds-fg-secondary">{k.key_prefix}…</code></TableCell>
+                                    <TableCell>
+                                        {/* Turning a key off is reversible, so it takes effect at once. */}
+                                        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-ds-fg-secondary">
+                                            <Switch
+                                                checked={!!k.is_active}
+                                                onCheckedChange={() => router.patch(route('api-keys.toggle', k.id), {}, { preserveScroll: true })}
+                                                aria-label={t('{{name}} active', { name: k.name })}
+                                            />
+                                            {k.is_active ? t('Active') : t('Inactive')}
+                                        </label>
+                                    </TableCell>
+                                    <TableCell className="text-ds-fg-secondary">{k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : '—'}</TableCell>
+                                    <TableCell className="text-ds-fg-secondary">{k.expires_at ? new Date(k.expires_at).toLocaleDateString() : t('Never')}</TableCell>
+                                    <TableCell className="text-right">
+                                        <IconButton
+                                            className="text-ds-danger-fg hover:bg-ds-danger-bg hover:text-ds-danger-fg"
+                                            aria-label={t('Revoke {{name}}', { name: k.name })}
+                                            onClick={() => setKeyToRevoke(k)}
+                                        >
+                                            <Trash2 />
+                                        </IconButton>
+                                    </TableCell>
+                                </TableRow>
                             ))}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
             )}
 
             <Dialog open={isOpen} onOpenChange={setIsOpen}>
                 <DialogContent className="sm:max-w-sm">
-                    <DialogHeader><DialogTitle>{t('Create API Key')}</DialogTitle></DialogHeader>
-                    <div className="space-y-3 py-2">
-                        <div><Label>{t('Key Name')} *</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Zapier Integration" className="mt-1" /></div>
-                        <div><Label>{t('Expires At')} <span className="text-muted-foreground text-xs">({t('optional')})</span></Label>
-                            <Input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} className="mt-1" /></div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsOpen(false)}>{t('Cancel')}</Button>
-                        <Button onClick={handleCreate} disabled={!name.trim()}>{t('Create')}</Button>
-                    </DialogFooter>
+                    <form noValidate onSubmit={(e) => { e.preventDefault(); handleCreate(); }} className="grid gap-4">
+                        <DialogHeader><DialogTitle>{t('Create API Key')}</DialogTitle></DialogHeader>
+                        <div className="space-y-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="api-key-name" required>{t('Key Name')}</Label>
+                                <Input id="api-key-name" required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Zapier Integration" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="api-key-expires">{t('Expires At')} <span className="text-xs font-normal text-ds-fg-muted">({t('optional')})</span></Label>
+                                <Input id="api-key-expires" type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)} />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>{t('Cancel')}</Button>
+                            <Button type="submit" disabled={!name.trim()} loading={creating}>{t('Create')}</Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
+
+            <ConfirmDialog
+                open={keyToRevoke !== null}
+                onOpenChange={(open) => { if (!open) setKeyToRevoke(null); }}
+                title={t('Revoke {{name}}?', { name: keyToRevoke?.name ?? '' })}
+                description={t('Apps using this key stop working immediately. This cannot be undone; you can create a new key instead.')}
+                confirmLabel={t('Revoke key')}
+                loading={revoking}
+                onConfirm={revoke}
+            />
         </PageTemplate>
     );
 }

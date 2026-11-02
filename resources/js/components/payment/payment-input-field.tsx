@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Eye, EyeOff } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface PaymentInputFieldProps {
   id: string;
@@ -27,6 +28,7 @@ export function PaymentInputField({
   error,
   className = ''
 }: PaymentInputFieldProps) {
+  const { t } = useTranslation();
   const [showSecret, setShowSecret] = useState(false);
   
   // Show asterisks in demo mode for secret fields with values
@@ -47,7 +49,7 @@ export function PaymentInputField({
           readOnly={(window as any).isDemo && isSecret && value}
         />
         {isSecret && (
-          <Button
+          <Button aria-label={t('Show or hide')}
             type="button"
             variant="ghost"
             size="icon"

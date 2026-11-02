@@ -4,7 +4,6 @@ import { Check, ChevronDown, Columns3, LayoutGrid, Rows3, Sheet as SheetIcon } f
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { hasPermission } from '@/utils/authorization';
-import { cn } from '@/lib/utils';
 
 export type BoardView = 'detail' | 'plain' | 'sheet';
 export const BOARD_VIEWS: BoardView[] = ['detail', 'plain', 'sheet'];
@@ -27,10 +26,10 @@ export function BoardViewMenu({ view, onChange, className }: { view: BoardView; 
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className={cn('h-9', className)} aria-label={t('Board view')}>
+                <Button variant="outline" className={className} aria-label={t('Board view')}>
                     <CurrentIcon className="h-4 w-4" />
                     {views[view].label}
-                    <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                    <ChevronDown className="h-4 w-4 text-ds-fg-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-72">
@@ -41,9 +40,9 @@ export function BoardViewMenu({ view, onChange, className }: { view: BoardView; 
                             <option.icon className="mt-0.5 h-4 w-4 shrink-0" />
                             <span className="min-w-0 flex-1">
                                 <span className="block font-medium">{option.label}</span>
-                                <span className="block text-xs text-muted-foreground">{option.hint}</span>
+                                <span className="block text-xs text-ds-fg-muted">{option.hint}</span>
                             </span>
-                            {view === key && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
+                            {view === key && <Check className="mt-0.5 h-4 w-4 shrink-0 !text-ds-fg-accent" aria-label={t('Selected')} />}
                         </DropdownMenuItem>
                     );
                 })}

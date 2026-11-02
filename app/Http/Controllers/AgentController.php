@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 use App\Models\Agent;
 use App\Models\KbArticle;
 use App\Models\KbCategory;
-use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Inertia\Inertia;
@@ -13,33 +12,28 @@ class AgentController extends Controller
 {
     private function ws(): int { return auth()->user()->current_workspace_id; }
 
-    /** Read API key directly from DB to bypass stale cache */
+    /**
+     * The OpenAI key the workspace owner saved in Settings (SystemSettingsController::updateChatgpt
+     * stores it under the owner and the workspace). Managers use agents too, and
+     * reading the signed-in user's own settings found no key for them.
+     */
     private function getChatgptKey(): ?string
     {
-        $user = auth()->user();
-        $key = Setting::where('user_id', $user->id)
-            ->where('workspace_id', $user->current_workspace_id)
-            ->where('key', 'chatgptKey')
-            ->value('value');
-
-        // Fallback: try without workspace (some setups store globally)
-        if (empty($key)) {
-            $key = Setting::where('user_id', $user->id)
-                ->whereNull('workspace_id')
-                ->where('key', 'chatgptKey')
-                ->value('value');
-        }
+        $key = $this->ownerSetting('chatgptKey');
 
         return empty($key) ? null : $key;
     }
 
     private function getChatgptModel(): string
     {
-        $user = auth()->user();
-        $model = Setting::where('user_id', $user->id)
-            ->where('key', 'chatgptModel')
-            ->value('value');
-        return $model ?: 'gpt-3.5-turbo';
+        return $this->ownerSetting('chatgptModel') ?: 'gpt-3.5-turbo';
+    }
+
+    private function ownerSetting(string $key): ?string
+    {
+        $workspace = auth()->user()->currentWorkspace;
+
+        return $workspace ? getSetting($key, null, $workspace->owner_id, $workspace->id) : null;
     }
 
     // ── CRUD ─────────────────────────────────────────────────────────────

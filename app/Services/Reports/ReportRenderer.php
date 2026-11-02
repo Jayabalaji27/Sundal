@@ -73,18 +73,18 @@ class ReportRenderer
     /** The workspace's theme colour, the same one the project report PDF uses. */
     public static function brandColor(): string
     {
-        $map = ['blue' => '#3b82f6', 'green' => '#10B77F', 'purple' => '#8b5cf6', 'orange' => '#f97316', 'red' => '#ef4444'];
+        $map = ['blue' => '#3b82f6', 'green' => '#10B77F', 'purple' => '#4f46e5', 'orange' => '#f97316', 'red' => '#ef4444'];
         $workspace = auth()->user()?->currentWorkspace;
         if (!$workspace) {
-            return '#10B77F';
+            return '#4f46e5';
         }
 
         $settings = Setting::where('user_id', $workspace->owner_id)->where('workspace_id', $workspace->id)
             ->whereIn('key', ['themeColor', 'customColor'])->pluck('value', 'key');
-        $theme = $settings['themeColor'] ?? 'green';
-        $color = $theme === 'custom' ? ($settings['customColor'] ?? '#10B77F') : ($map[$theme] ?? '#10B77F');
+        $theme = $settings['themeColor'] ?? 'purple';
+        $color = $theme === 'custom' ? ($settings['customColor'] ?? '#4f46e5') : ($map[$theme] ?? '#4f46e5');
 
-        return preg_match('/^#[0-9a-fA-F]{6}$/', $color) ? $color : '#10B77F';
+        return preg_match('/^#[0-9a-fA-F]{6}$/', $color) ? $color : '#4f46e5';
     }
 
     /**

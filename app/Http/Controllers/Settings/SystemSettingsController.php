@@ -93,9 +93,9 @@ class SystemSettingsController extends Controller
             if (config('app.is_demo')) {
                 // Demo mode: store ONLY theme settings in cookies (exclude logos and text)
                 $themeOnlySettings = [
-                    'themeColor' => $validated['settings']['themeColor'] ?? 'green',
-                    'customColor' => $validated['settings']['customColor'] ?? '#10B77F',
-                    'sidebarVariant' => $validated['settings']['sidebarVariant'] ?? 'inset',
+                    'themeColor' => $validated['settings']['themeColor'] ?? 'purple',
+                    'customColor' => $validated['settings']['customColor'] ?? '#4f46e5',
+                    'sidebarVariant' => $validated['settings']['sidebarVariant'] ?? 'sidebar',
                     'sidebarStyle' => $validated['settings']['sidebarStyle'] ?? 'plain',
                     'layoutDirection' => $validated['settings']['layoutDirection'] ?? 'left',
                     'themeMode' => $validated['settings']['themeMode'] ?? 'light',
@@ -159,9 +159,9 @@ class SystemSettingsController extends Controller
 
             if (config('app.is_demo')) {
                 $themeOnlySettings = [
-                    'themeColor' => $validated['settings']['themeColor'] ?? 'green',
-                    'customColor' => $validated['settings']['customColor'] ?? '#10B77F',
-                    'sidebarVariant' => $validated['settings']['sidebarVariant'] ?? 'inset',
+                    'themeColor' => $validated['settings']['themeColor'] ?? 'purple',
+                    'customColor' => $validated['settings']['customColor'] ?? '#4f46e5',
+                    'sidebarVariant' => $validated['settings']['sidebarVariant'] ?? 'sidebar',
                     'sidebarStyle' => $validated['settings']['sidebarStyle'] ?? 'plain',
                     'layoutDirection' => $validated['settings']['layoutDirection'] ?? 'left',
                     'themeMode' => $validated['settings']['themeMode'] ?? 'light',

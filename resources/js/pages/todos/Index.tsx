@@ -611,7 +611,7 @@ export default function TodosIndex() {
                                     <div className="flex gap-1">
                                         <Tooltip>
                                             <TooltipTrigger asChild>
-                                                <Button
+                                                <Button aria-label={t('View')}
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={() => handleView(todo)}
@@ -625,7 +625,7 @@ export default function TodosIndex() {
                                         {hasPermission(permissions, 'todo_update') && todo.status !== 'completed' && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <Button
+                                                    <Button aria-label={t('Edit')}
                                                         variant="ghost"
                                                         size="icon"
                                                         onClick={() => handleEdit(todo)}
@@ -640,7 +640,7 @@ export default function TodosIndex() {
                                         {hasPermission(permissions, 'todo_delete') && (
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <Button
+                                                    <Button aria-label={t('Delete')}
                                                         variant="ghost"
                                                         size="icon"
                                                         onClick={() => handleDelete(todo)}

@@ -116,11 +116,11 @@ export function CrudTable({
       <Button
         variant="ghost"
         size="icon"
-        className={cn("h-8 w-8", action.className)}
+        className={action.className}
         aria-label={action.label}
         onClick={action.href ? undefined : () => onAction(action.action, row)}
       >
-        <IconComponent size={16} />
+        <IconComponent />
       </Button>
     );
 
@@ -146,16 +146,16 @@ export function CrudTable({
     const visible = actions.filter(action => isActionVisible(action, row));
     const [first, ...rest] = visible;
     if (visible.length <= 2) {
-      return <div className="flex items-center justify-end space-x-2">{visible.map((action, index) => renderIconAction(action, row, index))}</div>;
+      return <div className="flex items-center justify-end gap-1">{visible.map((action, index) => renderIconAction(action, row, index))}</div>;
     }
 
     return (
-      <div className="flex items-center justify-end space-x-1">
+      <div className="flex items-center justify-end gap-1">
         {renderIconAction(first, row, 0)}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('More actions')}>
-              <MoreHorizontal size={16} />
+            <Button variant="ghost" size="icon" aria-label={t('More actions')}>
+              <MoreHorizontal />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-40">
@@ -163,7 +163,7 @@ export function CrudTable({
               const IconComponent = (LucidIcons as any)[action.icon] as React.ElementType;
               const content = (
                 <>
-                  <IconComponent className="mr-2 h-4 w-4" />
+                  <IconComponent />
                   {action.label}
                 </>
               );
@@ -174,7 +174,7 @@ export function CrudTable({
               ) : (
                 <DropdownMenuItem
                   key={index}
-                  className={action.action === 'delete' ? 'text-red-600 focus:text-red-600' : undefined}
+                  variant={action.action === 'delete' ? 'destructive' : 'default'}
                   onClick={() => onAction(action.action, row)}
                 >
                   {content}
@@ -217,7 +217,7 @@ export function CrudTable({
 
       case 'image':
         if (!value) {
-          return <div className="text-center text-gray-400">{t("No image")}</div>;
+          return <div className="text-center text-ds-fg-placeholder">{t("No image")}</div>;
         }
         return (
           <div className="flex justify-center">
@@ -255,7 +255,7 @@ export function CrudTable({
         return (
           <Link
             href={href}
-            className={col.linkClassName || "text-blue-600 hover:underline"}
+            className={col.linkClassName || "font-medium text-ds-fg-accent underline-offset-4 hover:underline"}
             target={col.openInNewTab ? '_blank' : undefined}
           >
             {value}
@@ -263,49 +263,52 @@ export function CrudTable({
         );
 
       default:
-        return <span className="text-sm font-medium">{value || '-'}</span>;
+        return <span className="text-sm">{value || '-'}</span>;
     }
   };
 
   return (
-    <div className="border-collapse dark:bg-gray-900 overflow-x-auto">
+    <div className="overflow-hidden rounded-lg">
       {/* Fits the page: cells wrap rather than pushing the actions column off-screen. */}
       <Table className="w-full">
         <TableHeader>
-          <TableRow className="bg-gray-50 dark:bg-gray-800 border-b">
-            <TableHead className="w-12 py-2.5 font-semibold">#</TableHead>
+          <TableRow>
+            <TableHead scope="col" className="w-12">#</TableHead>
             {columns.map((column) => (
               <TableHead
                 key={column.key}
-                className={cn(
-                  "py-2.5 font-semibold",
-                  column.sortable && "cursor-pointer select-none",
-                  column.className
-                )}
-                onClick={() => handleSort(column)}
+                scope="col"
+                className={column.className}
+                aria-sort={column.sortable && sortField === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}
               >
-                <div className="flex items-center">
-                  {column.label}
-                  {renderSortIcon(column)}
-                </div>
+                {/* Sortable headers are buttons so sorting works from the keyboard. */}
+                {column.sortable && onSort ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSort(column)}
+                    className="-mx-1 inline-flex cursor-pointer select-none items-center rounded-sm px-1 hover:text-ds-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus"
+                  >
+                    {column.label}
+                    {renderSortIcon(column)}
+                  </button>
+                ) : (
+                  <div className="flex items-center">{column.label}</div>
+                )}
               </TableHead>
             ))}
             {/* <TableHead className="w-24 py-2.5 font-semibold text-right">{t("Actions")}</TableHead> */}
-            {showActions && hasAnyActionPermission && <TableHead className="w-24 py-2.5 text-right font-semibold">{t('Actions')}</TableHead>}
+            {showActions && hasAnyActionPermission && <TableHead scope="col" className="w-24 text-right">{t('Actions')}</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.length > 0 ? (
             data.map((row, index) => (
-              <TableRow key={row.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 border-b">
-                <TableCell className="font-medium py-2.5">{from + index}</TableCell>
+              <TableRow key={row.id || index}>
+                <TableCell className="text-ds-fg-muted tabular-nums">{from + index}</TableCell>
                 {columns.map((col) => (
                   <TableCell
                     key={col.key}
-                    className={cn(
-                      "py-2.5",
-                      col.className
-                    )}
+                    className={col.className}
                   >
                     {renderCellContent(row, col)}
                   </TableCell>
@@ -313,7 +316,7 @@ export function CrudTable({
                 {/* <TableCell className="py-2.5 text-right">
                   {renderActionButtons(row)}
                 </TableCell> */}
-                {showActions && hasAnyActionPermission && <TableCell className="py-2.5 text-right">{renderActionButtons(row)}</TableCell>}
+                {showActions && hasAnyActionPermission && <TableCell className="py-1.5 text-right">{renderActionButtons(row)}</TableCell>}
               </TableRow>
             ))
           ) : (
@@ -326,9 +329,10 @@ export function CrudTable({
               </TableCell> */}
               <TableCell
                 colSpan={columns.length + (showActions && hasAnyActionPermission ? 2 : 1)}
-                className="text-muted-foreground h-24 text-center dark:text-gray-400"
+                className="h-auto py-10 text-center"
               >
-                {t('No results found.')}
+                <p className="text-sm font-medium text-ds-fg">{t('No results found')}</p>
+                <p className="mt-1 text-sm text-ds-fg-muted">{t('Try adjusting your search or filters.')}</p>
               </TableCell>
             </TableRow>
           )}

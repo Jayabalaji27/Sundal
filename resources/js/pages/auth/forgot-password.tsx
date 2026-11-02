@@ -48,10 +48,10 @@ export default function ForgotPassword({ status }: { status?: string }) {
             <form className="space-y-5" onSubmit={submit}>
                 <div className="space-y-4">
                     <div className="relative">
-                        <Label htmlFor="email" className="text-gray-700 dark:text-gray-300 font-medium mb-1 block">{t("Email address")}</Label>
+                        <Label htmlFor="email" className="mb-1.5 block">{t("Email address")}</Label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Mail className="h-5 w-5 text-gray-400" />
+                                <Mail className="h-[18px] w-[18px] text-ds-fg-muted" aria-hidden="true" />
                             </div>
                             <Input
                                 id="email"
@@ -63,8 +63,7 @@ export default function ForgotPassword({ status }: { status?: string }) {
                                 value={data.email}
                                 onChange={(e) => setData('email', e.target.value)}
                                 placeholder="email@example.com"
-                                className="pl-10 w-full border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-lg transition-all duration-200"
-                                style={{ '--tw-ring-color': primaryColor } as React.CSSProperties}
+                                className="pl-10"
                             />
                         </div>
                         <InputError message={errors.email} />
@@ -93,7 +92,7 @@ export default function ForgotPassword({ status }: { status?: string }) {
                     {t("Email password reset link")}
                 </AuthButton>
 
-                <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-6">
+                <div className="text-center text-sm text-ds-fg-secondary mt-6">
                     {t("Remember your password?")}{' '}
                     <TextLink 
                         href={route('login')} 

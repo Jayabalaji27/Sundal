@@ -121,7 +121,7 @@ export default function MonthlyView({
                 <CardHeader>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <Button
+                            <Button aria-label={t('Previous')}
                                 variant="outline"
                                 size="icon"
                                 onClick={() => navigateMonth('prev')}
@@ -136,7 +136,7 @@ export default function MonthlyView({
                                 </CardTitle>
                             </div>
                             
-                            <Button
+                            <Button aria-label={t('Next')}
                                 variant="outline"
                                 size="icon"
                                 onClick={() => navigateMonth('next')}

@@ -23,7 +23,7 @@ export function SidebarPreview({ variant, style, themeColor, customColor }: Side
     switch (themeColor) {
       case 'blue': return '#3b82f6';
       case 'green': return '#10b981';
-      case 'purple': return '#8b5cf6';
+      case 'purple': return '#4f46e5';
       case 'orange': return '#f97316';
       case 'red': return '#ef4444';
       case 'custom': return customColor;

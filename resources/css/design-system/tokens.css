@@ -1,0 +1,152 @@
+/*
+ * Design tokens: the single source of truth for colour, surfaces, borders,
+ * text and motion. Components reach them through the ds-* / brand-* Tailwind
+ * utilities (theme.css), and the shadcn/ui variables in app.css map onto them,
+ * so existing components follow the same palette.
+ *
+ * The brand scale is derived from --theme-color, which the workspace's brand
+ * colour setting (Settings -> Brand) writes onto <html>, so every tint, hover
+ * and selected state follows the picked colour. The default is the design
+ * system's #4f46e5, for which the mixes land within a few shades of the spec's
+ * scale (50 #f5f3ff, 100 #ede9fe, 200 #ddd6fe, 300 #c4b5fd, 400 #8b7cf6,
+ * 500 #635bee, 600 #4f46e5, 700 #4338ca).
+ */
+
+:root {
+    --theme-color: #4f46e5;
+
+    /* Brand */
+    --ds-brand-50: color-mix(in srgb, var(--theme-color) 6%, white);
+    --ds-brand-100: color-mix(in srgb, var(--theme-color) 12%, white);
+    --ds-brand-200: color-mix(in srgb, var(--theme-color) 22%, white);
+    --ds-brand-300: color-mix(in srgb, var(--theme-color) 40%, white);
+    --ds-brand-400: color-mix(in srgb, var(--theme-color) 72%, white);
+    --ds-brand-500: color-mix(in srgb, var(--theme-color) 88%, white);
+    --ds-brand-600: var(--theme-color);
+    --ds-brand-700: color-mix(in srgb, var(--theme-color) 85%, black);
+    --ds-brand-800: color-mix(in srgb, var(--theme-color) 70%, black);
+
+    /* Brand-tinted fills for selected states and soft badges */
+    --ds-brand-soft: var(--ds-brand-50);
+    --ds-brand-soft-border: var(--ds-brand-200);
+    --ds-brand-soft-fg: var(--ds-brand-700);
+
+    /* Surfaces */
+    --ds-canvas: #f8fafc;
+    --ds-surface: #ffffff;
+    --ds-surface-subtle: #f8fafc;
+    --ds-surface-hover: #f5f7fb;
+    --ds-surface-selected: color-mix(in srgb, var(--theme-color) 8%, white);
+    --ds-surface-sunken: #f2f4f7;
+    --ds-table-header: #f8f9fc;
+    --ds-row-hover: #fafbfc;
+    --ds-nav-hover: #f7f7fa;
+    --ds-button-hover: #f9fafb;
+
+    /* Text */
+    --ds-text-primary: #101828;
+    --ds-text-secondary: #475467;
+    --ds-text-muted: #667085;
+    --ds-text-placeholder: #98a2b3;
+    --ds-text-disabled: #98a2b3;
+    --ds-text-control: #344054;
+    --ds-text-accent: var(--ds-brand-700);
+    --ds-text-on-brand: #ffffff;
+
+    /* Borders */
+    --ds-border-default: #e4e7ec;
+    --ds-border-subtle: #eaecf0;
+    --ds-border-strong: #d0d5dd;
+    --ds-border-hover: #98a2b3;
+    --ds-border-control-hover: #bfc5cf;
+    --ds-border-focus: var(--ds-brand-500);
+
+    /* Semantic */
+    --ds-success: #12a175;
+    --ds-success-bg: #e9f8f2;
+    --ds-success-fg: #067647;
+    --ds-success-dot: #12b76a;
+    --ds-warning: #d97706;
+    --ds-warning-bg: #fff7e6;
+    --ds-warning-fg: #b54708;
+    --ds-danger: #d92d20;
+    --ds-danger-hover: #b42318;
+    --ds-danger-bg: #fef3f2;
+    --ds-danger-fg: #b42318;
+    --ds-danger-border: #fda29b;
+    --ds-danger-input: #f04438;
+    --ds-info: #2563eb;
+    --ds-info-bg: #eff6ff;
+    --ds-info-fg: #1d4ed8;
+    --ds-neutral-bg: #f2f4f7;
+    --ds-neutral-fg: #475467;
+
+    /* Floating */
+    --ds-tooltip: #101828;
+    --ds-overlay: rgb(16 24 40 / 0.4);
+    --ds-selection: var(--ds-brand-100);
+
+    /* Charts: single-series marks in the brand colour (validated >= 3:1 on the
+       surface in both modes), hairline grid, muted axis text. */
+    --ds-chart-1: var(--ds-brand-600);
+    --ds-chart-grid: var(--ds-border-subtle);
+    --ds-chart-axis: var(--ds-border-default);
+
+    /* Motion */
+    --ds-duration-fast: 120ms;
+    --ds-duration-normal: 180ms;
+    --ds-ease-standard: ease-out;
+}
+
+/* Dark mode: same roles on darker surfaces. */
+.dark {
+    color-scheme: dark;
+
+    --ds-brand-soft: color-mix(in srgb, var(--theme-color) 18%, transparent);
+    --ds-brand-soft-border: color-mix(in srgb, var(--theme-color) 40%, transparent);
+    --ds-brand-soft-fg: var(--ds-brand-300);
+
+    --ds-canvas: #0c111d;
+    --ds-surface: #161b26;
+    --ds-surface-subtle: #121826;
+    --ds-surface-hover: #1f242f;
+    --ds-surface-selected: color-mix(in srgb, var(--theme-color) 18%, transparent);
+    --ds-surface-sunken: #1f242f;
+    --ds-table-header: #121826;
+    --ds-row-hover: #1a1f2b;
+    --ds-nav-hover: #1f242f;
+    --ds-button-hover: #1f242f;
+
+    --ds-text-primary: #f5f5f6;
+    --ds-text-secondary: #cecfd2;
+    --ds-text-muted: #94969c;
+    --ds-text-placeholder: #85888e;
+    --ds-text-disabled: #61646c;
+    --ds-text-control: #cecfd2;
+    --ds-text-accent: var(--ds-brand-300);
+
+    --ds-border-default: #333741;
+    --ds-border-subtle: #1f242f;
+    --ds-border-strong: #3f4451;
+    --ds-border-hover: #61646c;
+    --ds-border-control-hover: #61646c;
+
+    --ds-success-bg: rgb(18 161 117 / 0.16);
+    --ds-success-fg: #47cd89;
+    --ds-warning-bg: rgb(217 119 6 / 0.16);
+    --ds-warning-fg: #fdb022;
+    --ds-danger-bg: rgb(217 45 32 / 0.16);
+    --ds-danger-fg: #f97066;
+    --ds-danger-border: rgb(249 112 102 / 0.5);
+    --ds-info-bg: rgb(37 99 235 / 0.16);
+    --ds-info-fg: #84adff;
+    --ds-neutral-bg: #1f242f;
+    --ds-neutral-fg: #cecfd2;
+
+    --ds-tooltip: #333741;
+    --ds-overlay: rgb(0 0 0 / 0.6);
+
+    /* Lighter brand step so marks keep >= 3:1 on the dark surface. */
+    --ds-chart-1: var(--ds-brand-400);
+    --ds-selection: color-mix(in srgb, var(--theme-color) 40%, transparent);
+}

@@ -156,7 +156,7 @@ export default function ZoomMeetingShow() {
                                                 <p className="font-medium">
                                                     {showPassword ? meeting.password : '••••••••'}
                                                 </p>
-                                                <Button
+                                                <Button aria-label={t('Show or hide')}
                                                     size="icon"
                                                     variant="ghost"
                                                     onClick={() => setShowPassword(!showPassword)}

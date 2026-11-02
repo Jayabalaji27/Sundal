@@ -1065,6 +1065,70 @@ Tests: `tests/Feature/TaskImportExportTest.php`.
 
 ---
 
+### RP-26 · 2026-11-02 · Role dashboards: charts and per-role insights (branch `feature/modern-ui`)
+
+Each role's dashboard now answers that role's questions. Figures come from `App\Services\DashboardInsights`
+(`DashboardController::roleInsights()` / `platformInsights()`, sent as `dashboardData.insights`); each one
+only counts what the person may see and is left out without its permission (`rescue` keeps one bad figure
+from breaking the page). Cards live in `components/dashboard/insights.tsx`.
+
+- **Owner:** stat strip Received / Outstanding / Overdue invoices / Active projects / Team hours this week;
+  *Revenue received* (paid invoices, last 6 months) beside *Needs attention*; *Work in progress* (open tasks
+  per stage, links to the filtered Tasks list); *Team workload* (open + overdue per person, hours this week);
+  *Projects at risk* and *Budget used* (amber past 80%, red past 100%); *Active sprints* and *Coming up*
+  (tasks due and meetings, next 7 days); *Recent activity*.
+- **Manager:** Overdue tasks / Waiting for approval / Team hours / Active sprints / Active projects;
+  attention, sprints, work in progress and team workload for their projects only, coming up, my tasks.
+- **Member:** My open / overdue tasks, hours this week against 40h, completed this week; *My week* (hours
+  per day, Log time button), coming up meetings, my work.
+- **Client:** Active projects / Upcoming deadlines / Invoices to pay / Contracts to review; project progress,
+  *Coming up* milestones (30 days), contracts waiting for them, invoice status.
+- **Platform admin (SaaS):** *Subscription revenue* and *Sign-ups* by month, *Plan mix*, *Trials and
+  renewals (14 days)*. Companies are users with the Spatie `company` role: `users.type` is 'company' for
+  every invited manager, member and client too.
+- Charts (Recharts): one series in the brand colour (`--ds-chart-1`, new chart tokens in `tokens.css`),
+  hairline grid, value on the current month only, value-first tooltip, and a Chart / Table toggle on each.
+- Dashboard grids are `grid-cols-1` below `lg`, so long text no longer pushes cards past a phone screen.
+
+Also on this branch (not logged before): the workspace switcher menu stays inside the sidebar, the
+collapsed sidebar's workspace icon lines up with the nav icons, and the project page shows five tabs
+(Summary, Board, Backlog, Sprints, Timesheet) with the rest under **More**.
+
+Deploy: `npm run build`; no migrations.
+
+Tests: `tests/Feature/DashboardInsightsTest.php` (5).
+
+---
+
+### RP-27 · 2026-11-02 · AI Tools, custom agents, Knowledge Base and Calendar back in the menu
+
+The owner saw Standup Bot, Risk Radar and Resource Conflicts only in the search box: the switches in
+`config/features.php` hide sidebar items, and `CommandPalette.tsx` never read them.
+
+- **Switched on** (`config/features.php`): `ai` (Tools → **AI**: Risk Radar, Resource Conflicts, Standup
+  Bot, custom agents), `knowledge_base`, `calendar`. New `ai_writer` (off) now controls the floating
+  ChatGPT writer, which `ai` used to switch on as well.
+- **Owners and managers only:** AI page, Standup and Risk Radar / Resource Conflicts need
+  `agent_advanced_insights`; members no longer hold `agent_view_any` / `agent_view` / `agent_use`
+  (`RoleSeeder`). Members get Calendar and Knowledge Base (read); clients get Calendar.
+- **Scoped to what the viewer may see** (`Project::visibleTo`): a manager's Risk Radar lists their
+  projects, Resource Conflicts counts load on their projects, and Standup shows them and the people on
+  their projects, counting only work on those projects. Standup never lists clients.
+- **Fixed:** Standup's "today" list had an ungrouped `orWhere`, so its filters only held for one branch.
+- **Fixed:** custom agents read the OpenAI key from the signed-in user's own settings, so they never
+  worked for managers; they now use the key the owner saved (Settings → ChatGPT).
+- AI page: Standup Bot card is back (dropped from the page in RP-6, its search entry stayed); "Manage
+  agents" action once agents exist.
+- **Search box follows the menu switches:** Bugs, Chat, Knowledge Base, AI tools; Calendar added.
+
+Deploy: `php artisan db:seed --class=RoleSeeder --force`, `npm run build`. AI tools and the Knowledge Base
+need the Pro add-on; agents also need an OpenAI key in Settings → ChatGPT (the AI Assistant's provider
+setting is separate).
+
+Tests: `tests/Feature/AiToolsAccessTest.php` (7).
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)

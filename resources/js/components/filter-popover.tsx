@@ -22,12 +22,13 @@ export function FilterPopover({
     return (
         <PopoverPrimitive.Root>
             <PopoverPrimitive.Trigger asChild>
-                <Button variant={activeCount > 0 ? 'secondary' : 'outline'} size="sm" className="h-9">
-                    <Filter className="h-3.5 w-3.5" />
+                <Button variant={activeCount > 0 ? 'secondary' : 'outline'}>
+                    <Filter className="h-4 w-4" />
                     {t('Filters')}
                     {activeCount > 0 && (
                         <span className="ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
                             {activeCount}
+                            <span className="sr-only"> {t('applied')}</span>
                         </span>
                     )}
                 </Button>
@@ -36,7 +37,7 @@ export function FilterPopover({
                 <PopoverPrimitive.Content
                     align="start"
                     sideOffset={6}
-                    className="z-50 w-64 space-y-4 rounded-lg border bg-popover p-4 text-popover-foreground shadow-md outline-none"
+                    className="z-50 w-64 space-y-4 rounded-lg border border-ds-border-subtle bg-popover p-4 text-popover-foreground shadow-ds-md outline-none"
                 >
                     {children}
                     {onReset && (

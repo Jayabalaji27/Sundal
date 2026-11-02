@@ -53,43 +53,40 @@ const allowed = (tab: TabDef, permissions: string[], addOnsUnlocked = true) =>
     (Array.isArray(tab.permission) ? tab.permission.some(p => hasPermission(permissions, p)) : hasPermission(permissions, tab.permission))
     && (!tab.needsAddOns || addOnsUnlocked);
 
+/** How many tabs the project bar shows; the rest go under "More". */
+const BAR_TABS = 5;
+
 /**
- * The order of Zoho Sprints' project tabs (Backlog, Epics, Release, Board,
- * Reports, Timesheet, Meetings, Expenses), using Sundal's equivalents, after
- * the Summary: Backlog, Sprints (Zoho plans sprints inside its Backlog),
- * Epics, Milestones (Zoho's Release), Board, Timesheet, Meetings, Expenses.
- * The rest sit under "More". A tab only shows when the role holds the
- * permission that guards its data. Clients get the Summary and Milestones
- * only: the activity log is internal.
+ * Project tabs in priority order. The bar shows the first BAR_TABS a person
+ * may open, so everyone gets the day-to-day views (Summary, Board, Backlog,
+ * Sprints, Timesheet) and planning and admin views sit under "More". A tab
+ * only shows when the role holds the permission that guards its data, so a
+ * role that can't see one of the five gets the next tab in the list instead.
+ * Clients get the Summary and Milestones only: the activity log is internal.
  */
-function projectTabs(t: (key: string) => string): { primary: TabDef[]; more: TabDef[] } {
-    return {
-        primary: [
-            { key: 'overview', label: t('Summary'), permission: 'project_view' },
-            { key: 'backlog', label: t('Backlog'), permission: 'sprint_view_any' },
-            { key: 'sprints', label: t('Sprints'), permission: 'sprint_view_any' },
-            { key: 'epics', label: t('Epics'), permission: 'sprint_view_any' },
-            { key: 'milestones', label: t('Milestones'), permission: 'project_view' },
-            // No Bugs tab: bugs are tasks of type bug, on the Board, Backlog and Sprints.
-            { key: 'board', label: t('Board'), permission: 'task_view_any' },
-            { key: 'timesheet', label: t('Timesheet'), permission: 'timesheet_view_any' },
-            { key: 'meetings', label: t('Meetings'), permission: ['zoom_meeting_view_any', 'google_meeting_view_any'], needsAddOns: true },
-            { key: 'expense', label: t('Expenses'), permission: 'expense_view_any' },
-        ],
-        more: [
-            { key: 'gantt', label: t('Timeline'), permission: 'task_view_any' },
-            { key: 'budget', label: t('Budget'), permission: 'project_manage_budget' },
-            { key: 'team', label: t('Team'), permission: 'project_assign_members' },
-            { key: 'attachments', label: t('Files'), permission: 'project_manage_attachments' },
-            { key: 'activity', label: t('Activity'), permission: 'task_view_any' },
-        ],
-    };
+function projectTabs(t: (key: string) => string): TabDef[] {
+    return [
+        { key: 'overview', label: t('Summary'), permission: 'project_view' },
+        // No Bugs tab: bugs are tasks of type bug, on the Board, Backlog and Sprints.
+        { key: 'board', label: t('Board'), permission: 'task_view_any' },
+        { key: 'backlog', label: t('Backlog'), permission: 'sprint_view_any' },
+        { key: 'sprints', label: t('Sprints'), permission: 'sprint_view_any' },
+        { key: 'timesheet', label: t('Timesheet'), permission: 'timesheet_view_any' },
+        { key: 'epics', label: t('Epics'), permission: 'sprint_view_any' },
+        { key: 'milestones', label: t('Milestones'), permission: 'project_view' },
+        { key: 'meetings', label: t('Meetings'), permission: ['zoom_meeting_view_any', 'google_meeting_view_any'], needsAddOns: true },
+        { key: 'expense', label: t('Expenses'), permission: 'expense_view_any' },
+        { key: 'gantt', label: t('Timeline'), permission: 'task_view_any' },
+        { key: 'budget', label: t('Budget'), permission: 'project_manage_budget' },
+        { key: 'team', label: t('Team'), permission: 'project_assign_members' },
+        { key: 'attachments', label: t('Files'), permission: 'project_manage_attachments' },
+        { key: 'activity', label: t('Activity'), permission: 'task_view_any' },
+    ];
 }
 
 /** Whether the user can open a project tab, so a hidden tab's URL falls back to the Summary. */
 export function canOpenProjectTab(tab: string, permissions: string[]): boolean {
-    const { primary, more } = projectTabs(key => key);
-    const def = [...primary, ...more].find(item => item.key === tab);
+    const def = projectTabs(key => key).find(item => item.key === tab);
     return !!def && allowed(def, permissions);
 }
 
@@ -162,11 +159,13 @@ export function ProjectShell({
         return () => window.removeEventListener(CREATE_TASK_EVENT, open);
     }, [taskForm]);
 
-    const { primary: primaryTabs, more: moreTabs } = projectTabs(t);
-    const visiblePrimary = primaryTabs.filter(tab => allowed(tab, permissions, addOnsUnlocked) || tab.key === active);
-    const visibleMore = moreTabs.filter(tab => allowed(tab, permissions, addOnsUnlocked));
+    const allTabs = projectTabs(t);
+    const visibleTabs = allTabs.filter(tab => allowed(tab, permissions, addOnsUnlocked) || tab.key === active);
+    const visiblePrimary = visibleTabs.slice(0, BAR_TABS);
+    const visibleMore = visibleTabs.slice(BAR_TABS);
+    // On a tab that lives under More, the More button shows that tab's name.
     const activeMore = visibleMore.find(tab => tab.key === active);
-    const activeLabel = [...primaryTabs, ...moreTabs].find(tab => tab.key === active)?.label;
+    const activeLabel = allTabs.find(tab => tab.key === active)?.label;
     const sectionLabel = section || (active !== 'overview' ? activeLabel : undefined);
 
     const isPanel = (tab: ProjectTab) => !PAGE_TABS.includes(tab);

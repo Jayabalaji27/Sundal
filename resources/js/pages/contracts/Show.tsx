@@ -684,21 +684,21 @@ export default function ContractShow() {
                                                             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
                                                                 {auth?.permissions?.includes('contract_attachment_view') && (
                                                                     <Tooltip><TooltipTrigger asChild>
-                                                                        <Button variant="secondary" size="icon" className="h-8 w-8 bg-white/90 hover:bg-white shadow-md dark:bg-gray-900/90 dark:hover:bg-gray-900" onClick={() => window.open(fileUrl, '_blank', 'noopener,noreferrer')}>
+                                                                        <Button aria-label={t('View')} variant="secondary" size="icon" className="h-8 w-8 bg-white/90 hover:bg-white shadow-md dark:bg-gray-900/90 dark:hover:bg-gray-900" onClick={() => window.open(fileUrl, '_blank', 'noopener,noreferrer')}>
                                                                             <Eye className="h-4 w-4 text-gray-700" />
                                                                         </Button>
                                                                     </TooltipTrigger><TooltipContent>View</TooltipContent></Tooltip>
                                                                 )}
                                                                 {auth?.permissions?.includes('contract_attachment_download') && (
                                                                     <Tooltip><TooltipTrigger asChild>
-                                                                        <Button variant="secondary" size="icon" className="h-8 w-8 bg-white/90 hover:bg-white shadow-md dark:bg-gray-900/90 dark:hover:bg-gray-900" onClick={() => { window.location.href = route('contract-attachments.download', attachment.id); }}>
+                                                                        <Button aria-label={t('Download')} variant="secondary" size="icon" className="h-8 w-8 bg-white/90 hover:bg-white shadow-md dark:bg-gray-900/90 dark:hover:bg-gray-900" onClick={() => { window.location.href = route('contract-attachments.download', attachment.id); }}>
                                                                             <Download className="h-4 w-4 text-gray-700" />
                                                                         </Button>
                                                                     </TooltipTrigger><TooltipContent>Download</TooltipContent></Tooltip>
                                                                 )}
                                                                 {auth?.permissions?.includes('contract_attachment_delete') && (
                                                                     <Tooltip><TooltipTrigger asChild>
-                                                                        <Button variant="secondary" size="icon" className="h-8 w-8 bg-red-500/90 hover:bg-red-600 shadow-md" onClick={() => router.delete(route('contract-attachments.destroy', attachment.id), { onSuccess: () => toast.success('Attachment deleted successfully') })}>
+                                                                        <Button aria-label={t('Delete')} variant="secondary" size="icon" className="h-8 w-8 bg-red-500/90 hover:bg-red-600 shadow-md" onClick={() => router.delete(route('contract-attachments.destroy', attachment.id), { onSuccess: () => toast.success('Attachment deleted successfully') })}>
                                                                             <Trash2 className="h-4 w-4 text-white" />
                                                                         </Button>
                                                                     </TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip>
@@ -716,21 +716,21 @@ export default function ContractShow() {
                                                             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
                                                                 {auth?.permissions?.includes('contract_attachment_view') && (
                                                                     <Tooltip><TooltipTrigger asChild>
-                                                                        <Button variant="secondary" size="icon" className="h-8 w-8 bg-white/90 hover:bg-white shadow-md" onClick={() => window.open(fileUrl, '_blank', 'noopener,noreferrer')}>
+                                                                        <Button aria-label={t('View')} variant="secondary" size="icon" className="h-8 w-8 bg-white/90 hover:bg-white shadow-md" onClick={() => window.open(fileUrl, '_blank', 'noopener,noreferrer')}>
                                                                             <Eye className="h-4 w-4 text-gray-700" />
                                                                         </Button>
                                                                     </TooltipTrigger><TooltipContent>View</TooltipContent></Tooltip>
                                                                 )}
                                                                 {auth?.permissions?.includes('contract_attachment_download') && (
                                                                     <Tooltip><TooltipTrigger asChild>
-                                                                        <Button variant="secondary" size="icon" className="h-8 w-8 bg-white/90 hover:bg-white shadow-md" onClick={() => { window.location.href = route('contract-attachments.download', attachment.id); }}>
+                                                                        <Button aria-label={t('Download')} variant="secondary" size="icon" className="h-8 w-8 bg-white/90 hover:bg-white shadow-md" onClick={() => { window.location.href = route('contract-attachments.download', attachment.id); }}>
                                                                             <Download className="h-4 w-4 text-gray-700" />
                                                                         </Button>
                                                                     </TooltipTrigger><TooltipContent>Download</TooltipContent></Tooltip>
                                                                 )}
                                                                 {auth?.permissions?.includes('contract_attachment_delete') && (
                                                                     <Tooltip><TooltipTrigger asChild>
-                                                                        <Button variant="secondary" size="icon" className="h-8 w-8 bg-red-500/90 hover:bg-red-600 shadow-md" onClick={() => router.delete(route('contract-attachments.destroy', attachment.id), { onSuccess: () => toast.success('Attachment deleted successfully') })}>
+                                                                        <Button aria-label={t('Delete')} variant="secondary" size="icon" className="h-8 w-8 bg-red-500/90 hover:bg-red-600 shadow-md" onClick={() => router.delete(route('contract-attachments.destroy', attachment.id), { onSuccess: () => toast.success('Attachment deleted successfully') })}>
                                                                             <Trash2 className="h-4 w-4 text-white" />
                                                                         </Button>
                                                                     </TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip>
@@ -817,7 +817,7 @@ export default function ContractShow() {
                                                             <div className="flex gap-1 shrink-0">
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-700" onClick={() => handleEditComment(comment)}>
+                                                                        <Button aria-label={t('Edit')} variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-700" onClick={() => handleEditComment(comment)}>
                                                                             <Edit className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     </TooltipTrigger>
@@ -825,7 +825,7 @@ export default function ContractShow() {
                                                                 </Tooltip>
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => handleDeleteComment(comment)}>
+                                                                        <Button aria-label={t('Delete')} variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => handleDeleteComment(comment)}>
                                                                             <Trash2 className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     </TooltipTrigger>
@@ -865,7 +865,7 @@ export default function ContractShow() {
                                                 placeholder={t('Write your comment...')}
                                                 className="pr-10"
                                             />
-                                            <Button
+                                            <Button aria-label={t('Send')}
                                                 onClick={handleAddComment}
                                                 disabled={!newComment.trim()}
                                                 size="icon"
@@ -978,7 +978,7 @@ export default function ContractShow() {
                                                                 {auth?.permissions?.includes('contract_note_update') && (
                                                                     <Tooltip>
                                                                         <TooltipTrigger asChild>
-                                                                            <Button variant="ghost" size="icon" className={`h-7 w-7 ${note.is_pinned ? 'text-yellow-500 hover:text-yellow-700' : 'text-gray-400 hover:text-yellow-500'}`} onClick={() => handlePinNote(note.id, note.is_pinned)}>
+                                                                            <Button variant="ghost" size="icon" aria-label={note.is_pinned ? t('Unpin') : t('Pin')} className={`h-7 w-7 ${note.is_pinned ? 'text-yellow-500 hover:text-yellow-700' : 'text-gray-400 hover:text-yellow-500'}`} onClick={() => handlePinNote(note.id, note.is_pinned)}>
                                                                                 {note.is_pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
                                                                             </Button>
                                                                         </TooltipTrigger>
@@ -987,7 +987,7 @@ export default function ContractShow() {
                                                                 )}
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-700" onClick={() => setViewNote(note)}>
+                                                                        <Button aria-label={t('View')} variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-700" onClick={() => setViewNote(note)}>
                                                                             <Eye className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     </TooltipTrigger>
@@ -996,7 +996,7 @@ export default function ContractShow() {
                                                                 {auth?.permissions?.includes('contract_note_update') && (
                                                                     <Tooltip>
                                                                         <TooltipTrigger asChild>
-                                                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-500 hover:text-amber-700" onClick={() => handleEditNote(note)}>
+                                                                            <Button aria-label={t('Edit')} variant="ghost" size="icon" className="h-7 w-7 text-amber-500 hover:text-amber-700" onClick={() => handleEditNote(note)}>
                                                                                 <Edit className="h-3.5 w-3.5" />
                                                                             </Button>
                                                                         </TooltipTrigger>
@@ -1006,7 +1006,7 @@ export default function ContractShow() {
                                                                 {auth?.permissions?.includes('contract_note_delete') && (
                                                                     <Tooltip>
                                                                         <TooltipTrigger asChild>
-                                                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => handleDeleteNote(note)}>
+                                                                            <Button aria-label={t('Delete')} variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-700" onClick={() => handleDeleteNote(note)}>
                                                                                 <Trash2 className="h-3.5 w-3.5" />
                                                                             </Button>
                                                                         </TooltipTrigger>

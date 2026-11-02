@@ -135,67 +135,80 @@ export function NotificationDropdown() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-4 w-4" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative"
+          aria-label={unreadCount > 0 ? t('Notifications ({{count}} unread)', { count: unreadCount }) : t('Notifications')}
+        >
+          <Bell />
           {unreadCount > 0 && (
-            <Badge 
-              className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 text-xs"
+            <Badge
+              className="absolute top-1 right-1 h-[18px] min-w-[18px] rounded-full border-2 border-ds-surface bg-ds-danger px-1 py-0 text-[10px] font-semibold leading-none text-white"
               variant="destructive"
+              aria-hidden="true"
             >
-              {unreadCount}
+              {unreadCount > 99 ? '99+' : unreadCount}
             </Badge>
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
-        <div className="flex items-center justify-between p-4">
-          <h3 className="font-medium">{t('Notifications')}</h3>
+      <DropdownMenuContent align="end" className="w-80 p-0">
+        <div className="flex items-center justify-between gap-2 border-b border-ds-border-subtle px-4 py-3">
+          <h3 className="text-sm font-semibold text-ds-fg">{t('Notifications')}</h3>
           {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={markAllAsRead}>
-              <CheckCheck className="h-3.5 w-3.5 mr-1" />
+            <Button variant="ghost" size="sm" className="-mr-2 text-xs" onClick={markAllAsRead}>
+              <CheckCheck className="h-3.5 w-3.5" />
               {t('Mark all as read')}
             </Button>
           )}
         </div>
-        
+
         <ScrollArea className="h-80">
           {notifications.length > 0 ? (
-            <div className="divide-y">
+            <div className="divide-y divide-ds-border-subtle">
               {notifications.map((notification) => (
-                <div
+                <button
+                  type="button"
                   key={notification.id}
-                  className={`p-3 flex items-start gap-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 ${notification.is_read ? '' : 'bg-blue-50 dark:bg-blue-950/30'}`}
+                  className={`flex w-full cursor-pointer items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-ds-surface-hover focus-visible:bg-ds-surface-hover focus-visible:outline-none ${notification.is_read ? '' : 'bg-ds-surface-selected/60'}`}
                   onClick={() => openNotification(notification)}
                 >
-                  <div className={`rounded-full p-2 ${notificationTypeColors[notification.type ?? ''] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'}`}>
+                  <div className={`shrink-0 rounded-full p-2 ${notificationTypeColors[notification.type ?? ''] ?? 'bg-ds-neutral-bg text-ds-neutral-fg'}`}>
                     {notificationTypeIcons[notification.type ?? ''] ?? <Bell className="h-4 w-4" />}
                   </div>
 
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="text-sm font-medium">{notification.title}</h4>
-                        <p className="text-xs text-muted-foreground">{notification.content}</p>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {formatTimeAgo(notification.created_at)}
-                        </div>
-                      </div>
+                      <h4 className="text-sm font-medium text-ds-fg">{notification.title}</h4>
+                      {!notification.is_read && (
+                        <span className="mt-1.5 size-2 shrink-0 rounded-full bg-brand-600">
+                          <span className="sr-only">{t('Unread')}</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-ds-fg-secondary">{notification.content}</p>
+                    <div className="mt-1 text-xs text-ds-fg-muted">
+                      {formatTimeAgo(notification.created_at)}
                     </div>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           ) : (
-            <div className="p-4 text-center">
-              <Bell className="h-8 w-8 mx-auto text-gray-300 dark:text-gray-600 mb-2" />
-              <p className="text-sm text-muted-foreground">{t('No notifications')}</p>
+            <div className="flex h-full flex-col items-center justify-center px-6 py-12 text-center">
+              <div className="mb-3 flex size-10 items-center justify-center rounded-full bg-ds-neutral-bg">
+                <Bell className="h-5 w-5 text-ds-fg-muted" aria-hidden="true" />
+              </div>
+              <p className="text-sm font-medium text-ds-fg">{t("You're all caught up")}</p>
+              <p className="mt-1 text-xs text-ds-fg-muted">{t('New notifications will appear here.')}</p>
             </div>
           )}
         </ScrollArea>
 
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          className="cursor-pointer p-3 flex items-center justify-center"
+          className="m-1.5 cursor-pointer justify-center font-medium text-ds-fg-accent"
           onClick={() => {
             router.visit(route('notifications.index'));
             setOpen(false);

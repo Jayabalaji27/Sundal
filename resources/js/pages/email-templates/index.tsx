@@ -201,7 +201,7 @@ export default function EmailTemplatesIndex({ templates, filters: pageFilters = 
                   <td className="px-4 py-3 text-right">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button 
+                        <Button aria-label={t("View")} 
                           variant="ghost" 
                           size="icon" 
                           onClick={() => handleAction('view', template)}

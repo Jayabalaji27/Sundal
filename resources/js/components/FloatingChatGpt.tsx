@@ -51,8 +51,8 @@ export function FloatingChatGpt() {
     canUseChatGPT = false;
   }
 
-  // AI features are switched off for this installation (config/features.php: ai)
-  if (!features?.ai) {
+  // The floating writer is switched off for this installation (config/features.php: ai_writer)
+  if (!features?.ai_writer) {
     canUseChatGPT = false;
   }
 

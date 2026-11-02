@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Upload, File, X, Download, Eye } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface ReceiptUploadProps {
     expenseId: number;
@@ -20,6 +21,7 @@ interface ReceiptUploadProps {
 }
 
 export default function ReceiptUpload({ expenseId, existingAttachments = [], onUploadComplete }: ReceiptUploadProps) {
+    const { t } = useTranslation();
     const [attachments, setAttachments] = useState(existingAttachments);
     const [uploading, setUploading] = useState(false);
     const [dragOver, setDragOver] = useState(false);
@@ -174,7 +176,7 @@ export default function ReceiptUpload({ expenseId, existingAttachments = [], onU
                                     </div>
                                 </div>
                                 <div className="flex gap-1">
-                                    <Button
+                                    <Button aria-label={t('Download')}
                                         variant="ghost"
                                         size="icon"
                                         onClick={() => downloadAttachment(attachment.id)}
@@ -182,7 +184,7 @@ export default function ReceiptUpload({ expenseId, existingAttachments = [], onU
                                     >
                                         <Download className="h-4 w-4" />
                                     </Button>
-                                    <Button
+                                    <Button aria-label={t('Delete')}
                                         variant="ghost"
                                         size="icon"
                                         onClick={() => deleteAttachment(attachment.id)}

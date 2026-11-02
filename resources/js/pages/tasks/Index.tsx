@@ -4,8 +4,11 @@ import TaskModal from './TaskModal';
 import TaskFormModal from '@/components/tasks/TaskFormModal';
 import TaskPriority from '@/components/tasks/TaskPriority';
 import TaskStageChanger from '@/components/tasks/TaskStageChanger';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button, IconButton } from '@/components/ui/button';
+import { SearchInput } from '@/components/ui/search-input';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { EmptyState } from '@/components/EmptyState';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -287,13 +290,14 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
 
     const getPriorityColor = (priority: string) => {
         const colors = {
-            low: 'bg-green-100 text-green-800',
-            medium: 'bg-yellow-100 text-yellow-800',
-            high: 'bg-orange-100 text-orange-800',
-            critical: 'bg-red-100 text-red-800'
+            low: 'bg-ds-neutral-bg text-ds-neutral-fg',
+            medium: 'bg-ds-info-bg text-ds-info-fg',
+            high: 'bg-orange-50 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300',
+            critical: 'bg-ds-danger-bg text-ds-danger-fg'
         };
-        return colors[priority as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+        return colors[priority as keyof typeof colors] || 'bg-ds-neutral-bg text-ds-neutral-fg';
     };
+    const priorityLabel = (priority: string) => t((priority || '').charAt(0).toUpperCase() + (priority || '').slice(1));
 
     // Sorting runs on the server, so it covers every page, not just this one.
     const sortHeader = (field: string, label: string) => {
@@ -301,16 +305,16 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
         const direction = filters.sort_direction === 'asc' ? 'asc' : 'desc';
         const Icon = !active ? ChevronsUpDown : direction === 'asc' ? ArrowUp : ArrowDown;
         return (
-            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+            <TableHead scope="col" aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
                 <button
                     type="button"
-                    className={cn('inline-flex items-center gap-1 whitespace-nowrap uppercase tracking-wider hover:text-foreground', active && 'text-foreground')}
+                    className={cn('-mx-1 inline-flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-sm px-1 hover:text-ds-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus', active && 'text-ds-fg')}
                     onClick={() => reload({ sort_field: field, sort_direction: active && direction === 'asc' ? 'desc' : 'asc' })}
                 >
                     {label}
-                    <Icon className={cn('h-3 w-3', !active && 'opacity-40')} />
+                    <Icon className={cn('h-3 w-3', !active && 'opacity-40')} aria-hidden="true" />
                 </button>
-            </th>
+            </TableHead>
         );
     };
 
@@ -349,10 +353,10 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
     const importExportMenu = (canExport || canImport) && (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" disabled={isExporting}>
-                    <FileDown className="h-4 w-4 mr-2" />
+                <Button variant="outline" disabled={isExporting}>
+                    <FileDown className="h-4 w-4" />
                     {isExporting ? t('Exporting...') : t('Import / Export')}
-                    <ChevronDown className="h-4 w-4 ml-1" />
+                    <ChevronDown className="h-4 w-4 text-ds-fg-muted" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-52">
@@ -382,7 +386,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
     if (userWorkspaceRole !== 'client') {
         pageActions.push({
             label: showingBugs ? t('Report Bug') : t('Create Task'),
-            icon: <Plus className="h-4 w-4 mr-2" />,
+            icon: <Plus className="h-4 w-4" />,
             variant: 'default',
             onClick: () => {
                 setEditingTask(null);
@@ -415,12 +419,12 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
             <Head title={t('Tasks')} />
 
             {/* Filters Row */}
-            <div className="bg-white rounded-lg shadow mb-4">
+            <div className="mb-4 rounded-xl border border-ds-border bg-ds-surface shadow-ds-xs">
                 <div className="p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                         <div className="flex flex-wrap items-center gap-2">
                             {/* Tasks and bugs are one list: switch between them here. */}
-                            <div role="radiogroup" aria-label={t('Type')} className="inline-flex rounded-md border bg-muted/40 p-0.5">
+                            <div role="radiogroup" aria-label={t('Type')} className="inline-flex rounded-lg bg-ds-neutral-bg p-1">
                                 {typeOptions.map(option => (
                                     <button
                                         key={option.value}
@@ -429,8 +433,8 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                                         aria-checked={selectedType === option.value}
                                         onClick={() => handleFilter('type', option.value)}
                                         className={cn(
-                                            'inline-flex h-8 items-center gap-1.5 rounded px-3 text-sm transition-colors',
-                                            selectedType === option.value ? 'bg-background font-medium text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+                                            'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus',
+                                            selectedType === option.value ? 'bg-ds-surface font-medium text-ds-fg shadow-ds-xs' : 'text-ds-fg-muted hover:text-ds-fg',
                                         )}
                                     >
                                         {option.value !== 'all' && <TypeIcon type={option.value} className="h-3.5 w-3.5" />}
@@ -439,32 +443,31 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                                 ))}
                             </div>
 
-                            <form onSubmit={handleSearch} className="flex gap-2">
-                                <div className="relative w-full sm:w-64">
-                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                        placeholder={showingBugs ? t('Search bugs...') : t('Search tasks...')}
-                                        value={searchTerm}
-                                        onChange={(e) => {
-                                            setSearchTerm(e.target.value);
-                                            clearTimeout(window.searchTimeout);
-                                            window.searchTimeout = setTimeout(() => reload({ search: e.target.value }), 500);
-                                        }}
-                                        className="w-full pl-9"
-                                    />
-                                </div>
+                            <form onSubmit={handleSearch} className="w-full sm:w-64" role="search">
+                                <SearchInput
+                                    placeholder={showingBugs ? t('Search bugs...') : t('Search tasks...')}
+                                    value={searchTerm}
+                                    onChange={(value) => {
+                                        setSearchTerm(value);
+                                        clearTimeout(window.searchTimeout);
+                                        window.searchTimeout = setTimeout(() => reload({ search: value }), 500);
+                                    }}
+                                />
                             </form>
 
+                            {/* Filters never outrank the page's primary action. */}
                             <Button
-                                variant={hasActiveFilters() ? "default" : "outline"}
-                                size="sm"
+                                variant={hasActiveFilters() ? 'secondary' : 'outline'}
                                 onClick={() => setShowFilters(!showFilters)}
+                                aria-expanded={showFilters}
+                                aria-controls="task-filters"
                             >
-                                <Filter className="h-4 w-4 mr-1.5" />
+                                <Filter className="h-4 w-4" />
                                 {showFilters ? t('Hide Filters') : t('Filters')}
                                 {hasActiveFilters() && (
-                                    <span className="ml-1 bg-primary-foreground text-primary rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
                                         {activeFilterCount()}
+                                        <span className="sr-only"> {t('applied')}</span>
                                     </span>
                                 )}
                             </Button>
@@ -473,7 +476,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                         <div className="flex flex-wrap items-center gap-2">
                             {view === 'sheet' && (
                                 <>
-                                    <Label className="text-xs text-muted-foreground">{t('Per Page')}:</Label>
+                                    <Label className="text-xs font-normal text-ds-fg-muted">{t('Per Page')}:</Label>
                                     <Select
                                         value={tasks?.per_page?.toString() || "20"}
                                         onValueChange={(value) => reload({ per_page: parseInt(value) })}
@@ -494,7 +497,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                     </div>
 
                     {showFilters && (
-                        <div className="p-4 bg-gray-50 border rounded-md">
+                        <div id="task-filters" className="rounded-lg border border-ds-border-subtle bg-ds-surface-subtle p-4">
                             <div className="flex flex-wrap gap-4 items-end">
                                 <div className="space-y-2">
                                     <Label>{t('Project')}</Label>
@@ -517,7 +520,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                                     <Label>{t('Status')}</Label>
                                     <Select value={selectedStage} onValueChange={(value) => handleFilter('stage_id', value)}>
                                         <SelectTrigger className="w-40">
-                                            <SelectValue placeholder="All Status" />
+                                            <SelectValue placeholder={t('All Status')} />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">{t('All')}</SelectItem>
@@ -534,7 +537,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                                     <Label>{t('Priority')}</Label>
                                     <Select value={selectedPriority} onValueChange={(value) => handleFilter('priority', value)}>
                                         <SelectTrigger className="w-40">
-                                            <SelectValue placeholder="All Priority" />
+                                            <SelectValue placeholder={t('All Priority')} />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">{t('All Priority')}</SelectItem>
@@ -567,7 +570,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                                     <Label>{t('Assignee')}</Label>
                                     <Select value={selectedAssignee} onValueChange={(value) => handleFilter('assigned_to', value)}>
                                         <SelectTrigger className="w-40">
-                                            <SelectValue placeholder="All Assignees" />
+                                            <SelectValue placeholder={t('All Assignees')} />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">{t('All Assignees')}</SelectItem>
@@ -581,9 +584,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                                 </div>
 
                                 <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-9"
+                                    variant="ghost"
                                     onClick={handleResetFilters}
                                     disabled={!hasActiveFilters()}
                                 >
@@ -599,7 +600,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
             {view !== 'sheet' && cards.length > 0 && (
                 <div className="space-y-2">
                     {board && board.total > board.cards.length && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-ds-fg-muted">
                             {t('Showing the :shown most recent of :total items. Use the filters to narrow them down.').replace(':shown', String(board.cards.length)).replace(':total', String(board.total))}
                         </p>
                     )}
@@ -617,42 +618,42 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
 
             {/* Sheet view: this table, page by page. */}
             {view === 'sheet' && (tasks?.data?.length ?? 0) > 0 && (
-            <div className="bg-white rounded-lg shadow">
+            <div className="overflow-hidden rounded-xl border border-ds-border bg-ds-surface shadow-ds-xs">
                 {(
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
+                        <Table className="min-w-[760px]">
+                            <TableHeader>
+                                <TableRow>
                                     {sortHeader('title', t('Title'))}
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('Stage')}</th>
+                                    <TableHead scope="col">{t('Stage')}</TableHead>
                                     {sortHeader('priority', t('Priority'))}
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('Assignee')}</th>
+                                    <TableHead scope="col">{t('Assignee')}</TableHead>
                                     {sortHeader('end_date', t('Due Date'))}
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{t('Actions')}</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                                    <TableHead scope="col" className="text-right">{t('Actions')}</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
                                 {tasks?.data?.map((task: Task) => (
-                                    <tr key={`table-${task.id}`} className="hover:bg-gray-50">
-                                        <td className="px-4 py-3">
+                                    <TableRow key={`table-${task.id}`}>
+                                        <TableCell>
                                             <div className="flex items-start gap-2.5">
                                                 <TypeIcon type={task.type} className="mt-0.5" />
                                                 <div className="min-w-0">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <span
-                                                            className="text-sm font-medium text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+                                                        <button
+                                                            type="button"
+                                                            className="cursor-pointer rounded-sm text-left text-sm font-medium text-ds-fg transition-colors hover:text-ds-fg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus"
                                                             onClick={() => handleAction('view', task.id)}
                                                         >
                                                             {task.title}
-                                                        </span>
+                                                        </button>
                                                         {task.type === 'bug' && <SeverityBadge severity={task.severity} />}
                                                     </div>
                                                     {/* The project sits under the title (one column instead of two). */}
-                                                    {!project_name && <div className="text-sm text-gray-500">{task.project?.title}</div>}
+                                                    {!project_name && <div className="text-sm text-ds-fg-muted">{task.project?.title}</div>}
                                                 </div>
                                             </div>
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap">
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap">
                                             {/* Changed in place, the same move as dragging a card on the board. */}
                                             {canMove && task.task_stage_id ? (
                                                 <Select value={String(task.task_stage_id)} onValueChange={(value) => changeStage(task.id, Number(value))}>
@@ -678,89 +679,88 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                                                     {task.task_stage?.name}
                                                 </Badge>
                                             )}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <Badge className={getPriorityColor(task.priority)} variant="outline">
-                                                {task.priority}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap">
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap">
+                                            <span className={cn('inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium', getPriorityColor(task.priority))}>
+                                                {priorityLabel(task.priority)}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap">
                                             {task.assigned_to ? (
-                                                <div className="flex items-center">
-                                                    <Avatar className="h-6 w-6 mr-2">
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="h-7 w-7">
                                                         <AvatarImage src={task.assigned_to.avatar} />
                                                         <AvatarFallback className="text-xs">
                                                             {task.assigned_to.name?.charAt(0)}
                                                         </AvatarFallback>
                                                     </Avatar>
-                                                    <span className="text-sm truncate">{task.assigned_to.name}</span>
+                                                    <span className="truncate text-sm text-ds-fg">{task.assigned_to.name}</span>
                                                 </div>
                                             ) : (
-                                                <span className="text-sm text-gray-400">{t('Unassigned')}</span>
+                                                <span className="text-sm text-ds-fg-placeholder">{t('Unassigned')}</span>
                                             )}
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap text-sm">
                                             <div className="flex items-center gap-2">
                                                 {task.end_date && isTaskOverdue(task) && (
-                                                    <Badge variant="destructive" className="text-xs">
-                                                        <AlertTriangle className="h-3 w-3 mr-1" />
-                                                        Overdue
-                                                    </Badge>
+                                                    <StatusBadge tone="danger" icon={<AlertTriangle aria-hidden="true" />}>
+                                                        {t('Overdue')}
+                                                    </StatusBadge>
                                                 )}
-                                                <span>{task.end_date ? new Date(task.end_date).toLocaleDateString() : 'No due date'}</span>
+                                                {task.end_date
+                                                    ? <span className="text-ds-fg-secondary">{new Date(task.end_date).toLocaleDateString()}</span>
+                                                    : <span className="text-ds-fg-placeholder">{t('No due date')}</span>}
                                             </div>
-                                        </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap py-1.5 text-right">
                                             {/* View is the everyday action; changes sit in a menu, and Delete asks first. */}
                                             <div className="flex justify-end gap-1">
                                                 <Button variant="ghost" size="sm" onClick={() => handleAction('view', task.id)}>{t('View')}</Button>
                                                 {userWorkspaceRole !== 'client' && (
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('More actions')}>
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
+                                                            <IconButton aria-label={t('More actions for {{name}}', { name: task.title })}>
+                                                                <MoreHorizontal />
+                                                            </IconButton>
                                                         </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuItem onClick={() => handleAction('edit', task.id)}>{t('Edit')}</DropdownMenuItem>
-                                                            <DropdownMenuItem onClick={() => handleAction('duplicate', task.id)}>{t('Duplicate')}</DropdownMenuItem>
-                                                            <DropdownMenuItem className="text-red-600" onClick={() => handleAction('delete', task.id)}>{t('Delete')}</DropdownMenuItem>
+                                                        <DropdownMenuContent align="end" className="min-w-40">
+                                                            <DropdownMenuItem onClick={() => handleAction('edit', task.id)}><Edit />{t('Edit')}</DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => handleAction('duplicate', task.id)}><Copy />{t('Duplicate')}</DropdownMenuItem>
+                                                            <DropdownMenuItem variant="destructive" onClick={() => handleAction('delete', task.id)}><Trash2 />{t('Delete')}</DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 )}
                                             </div>
-                                        </td>
-                                    </tr>
+                                        </TableCell>
+                                    </TableRow>
                                 ))}
-                            </tbody>
-                        </table>
-                    </div>
+                            </TableBody>
+                        </Table>
                 )}
             </div>
             )}
 
             {/* Empty State */}
             {(view === 'sheet' ? (tasks?.data?.length ?? 0) : cards.length) === 0 && (
-                <div className="bg-white rounded-lg shadow p-8 text-center">
-                    <CheckSquare className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                    <h3 className="text-lg font-semibold mb-2">{showingBugs ? t('No Bugs Found') : t('No Tasks Found')}</h3>
-                    <p className="text-gray-500 mb-4">
-                        {hasActiveFilters()
+                <div className="rounded-xl border border-ds-border bg-ds-surface shadow-ds-xs">
+                    <EmptyState
+                        icon={hasActiveFilters() ? Search : CheckSquare}
+                        title={showingBugs ? t('No Bugs Found') : t('No Tasks Found')}
+                        description={hasActiveFilters()
                             ? (showingBugs ? t('No bugs match your current filters.') : t('No tasks match your current filters.'))
                             : (showingBugs ? t('No bugs have been reported yet.') : t('No tasks have been created yet.'))}
-                    </p>
-                    {hasActiveFilters() && (
-                        <Button variant="outline" onClick={handleResetFilters}>
-                            {t('Clear Filters')}
-                        </Button>
-                    )}
+                        secondaryAction={hasActiveFilters() ? { label: t('Clear Filters'), onClick: handleResetFilters } : undefined}
+                        action={!hasActiveFilters() && userWorkspaceRole !== 'client'
+                            ? { label: showingBugs ? t('Report Bug') : t('Create Task'), icon: <Plus className="h-4 w-4" />, onClick: () => { setEditingTask(null); setIsFormModalOpen(true); } }
+                            : undefined}
+                    />
                 </div>
             )}
 
             {/* Pagination */}
             {view === 'sheet' && tasks?.links && (
-                <div className="mt-6 bg-white p-4 rounded-lg shadow flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm text-muted-foreground">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ds-border bg-ds-surface px-4 py-3 shadow-ds-xs">
+                    <div className="text-sm text-ds-fg-muted">
                         {t('Showing')} <span className="font-medium">{tasks?.from || 0}</span> {t('to')} <span className="font-medium">{tasks?.to || 0}</span> {t('of')} <span className="font-medium">{tasks?.total || 0}</span> {showingBugs ? t('bugs') : t('items')}
                     </div>
 
@@ -774,11 +774,12 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                                     key={i}
                                     variant={link.active ? 'default' : 'outline'}
                                     size={isTextLink ? "sm" : "icon"}
-                                    className={isTextLink ? "px-3" : "h-8 w-8"}
+                                    className={isTextLink ? "px-3" : "size-8"}
+                                    aria-current={link.active ? 'page' : undefined}
                                     disabled={!link.url}
                                     onClick={() => link.url && router.get(link.url)}
                                 >
-                                    {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
+                                    {isTextLink ? t(label) : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
                                 </Button>
                             );
                         })}
@@ -837,7 +838,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
                     requiredFields={importProject ? ['title'] : ['title', 'project']}
                     extraData={importProject ? { project_id: importProject.id } : undefined}
                     notes={
-                        <ul className="text-xs text-blue-700 list-disc pl-4 space-y-0.5">
+                        <ul className="text-xs text-ds-info-fg list-disc pl-4 space-y-0.5">
                             <li>{t('One task per row, from Excel (.xlsx, .xls) or CSV. Columns are matched by name; you can change any match.')}</li>
                             <li>
                                 {importProject

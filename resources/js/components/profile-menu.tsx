@@ -10,7 +10,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Link, router, usePage } from '@inertiajs/react';
-import { Building2, CreditCard, History, LogOut, Settings, User } from 'lucide-react';
+import { RoleBadge } from '@/components/ui/role-badge';
+import { Building2, ChevronDown, CreditCard, History, LogOut, Settings, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { notifySignedOut } from '@/lib/ai-mode';
 import { hasPermission } from '@/utils/authorization';
@@ -57,26 +58,28 @@ export function ProfileMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-9 w-9 shrink-0 rounded-full p-0" aria-label={t('Account menu')} title={user?.name}>
-          <Avatar className="h-8 w-8 shrink-0">
-            <AvatarImage src={user?.avatar} alt={user?.name} />
-            <AvatarFallback>{initials}</AvatarFallback>
+        <Button variant="ghost" className="h-9 shrink-0 gap-2 rounded-full p-1 md:rounded-md md:pr-2" aria-label={t('Account menu')} title={user?.name}>
+          <Avatar className="h-7 w-7 shrink-0">
+            <AvatarImage src={user?.avatar} alt="" />
+            <AvatarFallback seed={user?.name}>{initials}</AvatarFallback>
           </Avatar>
+          <span className="hidden max-w-32 truncate text-sm font-medium text-ds-fg md:inline">{user?.name}</span>
+          <ChevronDown className="hidden size-4 text-ds-fg-muted md:block" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user?.name}</p>
-            <p className="text-xs leading-none text-muted-foreground">
+            <p className="text-sm font-semibold leading-5 text-ds-fg">{user?.name}</p>
+            <p className="truncate text-xs leading-4 text-ds-fg-muted">
               {user?.email}
             </p>
             {user?.current_workspace?.name && (
-              <p className="flex items-center gap-1.5 pt-1 text-xs leading-none text-muted-foreground">
+              <p className="flex items-center gap-1.5 pt-1.5 text-xs leading-none">
                 {user?.workspace_role && (
-                  <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium capitalize text-primary">{t(user.workspace_role)}</span>
+                  <RoleBadge role={user.workspace_role} className="capitalize">{t(user.workspace_role)}</RoleBadge>
                 )}
-                <span className="truncate text-foreground">{user.current_workspace.name}</span>
+                <span className="truncate text-ds-fg-secondary">{user.current_workspace.name}</span>
               </p>
             )}
           </div>

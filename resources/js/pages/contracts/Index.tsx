@@ -564,7 +564,7 @@ export default function ContractsIndex() {
                             {hasPermission(permissions, 'contract_view') && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button 
+                                        <Button aria-label={t('View')} 
                                             variant="ghost" 
                                             size="icon" 
                                             onClick={() => handleAction('view', contract)}
@@ -579,7 +579,7 @@ export default function ContractsIndex() {
                             {hasPermission(permissions, 'contract_update') && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button 
+                                        <Button aria-label={t('Edit')} 
                                             variant="ghost" 
                                             size="icon" 
                                             onClick={() => handleAction('edit', contract)}
@@ -594,7 +594,7 @@ export default function ContractsIndex() {
                             {hasPermission(permissions, 'contract_delete') && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button 
+                                        <Button aria-label={t('Delete')} 
                                             variant="ghost" 
                                             size="icon"
                                             className="text-red-500 hover:text-red-700 h-8 w-8"

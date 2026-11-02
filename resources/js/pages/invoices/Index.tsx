@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { router, usePage } from '@inertiajs/react';
 import { toast } from '@/components/custom-toast';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { SearchInput } from '@/components/ui/search-input';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { StatStrip } from '@/components/stat-strip';
+import { EmptyState } from '@/components/EmptyState';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Plus, Search, Filter, Eye, Edit, DollarSign, Trash2, FileText, Calendar, AlertTriangle, CreditCard, Send, Link, Download, CheckCircle, Clock, AlertCircle, Zap, TrendingUp, Wallet, Hash } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, Trash2, FileText, Calendar, AlertTriangle, CreditCard, Send, Link, Download, CheckCircle, Clock, AlertCircle, Zap, TrendingUp } from 'lucide-react';
 import { PageTemplate } from '@/components/page-template';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
 import { CrudTable } from '@/components/CrudTable';
@@ -96,6 +98,21 @@ export default function InvoiceIndex() {
         router.get(route('invoices.index'), buildParams({ page: 1 }), { preserveState: false, preserveScroll: false });
     };
 
+    // Search as you type; preserveState keeps the field (and its focus) while the list reloads.
+    const isFirstSearchRender = useRef(true);
+    useEffect(() => {
+        if (isFirstSearchRender.current) {
+            isFirstSearchRender.current = false;
+            return;
+        }
+        if (searchTerm === (filters?.search || '')) return;
+        const timeout = setTimeout(() => {
+            router.get(route('invoices.index'), buildParams({ page: 1 }), { preserveState: true, preserveScroll: true, replace: true });
+        }, 400);
+        return () => clearTimeout(timeout);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchTerm]);
+
     const applyFilters = () => {
         router.get(route('invoices.index'), buildParams({ page: 1 }), { preserveState: false, preserveScroll: false });
     };
@@ -161,14 +178,15 @@ export default function InvoiceIndex() {
             render: (value: string, row: Invoice) => (
                 <div className="flex items-center gap-3">
                     <div>
-                        <div 
-                            className="text-sm font-semibold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+                        <button
+                            type="button"
+                            className="cursor-pointer rounded-sm text-left text-sm font-semibold text-ds-fg transition-colors hover:text-ds-fg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus"
                             onClick={() => handleAction('view', row)}
                         >
                             {value}
-                        </div>
-                        <div className="text-xs text-gray-500 truncate max-w-[160px]">
-                            Created on: {window.appSettings.formatDateTime(new Date(row.created_at), false)}
+                        </button>
+                        <div className="max-w-[180px] truncate text-xs text-ds-fg-muted">
+                            {t('Created on {{date}}', { date: window.appSettings.formatDateTime(new Date(row.created_at), false) })}
                         </div>
                     </div>
                 </div>
@@ -185,11 +203,11 @@ export default function InvoiceIndex() {
                         <AvatarFallback><img src="/images/avatar/avatar.png" className="h-full w-full object-cover rounded-full" /></AvatarFallback>
                     </Avatar>
                     <div>
-                        <div className="text-sm font-medium text-gray-900">{row.client.name}</div>
+                        <div className="text-sm font-medium text-ds-fg">{row.client.name}</div>
                     </div>
                 </div>
             ) : (
-                <span className="text-sm text-gray-400">—</span>
+                <span className="text-sm text-ds-fg-placeholder">—</span>
             )
         }]),
         {
@@ -197,10 +215,10 @@ export default function InvoiceIndex() {
             label: t('Project'),
             render: (_: any, row: Invoice) => row.project ? (
                 
-                    <div className="text-sm font-medium text-gray-900">{row.project?.title || ''}</div>
-                
+                    <div className="text-sm text-ds-fg-secondary">{row.project?.title || ''}</div>
+
             ) : (
-                <span className="text-sm text-gray-400">—</span>
+                <span className="text-sm text-ds-fg-placeholder">—</span>
             )
         },
         {
@@ -210,11 +228,11 @@ export default function InvoiceIndex() {
             sortable: true,
             render: (value: number, row: Invoice) => (
                 <div className="whitespace-nowrap">
-                    <div className="text-sm font-semibold text-gray-900">{formatCurrency(value)}</div>
+                    <div className="text-sm font-semibold tabular-nums text-ds-fg">{formatCurrency(value)}</div>
                     {row.balance_due > 0 && row.status !== 'paid' && row.status !== 'cancelled' ? (
-                        <div className="text-xs font-medium text-red-500">{formatCurrency(row.balance_due)} {t('due')}</div>
+                        <div className="text-xs font-medium tabular-nums text-ds-danger-fg">{formatCurrency(row.balance_due)} {t('due')}</div>
                     ) : row.paid_amount > 0 ? (
-                        <div className="text-xs text-green-600">{t('Paid')}</div>
+                        <div className="text-xs text-ds-success-fg">{t('Paid')}</div>
                     ) : null}
                 </div>
             )
@@ -226,9 +244,9 @@ export default function InvoiceIndex() {
             render: (value: string, row: Invoice) => (
                 <div className="flex items-center gap-2">
                     {/* {row.is_overdue && <AlertTriangle className="h-4 w-4 text-red-500" />} */}
-                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium whitespace-nowrap ${getStatusColor(value)}`}>
-                        {value?.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                    </span>
+                    <StatusBadge tone={STATUS_TONE[value] ?? 'neutral'}>
+                        {t(value?.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '))}
+                    </StatusBadge>
                 </div>
             )
         },
@@ -238,14 +256,14 @@ export default function InvoiceIndex() {
             sortable: true,
             render: (value: string, row: Invoice) => (
                 <div>
-                    <div className={`flex items-center gap-1.5 text-sm whitespace-nowrap ${row.is_overdue ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
-                        <Calendar className="h-3.5 w-3.5 shrink-0" />
+                    <div className={`flex items-center gap-1.5 whitespace-nowrap text-sm ${row.is_overdue ? 'font-medium text-ds-danger-fg' : 'text-ds-fg-secondary'}`}>
+                        <Calendar className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                         <span>{window.appSettings.formatDateTime(new Date(value), false)}</span>
                     </div>
                     {row.is_overdue && (
-                        <div className="flex items-center gap-1 text-xs text-red-600 mt-0.5">
-                            <AlertTriangle className="h-3 w-3" />
-                            {row.days_overdue} days overdue
+                        <div className="mt-0.5 flex items-center gap-1 text-xs text-ds-danger-fg">
+                            <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+                            {t('{{count}} days overdue', { count: row.days_overdue })}
                         </div>
                     )}
                 </div>
@@ -257,7 +275,7 @@ export default function InvoiceIndex() {
             label: '',
             render: (_: any, row: Invoice) => canPay(row) ? (
                 <Button size="sm" onClick={() => handleAction('pay', row)}>
-                    <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+                    <CreditCard />
                     {t('Pay now')}
                 </Button>
             ) : null
@@ -269,27 +287,23 @@ export default function InvoiceIndex() {
             label: t('View'),
             icon: 'Eye',
             action: 'view',
-            className: 'text-blue-500 hover:text-blue-700'
         },
         {
             label: t('Edit'),
             icon: 'Edit',
             action: 'edit',
-            className: 'text-amber-500 hover:text-amber-700',
             condition: (row: Invoice) => ['owner', 'manager'].includes(userWorkspaceRole) && row.status === 'draft'
         },
         {
             label: t('Send'),
             icon: 'Send',
             action: 'send',
-            className: 'text-blue-500 hover:text-blue-700',
             condition: (row: Invoice) => ['owner', 'manager'].includes(userWorkspaceRole) && row.status === 'draft' && emailNotificationsEnabled
         },
         {
             label: t('Copy Payment Link'),
             icon: 'Link',
             action: 'copy-payment-link',
-            className: 'text-purple-500 hover:text-purple-700',
             condition: (row: Invoice) => userWorkspaceRole !== 'client' && row.status !== 'paid'
         },
         // {
@@ -303,22 +317,13 @@ export default function InvoiceIndex() {
             label: t('Delete'),
             icon: 'Trash2',
             action: 'delete',
-            className: 'text-red-500 hover:text-red-700',
             // Same permission as the delete route: managers create invoices, the owner deletes them.
             condition: (row: Invoice) => (auth?.permissions || []).includes('invoice_delete') && row.status === 'draft'
         }
     ];
 
-    const getStatusColor = (status: string) => {
-        const colors = {
-            draft: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-500/30',
-            sent: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20',
-            paid: 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20',
-            partial_paid: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-600/20',
-            overdue: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20',
-            cancelled: 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20'
-        };
-        return colors[status as keyof typeof colors] || 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20';
+    const STATUS_TONE: Record<string, 'neutral' | 'info' | 'success' | 'warning' | 'danger'> = {
+        draft: 'neutral', sent: 'info', paid: 'success', partial_paid: 'warning', overdue: 'danger', cancelled: 'neutral',
     };
 
     const formatCurrency = (amount: string | number) => {
@@ -381,7 +386,7 @@ export default function InvoiceIndex() {
     if (userWorkspaceRole !== 'client') {
         pageActions.push({
             label: t('Export'),
-            icon: <Download className="h-4 w-4 mr-2" />,
+            icon: <Download className="h-4 w-4" />,
             variant: 'outline',
             onClick: async () => {
                 try {
@@ -430,7 +435,7 @@ export default function InvoiceIndex() {
     if (['owner', 'manager','member'].includes(userWorkspaceRole)) {
         pageActions.push({
             label: t('Create Invoice'),
-            icon: <Plus className="h-4 w-4 mr-2" />,
+            icon: <Plus className="h-4 w-4" />,
             variant: 'default',
             onClick: () => router.get(route('invoices.create'))
         });
@@ -450,82 +455,31 @@ export default function InvoiceIndex() {
             noPadding
         >
             {/* Stat Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4 mb-4">
-                {[
-                    {
-                        title: t('Total Invoiced'),
-                        value: formatCurrency(totalAmount || 0),
-                        icon: DollarSign,
-                        iconBg: 'bg-blue-100 dark:bg-blue-900',
-                        iconColor: 'text-blue-600 dark:text-blue-300',
-                    },
-                    {
-                        title: t('Total Paid'),
-                        value: formatCurrency(paidAmount || 0),
-                        icon: CheckCircle,
-                        iconBg: 'bg-green-100 dark:bg-green-900',
-                        iconColor: 'text-green-600 dark:text-green-300',
-                    },
-                    {
-                        title: t('Total Unpaid'),
-                        value: formatCurrency(outstandingAmount || 0),
-                        icon: Wallet,
-                        iconBg: 'bg-orange-100 dark:bg-orange-900',
-                        iconColor: 'text-orange-600 dark:text-orange-300',
-                    },
-                    {
-                        title: t('Unpaid Invoices'),
-                        value: outstandingCount || 0,
-                        icon: Hash,
-                        iconBg: 'bg-purple-100 dark:bg-purple-900',
-                        iconColor: 'text-purple-600 dark:text-purple-300',
-                    },
-                    {
-                        title: t('Overdue'),
-                        value: overdueCount || 0,
-                        icon: AlertTriangle,
-                        iconBg: 'bg-red-100 dark:bg-red-900',
-                        iconColor: 'text-red-600 dark:text-red-300',
-                    },
-                ].map((card, index) => (
-                    <Card key={index} className="shadow-sm hover:shadow-md transition-shadow duration-200 cursor-default">
-                        <CardContent className="p-4">
-                            <div className="flex items-center gap-3">
-                                <div className={`h-11 w-11 rounded-full flex items-center justify-center shrink-0 ${card.iconBg}`}>
-                                    <card.icon className={`h-5 w-5 ${card.iconColor}`} />
-                                </div>
-                                <div>
-                                    <p className="text-xl font-bold leading-tight text-gray-900 dark:text-gray-100">{card.value}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{card.title}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
+            <StatStrip
+                className="mb-4"
+                items={[
+                    { key: 'total', label: t('Total Invoiced'), value: formatCurrency(totalAmount || 0) },
+                    { key: 'paid', label: t('Total Paid'), value: formatCurrency(paidAmount || 0), tone: 'success' },
+                    { key: 'unpaid', label: t('Total Unpaid'), value: formatCurrency(outstandingAmount || 0), tone: 'warning' },
+                    { key: 'unpaid-count', label: t('Unpaid Invoices'), value: outstandingCount || 0, tone: 'info' },
+                    { key: 'overdue', label: t('Overdue'), value: overdueCount || 0, tone: 'danger' },
+                ]}
+            />
 
             {/* Status Tabs */}
-            <div className="bg-white rounded-lg border shadow mb-4">
+            <div className="mb-4 rounded-xl border border-ds-border bg-ds-surface shadow-ds-xs">
 
                 {/* Row 1: Search + Per Page + Filters */}
-                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b">
-                    <form onSubmit={handleSearch} className="flex gap-2">
-                        <div className="relative w-full sm:w-72">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder={t('Search invoices...')}
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-9"
-                            />
-                        </div>
-                        <Button type="submit" size="sm">
-                            <Search className="h-4 w-4 mr-1.5" />
-                            {t('Search')}
-                        </Button>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ds-border-subtle px-4 py-3">
+                    <form onSubmit={handleSearch} className="w-full sm:w-72" role="search">
+                        <SearchInput
+                            placeholder={t('Search invoices...')}
+                            value={searchTerm}
+                            onChange={setSearchTerm}
+                        />
                     </form>
                     <div className="flex items-center gap-2">
-                    <Label className="text-xs text-muted-foreground">{t('Per Page')}:</Label>
+                    <Label className="text-xs font-normal text-ds-fg-muted">{t('Per Page')}:</Label>
                         <Select
                             value={filters?.per_page?.toString() || "10"}
                             onValueChange={(value) => {
@@ -543,16 +497,17 @@ export default function InvoiceIndex() {
                             </SelectContent>
                         </Select>
                         <Button
-                            variant={hasActiveFilters() ? "default" : "outline"}
-                            size="sm"
-                            className="h-8 px-3"
+                            variant={hasActiveFilters() ? 'secondary' : 'outline'}
                             onClick={() => setShowFilters(!showFilters)}
+                            aria-expanded={showFilters}
+                            aria-controls="invoice-filters"
                         >
-                            <Filter className="h-3.5 w-3.5 mr-1.5" />
+                            <Filter className="h-4 w-4" />
                             {showFilters ? t('Hide Filters') : t('Filters')}
                             {hasActiveFilters() && (
-                                <span className="ml-1 bg-primary-foreground text-primary rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-xs text-primary-foreground">
                                     {activeFilterCount()}
+                                    <span className="sr-only"> {t('applied')}</span>
                                 </span>
                             )}
                         </Button>
@@ -560,7 +515,7 @@ export default function InvoiceIndex() {
                 </div>
 
                 {/* Row 2: Status Tabs with icons + counts */}
-                <div className="flex items-center gap-1 px-4 pt-1 pb-0 overflow-x-auto">
+                <div className="flex items-center gap-1 overflow-x-auto px-4 pt-1 pb-0" role="group" aria-label={t('Status')}>
                     {[
                         { value: 'all', label: t('All Invoices'), icon: <FileText className="h-3.5 w-3.5" />, count: statusCounts?.all ?? 0 },
                         // Drafts are never shown to clients (backend excludes them entirely), so the tab is meaningless in their POV.
@@ -572,20 +527,22 @@ export default function InvoiceIndex() {
                     ].map((tab) => (
                         <button
                             key={tab.value}
+                            type="button"
+                            aria-pressed={selectedStatus === tab.value}
                             onClick={() => {
                                 setSelectedStatus(tab.value);
                                 router.get(route('invoices.index'), buildParams({ page: 1 }, { status: tab.value }), { preserveState: false, preserveScroll: false });
                             }}
-                            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                            className={`flex cursor-pointer items-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ds-border-focus ${
                                 selectedStatus === tab.value
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-muted-foreground hover:text-gray-700 hover:border-gray-300'
+                                    ? 'border-brand-600 text-ds-fg-accent'
+                                    : 'border-transparent text-ds-fg-muted hover:border-ds-border-strong hover:text-ds-fg'
                             }`}
                         >
                             {tab.icon}
                             {tab.label}
-                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
-                                selectedStatus === tab.value ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-500'
+                            <span className={`rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums ${
+                                selectedStatus === tab.value ? 'bg-brand-soft text-brand-soft-fg' : 'bg-ds-neutral-bg text-ds-fg-muted'
                             }`}>
                                 {tab.count}
                             </span>
@@ -595,7 +552,7 @@ export default function InvoiceIndex() {
 
                 {/* Filters panel */}
                 {showFilters && (
-                    <div className="mx-4 mb-4 mt-3 p-4 bg-gray-50 border rounded-md">
+                    <div id="invoice-filters" className="mx-4 mb-4 mt-3 rounded-lg border border-ds-border-subtle bg-ds-surface-subtle p-4">
                         <div className="flex flex-wrap gap-4 items-end">
                             <div className="space-y-2">
                                 <Label>{t('Project')}</Label>
@@ -616,7 +573,7 @@ export default function InvoiceIndex() {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <Button variant="outline" size="sm" onClick={() => {
+                            <Button variant="ghost" onClick={() => {
                                 setSelectedProject('all');
                                 setSelectedClient('all');
                                 setSelectedStatus('all');
@@ -632,9 +589,37 @@ export default function InvoiceIndex() {
                     </div>
                 )}
             </div>
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                    <style>{`.invoice-table th:last-child { text-align: center !important; }`}</style>
-                    <div className="invoice-table">
+                <div className="overflow-hidden rounded-xl border border-ds-border bg-ds-surface shadow-ds-xs">
+                    {(invoices?.data?.length ?? 0) === 0 ? (
+                        hasActiveFilters() ? (
+                            <EmptyState
+                                icon={Search}
+                                title={t('No invoices found')}
+                                description={t('Try another search, or clear the filters.')}
+                                secondaryAction={{
+                                    label: t('Reset Filters'),
+                                    onClick: () => {
+                                        setSelectedProject('all'); setSelectedClient('all'); setSelectedStatus('all'); setSearchTerm('');
+                                        const params: Record<string, number> = { page: 1 };
+                                        if (filters?.per_page) params.per_page = filters.per_page;
+                                        router.get(route('invoices.index'), params, { preserveState: false, preserveScroll: false });
+                                    },
+                                }}
+                            />
+                        ) : (
+                            <EmptyState
+                                icon={FileText}
+                                title={t('No invoices yet')}
+                                description={isClient
+                                    ? t('Invoices sent to you will appear here.')
+                                    : t('Create your first invoice and send it directly to your client.')}
+                                action={['owner', 'manager', 'member'].includes(userWorkspaceRole)
+                                    ? { label: t('Create Invoice'), icon: <Plus className="h-4 w-4" />, onClick: () => router.get(route('invoices.create')) }
+                                    : undefined}
+                            />
+                        )
+                    ) : (
+                    <div>
                     <CrudTable
                         columns={columns}
                         actions={actions}
@@ -647,11 +632,12 @@ export default function InvoiceIndex() {
                         permissions={auth?.permissions || []}
                     />
                     </div>
+                    )}
                     {/* Pagination - for list view */}
-                    {invoices?.links && (
-                        <div className="p-4 border-t flex items-center justify-between bg-[#F0F0F1] dark:bg-gray-800">
-                            <div className="text-sm text-muted-foreground">
-                                Showing <span className="font-medium">{invoices?.from || 0}</span> to <span className="font-medium">{invoices?.to || 0}</span> of <span className="font-medium">{invoices?.total || 0}</span> invoices
+                    {invoices?.links && (invoices?.data?.length ?? 0) > 0 && (
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ds-border-subtle bg-ds-surface-subtle px-4 py-3">
+                            <div className="text-sm text-ds-fg-muted">
+                                {t('Showing')} <span className="font-medium text-ds-fg">{invoices?.from || 0}</span> {t('to')} <span className="font-medium text-ds-fg">{invoices?.to || 0}</span> {t('of')} <span className="font-medium text-ds-fg">{invoices?.total || 0}</span> {t('invoices')}
                             </div>
                             
                             <div className="flex gap-1">
@@ -664,7 +650,8 @@ export default function InvoiceIndex() {
                                             key={i}
                                             variant={link.active ? 'default' : 'outline'}
                                             size={isTextLink ? "sm" : "icon"}
-                                            className={isTextLink ? "px-3" : "h-8 w-8"}
+                                            className={isTextLink ? "px-3" : "size-8"}
+                                            aria-current={link.active ? 'page' : undefined}
                                             disabled={!link.url}
                                             onClick={() => {
                                                 if (!link.url) return;
@@ -672,7 +659,7 @@ export default function InvoiceIndex() {
                                                 router.get(route('invoices.index'), buildParams({ page: pageNum ? parseInt(pageNum) : 1 }), { preserveState: false, preserveScroll: false });
                                             }}
                                         >
-                                            {isTextLink ? label : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
+                                            {isTextLink ? t(label) : <span dangerouslySetInnerHTML={{ __html: link.label }} />}
                                         </Button>
                                     );
                                 })}
@@ -690,7 +677,7 @@ export default function InvoiceIndex() {
                 }}
                 onConfirm={handleDeleteConfirm}
                 itemName={invoiceToDelete?.invoice_number || ''}
-                entityName="invoice"
+                entityName={t('invoice')}
             />
             
             {/* Payment Modal */}

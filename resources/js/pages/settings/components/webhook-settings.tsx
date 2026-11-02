@@ -162,7 +162,7 @@ export default function WebhookSettings({ webhooks = [] }: WebhookSettingsProps)
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button
+                            <Button aria-label={t("Edit")}
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-amber-500 hover:text-amber-700"
@@ -179,7 +179,7 @@ export default function WebhookSettings({ webhooks = [] }: WebhookSettingsProps)
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button
+                            <Button aria-label={t("Delete")}
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-red-500 hover:text-red-700"

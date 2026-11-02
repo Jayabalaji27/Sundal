@@ -6,6 +6,7 @@ use App\Models\Project;
 use App\Services\ProjectHealthService;
 use App\Traits\HasPermissionChecks;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 
 class RiskRadarController extends Controller
@@ -20,12 +21,8 @@ class RiskRadarController extends Controller
         $workspace = $user->currentWorkspace;
         if (!$workspace) abort(404);
 
-        $projects = Project::forWorkspace($workspace->id)
-            ->whereIn('status', ['planning', 'active', 'on_hold'])
-            ->get();
-
         $service = new ProjectHealthService();
-        $results = $projects->map(function (Project $p) use ($service) {
+        $results = $this->openProjects()->map(function (Project $p) use ($service) {
             $h = $service->calculate($p);
             return [
                 'id'       => $p->id,
@@ -53,23 +50,31 @@ class RiskRadarController extends Controller
     {
         $this->authorizePermission('project_view_any');
 
-        $user      = auth()->user();
-        $workspace = $user->currentWorkspace;
-        if (!$workspace) return response()->json([]);
-
-        $projects = Project::forWorkspace($workspace->id)
-            ->whereIn('status', ['planning', 'active', 'on_hold'])
-            ->get();
+        if (!auth()->user()->currentWorkspace) return response()->json([]);
 
         $service = new ProjectHealthService();
-        $results = $projects->map(fn(Project $p) => [
-            'id'       => $p->id,
-            'title'    => $p->title,
-            'score'    => $service->calculate($p)['score'],
-            'status'   => $service->calculate($p)['status'],
-            'factors'  => $service->calculate($p)['factors'],
-        ])->sortBy('score')->values();
+        $results = $this->openProjects()->map(function (Project $p) use ($service) {
+            $health = $service->calculate($p);
+            return [
+                'id'      => $p->id,
+                'title'   => $p->title,
+                'score'   => $health['score'],
+                'status'  => $health['status'],
+                'factors' => $health['factors'],
+            ];
+        })->sortBy('score')->values();
 
         return response()->json($results);
+    }
+
+    /** Planning, active and on-hold projects of this workspace that the user may see (a manager: their own). */
+    private function openProjects(): Collection
+    {
+        $user = auth()->user();
+
+        return Project::forWorkspace($user->currentWorkspace->id)
+            ->visibleTo($user)
+            ->whereIn('status', ['planning', 'active', 'on_hold'])
+            ->get();
     }
 }

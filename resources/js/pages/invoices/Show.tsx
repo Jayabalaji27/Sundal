@@ -579,7 +579,7 @@ export default function InvoiceShow() {
                                                                     <TooltipProvider>
                                                                         <Tooltip>
                                                                             <TooltipTrigger asChild>
-                                                                                <Button variant="ghost" size="icon" className="text-blue-600">
+                                                                                <Button aria-label={t('View Receipt')} variant="ghost" size="icon" className="text-blue-600">
                                                                                     <ExternalLink className="h-4 w-4" />
                                                                                 </Button>
 
@@ -598,7 +598,7 @@ export default function InvoiceShow() {
                                                                 <TooltipProvider>
                                                                     <Tooltip>
                                                                         <TooltipTrigger asChild>
-                                                                            <Button
+                                                                            <Button aria-label={t('Approve')}
                                                                                 variant="ghost"
                                                                                 size="icon"
                                                                                 className="text-green-600"
@@ -616,7 +616,7 @@ export default function InvoiceShow() {
                                                                 <TooltipProvider>
                                                                     <Tooltip>
                                                                         <TooltipTrigger asChild>
-                                                                            <Button
+                                                                            <Button aria-label={t('Reject')}
                                                                                 variant="ghost"
                                                                                 size="icon"
                                                                                 className="text-red-600"

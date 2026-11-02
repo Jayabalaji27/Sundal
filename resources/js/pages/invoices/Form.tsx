@@ -486,7 +486,7 @@ export default function InvoiceForm({ invoice, projects, clients, currencies, ta
                                                     {amountError && <p className="text-sm text-red-600 mt-1">{amountError}</p>}
                                                 </td>
                                                 <td className="px-4 py-3 align-middle">
-                                                    <Button
+                                                    <Button aria-label={t('Delete')}
                                                         type="button"
                                                         variant="ghost"
                                                         size="icon"

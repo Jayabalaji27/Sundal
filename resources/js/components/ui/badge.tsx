@@ -4,21 +4,29 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// Small tags and labels: tinted, 6px radius, quieter than actions.
+// For workflow states (Active, Pending, Failed) use StatusBadge.
 const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-auto",
+  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-sm border px-2 py-0.5 text-xs font-medium transition-[color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
+          "border-transparent bg-brand-soft text-brand-soft-fg [a&]:hover:bg-ds-surface-selected",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
+          "border-transparent bg-ds-neutral-bg text-ds-neutral-fg [a&]:hover:bg-ds-border-subtle",
+        neutral:
+          "border-transparent bg-ds-neutral-bg text-ds-neutral-fg",
         destructive:
-          "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40",
+          "border-transparent bg-ds-danger-bg text-ds-danger-fg",
         outline:
-          "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+          "border-ds-border bg-ds-surface text-ds-fg-secondary [a&]:hover:bg-ds-surface-hover",
         success:
-          "border-transparent bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400 [a&]:hover:bg-green-200 dark:[a&]:hover:bg-green-900",
+          "border-transparent bg-ds-success-bg text-ds-success-fg",
+        warning:
+          "border-transparent bg-ds-warning-bg text-ds-warning-fg",
+        info:
+          "border-transparent bg-ds-info-bg text-ds-info-fg",
       },
     },
     defaultVariants: {

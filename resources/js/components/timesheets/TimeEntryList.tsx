@@ -476,7 +476,7 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                                         <div className="flex gap-1">
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <Button 
+                                                    <Button aria-label={t('Edit')} 
                                                         variant="ghost" 
                                                         size="icon" 
                                                         onClick={() => handleEdit(entry)}
@@ -489,7 +489,7 @@ export default function TimeEntryList({ entries, timesheetId, projects, onRefres
                                             </Tooltip>
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
-                                                    <Button 
+                                                    <Button aria-label={t('Delete')} 
                                                         variant="ghost" 
                                                         size="icon" 
                                                         onClick={() => handleDelete(entry)}

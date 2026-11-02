@@ -150,7 +150,7 @@ export default function StripeSettings() {
                     className="font-mono text-sm pr-10"
                     disabled={!stripeSettings.enabled}
                   />
-                  <Button
+                  <Button aria-label={t('Show or hide')}
                     type="button"
                     variant="ghost"
                     size="icon"
@@ -187,7 +187,7 @@ export default function StripeSettings() {
                     className="font-mono text-sm pr-10"
                     disabled={!stripeSettings.enabled}
                   />
-                  <Button
+                  <Button aria-label={t('Show or hide')}
                     type="button"
                     variant="ghost"
                     size="icon"

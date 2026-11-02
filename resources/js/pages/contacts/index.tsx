@@ -504,7 +504,7 @@ export default function Contacts() {
                     <div className="flex justify-end gap-1">
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button 
+                          <Button aria-label={t("View")} 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleView(contact)}
@@ -518,7 +518,7 @@ export default function Contacts() {
                       
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button 
+                          <Button aria-label={t("Update Status")} 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleUpdateStatus(contact)}
@@ -532,7 +532,7 @@ export default function Contacts() {
                       
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button 
+                          <Button aria-label={t("Edit")} 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleEdit(contact)}
@@ -546,7 +546,7 @@ export default function Contacts() {
                       
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button 
+                          <Button aria-label={t("Delete")} 
                             variant="ghost" 
                             size="icon"
                             className="text-red-500 hover:text-red-700"

@@ -204,7 +204,7 @@ export default function FormBuilder() {
                                                             onChange={e => updateOption(field._key, i, e.target.value)}
                                                             placeholder={`${t('Option')} ${i + 1}`}
                                                             className="h-8 text-sm" />
-                                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive"
+                                                        <Button aria-label={t('Delete')} size="icon" variant="ghost" className="h-8 w-8 text-destructive"
                                                             onClick={() => removeOption(field._key, i)}
                                                             disabled={field.options.length <= 1}>
                                                             <Trash2 className="h-3.5 w-3.5" />
@@ -230,7 +230,7 @@ export default function FormBuilder() {
                                 </div>
 
                                 {/* Delete */}
-                                <Button size="icon" variant="ghost"
+                                <Button aria-label={t('Delete')} size="icon" variant="ghost"
                                     className="mt-1 h-7 w-7 text-destructive hover:text-destructive"
                                     onClick={() => removeField(field._key)}>
                                     <Trash2 className="h-4 w-4" />

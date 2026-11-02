@@ -11,24 +11,24 @@ interface SettingsSectionProps {
 export function SettingsSection({ title, description, children, action }: SettingsSectionProps) {
   return (
     <Card className="mb-6">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg font-medium">{title}</CardTitle>
+      <CardHeader className="border-b border-ds-border-subtle pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <CardTitle>{title}</CardTitle>
             {description && (
-              <CardDescription className="mt-1.5">
+              <CardDescription className="mt-1">
                 {description}
               </CardDescription>
             )}
           </div>
           {action && (
-            <div>
+            <div className="shrink-0">
               {action}
             </div>
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-5">
         {children}
       </CardContent>
     </Card>

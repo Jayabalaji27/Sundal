@@ -1036,7 +1036,7 @@ export default function ProjectShow() {
                                                         <div className="flex gap-1">
                                                             <Tooltip>
                                                                 <TooltipTrigger asChild>
-                                                                    <Button 
+                                                                    <Button aria-label={t('Edit')} 
                                                                         variant="ghost" 
                                                                         size="icon"
                                                                         onClick={() => handleAction('edit-milestone', milestone)}
@@ -1048,7 +1048,7 @@ export default function ProjectShow() {
                                                             </Tooltip>
                                                             <Tooltip>
                                                                 <TooltipTrigger asChild>
-                                                                    <Button 
+                                                                    <Button aria-label={t('Delete')} 
                                                                         variant="ghost" 
                                                                         size="icon"
                                                                         onClick={() => {
@@ -1182,7 +1182,7 @@ export default function ProjectShow() {
                                                             {canManageProject && (
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button
+                                                                        <Button aria-label={t('Toggle Pin')}
                                                                             variant="ghost"
                                                                             size="icon"
                                                                             onClick={() => handleAction('toggle-pin', note)}
@@ -1196,7 +1196,7 @@ export default function ProjectShow() {
                                                             {canManageProject && (
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button 
+                                                                        <Button aria-label={t('Edit')} 
                                                                             variant="ghost" 
                                                                             size="icon"
                                                                             onClick={() => handleAction('edit-note', note)}
@@ -1210,7 +1210,7 @@ export default function ProjectShow() {
                                                             {canManageProject && (
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
-                                                                        <Button 
+                                                                        <Button aria-label={t('Delete')} 
                                                                             variant="ghost" 
                                                                             size="icon"
                                                                             onClick={() => {
@@ -2076,7 +2076,7 @@ export default function ProjectShow() {
                                                                 
                                                                 {/* Action Buttons Overlay */}
                                                                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                                                    <Button
+                                                                    <Button aria-label={t('Download')}
                                                                         variant="secondary"
                                                                         size="icon"
                                                                         className="h-8 w-8 bg-white/90 hover:bg-white shadow-md"
@@ -2090,7 +2090,7 @@ export default function ProjectShow() {
                                                                     </Button>
                                                                     
                                                                     {canManageProject && (
-                                                                        <Button
+                                                                        <Button aria-label={t('Delete')}
                                                                             variant="secondary"
                                                                             size="icon"
                                                                             className="h-8 w-8 bg-red-500/90 hover:bg-red-600 shadow-md"
