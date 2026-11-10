@@ -1242,6 +1242,13 @@ Deploy (no terminal): `sundal-update-2026-11-10.zip` holds the whole app with a 
 superadmin, Run update). Leaves `.env`, `storage/` and `resources/lang` (translations edited on the
 server) as they are.
 
+CloudPanel server `168-231-102-225.sslip.io` (Nginx, web root `public/`, nothing private served): its build
+is exactly `a5edd6475` (2026-11-02) and `/update` answers 404, so its migrations are complete. From there to
+`52c9efc5c` there are no migrations, seeders or packages: `sundal-cloudpanel-update-2026-11-10.zip` (58 files
+plus `public/build`), extract in CloudPanel File Manager, then Settings → Cache Settings → Clear Cache.
+Earlier releases there probably ran through the installer's `/update` (full `db:seed`): check the Users list
+for `superadmin@example.com` / `company@example.com` (password `password`).
+
 Tests: `tests/Feature/SystemUpdateTest.php` (4).
 
 ---
