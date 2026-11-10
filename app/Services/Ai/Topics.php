@@ -20,33 +20,51 @@ class Topics
     public const SHARED = ['list_projects', 'list_team_members', 'get_record_history', 'read_attachment', 'get_sheet_rows', 'open_page', 'show_list', 'open_record'];
 
     public const TOOLS = [
-        'tasks' => ['list_tasks', 'create_task', 'assign_task', 'change_task_status', 'list_sprints', 'add_tasks_to_sprint', 'remove_tasks_from_sprint', 'list_epics', 'set_epic', 'import_tasks_from_sheet', 'plan_tasks_from_document'],
-        'bugs' => ['list_bugs', 'create_bug', 'assign_bug', 'change_bug_status', 'list_epics', 'set_epic', 'import_bugs_from_sheet'],
-        'projects' => ['create_project', 'add_project_members', 'get_project_report', 'get_budget_status', 'list_tasks', 'list_bugs', 'list_epics', 'create_epic', 'set_epic', 'list_meetings', 'schedule_meeting', 'plan_tasks_from_document'],
-        'time' => ['list_my_time', 'log_time', 'update_time_entry', 'delete_time_entry', 'submit_timesheet', 'start_timer', 'stop_timer', 'list_tasks'],
+        'tasks' => [
+            'list_tasks', 'create_task', 'update_task', 'assign_task', 'change_task_status', 'add_comment', 'update_checklist',
+            'list_sprints', 'create_sprint', 'start_sprint', 'complete_sprint', 'add_tasks_to_sprint', 'remove_tasks_from_sprint',
+            'list_epics', 'set_epic', 'list_milestones', 'import_tasks_from_sheet', 'plan_tasks_from_document',
+        ],
+        'bugs' => ['list_bugs', 'create_bug', 'update_bug', 'assign_bug', 'change_bug_status', 'add_comment', 'update_checklist', 'list_epics', 'set_epic', 'import_bugs_from_sheet'],
+        'projects' => [
+            'create_project', 'update_project', 'add_project_members', 'remove_project_members', 'get_project_report', 'get_budget_status',
+            'list_tasks', 'list_bugs', 'list_epics', 'create_epic', 'update_epic', 'set_epic', 'list_milestones', 'create_milestone', 'update_milestone',
+            'list_sprints', 'create_sprint', 'start_sprint', 'complete_sprint',
+            'list_meetings', 'schedule_meeting', 'reschedule_meeting', 'cancel_meeting', 'plan_tasks_from_document',
+        ],
+        'time' => ['list_my_time', 'log_time', 'update_time_entry', 'delete_time_entry', 'submit_timesheet', 'start_timer', 'stop_timer', 'list_tasks', 'get_timesheet_report'],
         'approvals' => ['list_timesheet_approvals', 'decide_timesheets', 'list_expense_approvals', 'decide_expenses'],
         'finance' => [
             'list_invoices', 'create_invoice', 'update_invoice', 'delete_invoice', 'send_invoice', 'mark_invoice_paid', 'get_revenue_summary',
             'list_expenses', 'create_expense', 'update_expense', 'delete_expense', 'get_budget_status', 'create_budget', 'update_budget',
-            'list_contracts', 'list_expense_approvals',
+            'list_contracts', 'change_contract_status', 'list_expense_approvals',
         ],
-        'team' => ['invite_user'],
-        'help' => ['search_knowledge_base'],
+        // Calendar, Reports and the AI tools page (Risk Radar, Resource Conflicts, Standup Bot).
+        'reports' => [
+            'get_calendar', 'get_timesheet_report', 'get_project_report', 'get_risk_radar', 'get_resource_conflicts', 'get_standup',
+            'get_revenue_summary', 'get_budget_status', 'list_milestones', 'list_meetings',
+        ],
+        'team' => ['invite_user', 'add_project_members', 'remove_project_members', 'get_resource_conflicts', 'get_standup'],
+        'help' => ['search_knowledge_base', 'create_kb_article', 'update_kb_article'],
     ];
 
     /** Words that show a message is about a topic, for the out-of-topic check. */
     private const KEYWORDS = [
         'tasks' => ['task', 'tasks', 'todo', 'to-do', 'story', 'stories', 'sprint', 'sprints', 'stage', 'kanban', 'backlog', 'epic', 'epics'],
         'bugs' => ['bug', 'bugs', 'defect', 'defects', 'issue', 'issues', 'crash', 'crashes'],
-        'projects' => ['project', 'projects', 'milestone', 'milestones', 'report', 'reports', 'progress', 'epic', 'epics', 'meeting', 'meetings', 'call', 'stand-up', 'standup', 'review'],
+        'projects' => ['project', 'projects', 'milestone', 'milestones', 'report', 'reports', 'progress', 'epic', 'epics', 'meeting', 'meetings', 'call', 'stand-up', 'standup', 'review', 'reschedule'],
         'time' => ['hours', 'hour', 'hrs', 'timer', 'log time', 'logged', 'worked', 'timesheet', 'timesheets', 'time entry', 'time entries', 'my time', 'clock'],
         'approvals' => ['approve', 'approval', 'approvals', 'reject', 'timesheet', 'timesheets', 'expense', 'expenses', 'pending'],
         'finance' => [
             'invoice', 'invoices', 'revenue', 'bill', 'billed', 'billing', 'payment', 'payments', 'paid', 'contract', 'contracts',
             'budget', 'budgets', 'money', 'expense', 'expenses', 'spent', 'cost', 'costs',
         ],
+        'reports' => [
+            'report', 'reports', 'calendar', 'risk', 'risks', 'health', 'overloaded', 'workload',
+            'capacity', 'stand-up', 'standup', 'hours logged', 'utilisation', 'utilization',
+        ],
         'team' => ['invite', 'invitation', 'team', 'member', 'members', 'people', 'colleague', 'colleagues'],
-        'help' => ['how do i', 'how to', 'how can i', 'policy', 'guide', 'help', 'documentation', 'knowledge base'],
+        'help' => ['how do i', 'how to', 'how can i', 'policy', 'guide', 'help', 'documentation', 'knowledge base', 'article', 'articles', 'kb'],
     ];
 
     public static function label(string $topic): string
@@ -58,6 +76,7 @@ class Topics
             'time' => __('Time'),
             'approvals' => __('Approvals'),
             'finance' => __('Finance'),
+            'reports' => __('Reports'),
             'team' => __('Team'),
             'help' => __('Help'),
         };

@@ -3,7 +3,7 @@ import { router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import {
-    Archive, ArchiveRestore, ArrowLeft, ArrowUp, AudioLines, Bot, Bug, Check, CheckCheck, ChevronDown, ChevronsUpDown, Clock, Copy, CornerDownLeft, ExternalLink,
+    Archive, ArchiveRestore, ArrowLeft, ArrowUp, AudioLines, BarChart3, Bot, Bug, Check, CheckCheck, ChevronDown, ChevronsUpDown, Clock, Copy, CornerDownLeft, ExternalLink,
     FolderKanban, HelpCircle, ListTodo, Loader2, LogOut, MessageSquare, Mic, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus,
     Receipt, Settings as SettingsIcon, Sparkles, Star, Trash2, Undo2, UserRound, Users, X,
 } from 'lucide-react';
@@ -264,19 +264,21 @@ const TOPIC_HINTS: Record<string, string> = {
     time: 'e.g. "Log 3 hours on Website Redesign for today"',
     approvals: 'e.g. "Approve the pending timesheets for Website Redesign"',
     finance: 'e.g. "Create an invoice for the Website Redesign tasks"',
+    reports: 'e.g. "Which projects are at risk?" or "What is due this week?"',
     team: 'e.g. "Invite john@acme.com as a client"',
-    help: 'Ask how to do something in Sundal',
+    help: 'Ask how to do something in Sundal, or write an article',
 };
 
 const TOPIC_EXAMPLES: Record<string, string[]> = {
-    tasks: ['Login page for the Mobile App project, high priority', "Move 'API docs' to Done", 'What tasks are overdue?', 'Put the cart tasks into the Checkout epic'],
-    bugs: ['Login button does nothing on mobile', 'Which bugs are still open?', 'Assign the login bug to me', 'Which critical bugs are in the Checkout epic?'],
-    projects: ['Create a project called Mobile App', 'Write the weekly report for my biggest project', 'What meetings do I have this week?', 'Who is over budget this month?'],
+    tasks: ['Login page for the Mobile App project, high priority', "Move 'API docs' to Done", "Change the due date of 'API docs' to Friday", 'Start Sprint 3 in Mobile App'],
+    bugs: ['Login button does nothing on mobile', 'Which bugs are still open?', 'Make the login bug critical', "Comment on the login bug: fixed in build 42"],
+    projects: ['Create a project called Mobile App', 'Add a Beta release milestone to Mobile App on 15 December', 'Move the sprint review to tomorrow 4 pm', 'Put Website Redesign on hold'],
     time: ['Log 3 hours on Website Redesign for today', 'Start the timer on Mobile App', 'How many hours did I log this week?', 'Submit my timesheet'],
     approvals: ['Which timesheets are waiting for my approval?', 'Which expenses are pending?'],
     finance: ['Create an invoice for the Website Redesign tasks', 'Mark INV-104 as paid', 'Add a 120 hosting expense to Mobile App', 'Which invoices are unpaid?'],
-    team: ['Who is on my team?', 'Invite john@acme.com as a client'],
-    help: ['How do I submit a timesheet?'],
+    reports: ['Which projects are at risk?', 'Who is overloaded this fortnight?', "Give me today's stand-up", 'How many hours did the team log this month?'],
+    team: ['Who is on my team?', 'Invite john@acme.com as a client', 'Take Ravi off the Mobile App project'],
+    help: ['How do I submit a timesheet?', 'Write a Knowledge Base article on our leave policy'],
 };
 
 const TOPIC_ICONS: Record<string, typeof Bot> = {
@@ -286,6 +288,7 @@ const TOPIC_ICONS: Record<string, typeof Bot> = {
     time: Clock,
     approvals: CheckCheck,
     finance: Receipt,
+    reports: BarChart3,
     team: Users,
     help: HelpCircle,
 };

@@ -32,27 +32,8 @@ class ProjectMilestoneController extends Controller
             'status' => 'required|in:pending,in_progress,completed,overdue'
         ]);
 
-        $oldStatus = $milestone->status;
-        $milestone->update($validated);
-        
-        // Auto-calculate progress from tasks
-        $milestone->updateProgressFromTasks();
-
-        if ($validated['status'] === 'completed' && $milestone->status !== 'completed') {
-            $milestone->update([
-                'completed_at' => now(),
-                'completed_by' => auth()->id()
-            ]);
-        }
-        
-        // Fire event for Slack notification if status changed
-        if ($oldStatus !== $validated['status']) {
-            if (!config('app.is_demo', true)) {
-                event(new \App\Events\MilestoneStatusUpdated($milestone, $oldStatus, $validated['status']));
-            }
-        }
-
-        $project->logActivity('milestone_updated', "Milestone '{$milestone->title}' was updated");
+        // Shared with the AI assistant.
+        app(\App\Actions\Projects\UpdateMilestone::class)->handle(auth()->user(), $milestone, $validated);
 
         return back();
     }
