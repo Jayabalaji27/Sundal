@@ -33,9 +33,11 @@ class CheckInstallation
             return redirect('/install');
         }
 
-        // If logged in as superadmin and migrations needed, redirect to /update
+        // Superadmin and migrations pending: the System update page runs them.
+        // Not the installer's /update, whose full db:seed would bring back the
+        // default accounts and reset plans and templates on a live site.
         if (auth()->check() && auth()->user()->hasRole('superadmin') && $this->needsMigration()) {
-            return redirect('/update');
+            return redirect()->route('system-update.show');
         }
 
         return $next($request);

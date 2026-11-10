@@ -26,3 +26,5 @@ test.md
 
 # Laravel test fakes (Storage::fake)
 /storage/framework/testing
+/storage/framework/system-update.lock
+/storage/framework/system-update-last.json

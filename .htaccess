@@ -17,6 +17,14 @@
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
+    # The project root is not public. Refuse its own files and folders (code,
+    # config, storage/logs, vendor, scripts, composer files): only index.php,
+    # public/ and the asset folders mapped to public/ below are for the web.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteCond $1 !^(public/|index\.php(/|$))
+    RewriteRule ^(.+)$ - [F,L]
+
     # Redirect Trailing Slashes If Not A Folder...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$

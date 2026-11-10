@@ -1206,10 +1206,50 @@ article." → `search_knowledge_base`) led to a sharper description of that tool
 
 ---
 
+### RP-30 · 2026-11-10 · Deploy without a terminal; live site hardening
+
+The server has no terminal, so `php artisan migrate` and the seeders could not run there.
+
+Found on `codecartz.com/sundal` (checked from outside, status codes only):
+- Its build is from about the first commit (2026-10-02): no AI Assistant, 18 migrations behind.
+- Served to anyone: `storage/logs/laravel.log`, `composer.json`, `artisan`, `deploy.ps1`, and
+  `extract-translations.php` ran (it rewrites `resources/lang/en.json`). `.env` was already refused.
+- The installer's `/update` wizard has no sign-in check: while migrations are pending anyone could run
+  `migrate` plus the full `db:seed`, which brings back `superadmin@example.com` / `company@example.com`
+  and resets plans, landing page and email templates.
+
+Changes:
+- System update page `/system-update` (superadmin; `App\Services\SystemUpdate`): lists the pending
+  migrations and the `public/storage` link, then runs `migrate --force`, `PermissionSeeder`, `RoleSeeder`,
+  `permission:cache-reset`, `optimize:clear` and, if missing, `storage:link` (last, as some hosts turn
+  symlinks off). Stops at the first failure; one run at a time (file lock); result kept in
+  `storage/framework/system-update-last.json`. Plain Blade, not Inertia, and not behind a permission, so it
+  opens while the database is still on the old version. Linked from Settings → Cache Settings.
+- `CheckInstallation` sends the superadmin there when migrations are pending (was the installer's
+  `/update`); `config/installer.php` `updaterEnabled` is now `false`.
+- Root `.htaccess`: an existing file or folder in the project root is refused (403) unless it is
+  `index.php` or under `public/`. All other rules unchanged. Checked on Apache 2.4 with `/sundal/` like the
+  server: pages, `public/` assets, images, uploads through `storage/` and the `storage/{path}` route still
+  work; logs, code, config, `vendor/`, scripts, composer and Markdown files give 403.
+
+Rehearsed on a copy of the old schema (the 125 migrations of 2026-10-02, old permission/role seeders, two
+old bugs with a comment): the superadmin signs in, is sent to the page, sees 18 changes; the run takes 2.7 s,
+the bugs become tasks of type bug in the matching stages with their comment, and the role permissions
+then equal an up-to-date database.
+
+Deploy (no terminal): `sundal-update-2026-11-10.zip` holds the whole app with a `vendor` built with
+`--no-dev`; its `DEPLOY-NOTES.txt` has the cPanel steps (back up the database, upload, extract, sign in as
+superadmin, Run update). Leaves `.env`, `storage/` and `resources/lang` (translations edited on the
+server) as they are.
+
+Tests: `tests/Feature/SystemUpdateTest.php` (4).
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)
-- [ ] Run `php artisan migrate` on production after deploy
+- [ ] After uploading a new version: sign in as superadmin, System update page (`/system-update`) → Run update
 - [ ] AI Assistant: `npm run build` (new page) + `php artisan migrate` + scheduler running for `ai:prune-conversations`
 - [ ] AI Assistant: run `php artisan ai:eval` per role on each provider before release (plan gate: 90%)
 - [ ] AI Assistant: set `AI_ASSISTANT_QUEUE=true` once a queue worker runs in production

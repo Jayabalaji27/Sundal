@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
-import { Trash2, HardDrive } from 'lucide-react';
+import { Trash2, HardDrive, DatabaseZap } from 'lucide-react';
 import { SettingsSection } from '@/components/settings-section';
 import { useTranslation } from 'react-i18next';
 import { router, usePage } from '@inertiajs/react';
@@ -72,6 +72,22 @@ export default function CacheSettings({ cacheSize = '0.00' }: CacheSettingsProps
           </Button>
         </div>
         
+        <div className="flex items-center justify-between gap-3 p-4 border rounded-lg">
+          <div className="flex items-center space-x-3">
+            <DatabaseZap className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <h4 className="font-medium">{t("System update")}</h4>
+              <p className="text-sm text-muted-foreground">
+                {t("After uploading a new version, run its database changes. No terminal is needed.")}
+              </p>
+            </div>
+          </div>
+          {/* A plain page outside the app, so it opens before the update has run. */}
+          <Button asChild variant="outline" size="sm">
+            <a href={route('system-update.show')}>{t("Open")}</a>
+          </Button>
+        </div>
+
         <div className="text-sm text-muted-foreground">
           <p>{t("Clearing cache will remove")}:</p>
           <ul className="list-disc list-inside mt-2 space-y-1">
