@@ -11,12 +11,14 @@ use App\Services\Ai\Tools\AiTool;
  * signed-in user's workspace permissions allow, so changing a role in
  * RoleSeeder changes what its assistant can do.
  *
- * Deliberately absent (stay on the normal screens): roles and permissions,
- * plans and payments, BYOA/API keys, webhooks, removing users, deleting a
- * workspace, creating, starting or completing sprints (done on the project's
- * Sprints page) and creating contracts (needs an uploaded file). Hard deletes are limited to everyday
- * records: draft invoices (with the number typed), unapproved expenses and
- * the user's own unsubmitted time.
+ * Every module in the owner's and manager's menus has its tools here
+ * (2026-11-10). Deliberately absent (stay on the normal screens): roles and
+ * permissions, plans and payments, settings and integrations, BYOA/API keys,
+ * webhooks, changing a member's workspace role or removing users, deleting a
+ * workspace or a project, and creating contracts (needs the contract file).
+ * Hard deletes are limited to everyday records: draft invoices (with the
+ * number typed), unapproved expenses, the user's own unsubmitted time, and
+ * meetings the user scheduled (cancel_meeting).
  */
 class ToolRegistry
 {
@@ -89,6 +91,35 @@ class ToolRegistry
         Tools\OpenPageTool::class,
         Tools\ShowListTool::class,
         Tools\OpenRecordTool::class,
+        // Full module coverage (2026-11-10): editing tasks, bugs, projects and epics
+        Tools\UpdateTaskTool::class,
+        Tools\UpdateBugTool::class,
+        Tools\AddCommentTool::class,
+        Tools\UpdateChecklistTool::class,
+        Tools\UpdateProjectTool::class,
+        Tools\RemoveProjectMembersTool::class,
+        Tools\UpdateEpicTool::class,
+        // Milestones
+        Tools\ListMilestones::class,
+        Tools\CreateMilestoneTool::class,
+        Tools\UpdateMilestoneTool::class,
+        // Sprints: plan, start, complete
+        Tools\CreateSprintTool::class,
+        Tools\StartSprintTool::class,
+        Tools\CompleteSprintTool::class,
+        // Meetings: move and cancel
+        Tools\RescheduleMeetingTool::class,
+        Tools\CancelMeetingTool::class,
+        // Calendar, Reports and the AI tools page (Risk Radar, Resource Conflicts, Standup Bot)
+        Tools\GetCalendar::class,
+        Tools\GetTimesheetReport::class,
+        Tools\GetRiskRadar::class,
+        Tools\GetResourceConflicts::class,
+        Tools\GetStandup::class,
+        // Knowledge Base articles and contract status
+        Tools\CreateKbArticleTool::class,
+        Tools\UpdateKbArticleTool::class,
+        Tools\ChangeContractStatusTool::class,
     ];
 
     /** @var AiTool[]|null */

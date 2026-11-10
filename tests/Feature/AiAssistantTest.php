@@ -383,7 +383,7 @@ describe('chat', function () {
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
 
         expect(toolNames($fake))->toBe(collect(app(\App\Services\Ai\ToolRegistry::class)->all())->keys()->sort()->values()->all())
-            ->and(toolNames($fake))->toHaveCount(58);
+            ->and(toolNames($fake))->toHaveCount(81);
     });
 
     test('a manager gets the manager workflow tools their role allows', function () {
@@ -1186,6 +1186,18 @@ describe('usage, errors, queue, writing helper and evaluation', function () {
         fakeAi([['tool' => 'list_tasks', 'args' => ['overdue' => true]]]);
 
         $this->artisan('ai:eval', ['--user' => $users['manager']->email, '--limit' => 1, '--threshold' => 100])
+            ->expectsOutputToContain('Correct tool picks: 1/1 (100%)')
+            ->assertSuccessful();
+    });
+
+    test('ai:eval --skip starts later in the set', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        // Manager prompt #59: "Change the due date of the API docs task to Friday."
+        fakeAi([['tool' => 'list_tasks', 'args' => ['search' => 'API docs']]]);
+
+        $this->artisan('ai:eval', ['--user' => $users['manager']->email, '--skip' => 59, '--limit' => 1, '--threshold' => 100])
+            ->expectsOutputToContain('API docs task')
             ->expectsOutputToContain('Correct tool picks: 1/1 (100%)')
             ->assertSuccessful();
     });
@@ -3270,5 +3282,283 @@ describe('logging', function () {
         $history = \Spatie\Activitylog\Models\Activity::where('subject_type', (new AiProviderSetting)->getMorphClass())->latest('id')->first();
         expect($history->causer_id)->toBe($users['owner']->id)
             ->and(json_encode($history->properties))->not->toContain('sk-ant-secret');
+    });
+});
+
+// ── Every owner and manager module (2026-11-10) ──────────────────────────────
+
+describe('module coverage', function () {
+    test('a manager gets the tools for every module in their menu, but not the owner-only ones', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $fake = fakeAi([['text' => 'ok']]);
+
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+
+        expect(toolNames($fake))->toContain(
+            'update_task', 'update_bug', 'add_comment', 'update_checklist', 'update_project', 'remove_project_members', 'update_epic',
+            'list_milestones', 'create_milestone', 'update_milestone', 'create_sprint', 'start_sprint', 'complete_sprint',
+            'reschedule_meeting', 'cancel_meeting', 'get_calendar', 'get_timesheet_report', 'get_risk_radar', 'get_resource_conflicts',
+            'get_standup', 'create_kb_article', 'update_kb_article',
+        )->and(toolNames($fake))->not->toContain('change_contract_status');
+    });
+
+    test('update_task changes only the values given, and undo puts them back', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $task = aiTask($project, $users['owner'], 'API docs', ['priority' => 'low']);
+
+        $card = aiCall($this, $users['manager'], 'update_task', ['task' => 'API docs', 'priority' => 'high', 'due_date' => '2030-01-15'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($task->fresh())->priority->toBe('high')->and($task->fresh()->end_date->toDateString())->toBe('2030-01-15')
+            ->and($task->fresh()->title)->toBe('API docs');
+
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect($task->fresh()->priority)->toBe('low')->and($task->fresh()->end_date)->toBeNull();
+    });
+
+    test('update_bug sets the severity and bug fields; nothing to change is refused', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $bug = aiBug($project, $users['owner'], 'Login crash');
+
+        $card = aiCall($this, $users['manager'], 'update_bug', ['bug' => 'Login crash', 'severity' => 'blocker', 'environment' => 'iOS 18'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($bug->fresh())->severity->toBe('blocker')->and($bug->fresh()->environment)->toBe('iOS 18');
+
+        $call = aiCall($this, $users['manager'], 'update_bug', ['bug' => 'Login crash', 'severity' => 'blocker']);
+        expect($call['card'])->toBeNull()->and($call['result'])->toContain('What should change');
+    });
+
+    test('add_comment posts in the user\'s name, and undo removes it', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $bug = aiBug($project, $users['owner'], 'Login crash');
+
+        $card = aiCall($this, $users['manager'], 'add_comment', ['type' => 'bug', 'ref' => 'Login crash', 'comment' => 'Fixed in build 42'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        $comment = \App\Models\TaskComment::where('task_id', $bug->id)->firstOrFail();
+        expect($comment->comment)->toBe('Fixed in build 42')->and($comment->user_id)->toBe($users['manager']->id);
+
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect(\App\Models\TaskComment::where('task_id', $bug->id)->count())->toBe(0);
+    });
+
+    test('update_checklist adds items and ticks them, and the task progress follows', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $task = aiTask($project, $users['owner'], 'Signup page');
+
+        $card = aiCall($this, $users['manager'], 'update_checklist', ['task' => 'Signup page', 'add' => "Form\nValidation"])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($task->checklists()->orderBy('order')->pluck('title')->all())->toBe(['Form', 'Validation']);
+
+        $card = aiCall($this, $users['manager'], 'update_checklist', ['task' => 'Signup page', 'mark_done' => 'Form'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($task->checklists()->where('is_completed', true)->pluck('title')->all())->toBe(['Form'])
+            ->and($task->fresh()->progress)->toBe(50);
+    });
+
+    test('milestones: create, list, complete (stamped), and undo', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+
+        $card = aiCall($this, $users['manager'], 'create_milestone', ['project' => 'Website Redesign', 'title' => 'Beta release', 'due_date' => '2030-02-01'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        $milestone = $project->milestones()->where('title', 'Beta release')->firstOrFail();
+        expect($milestone->due_date->toDateString())->toBe('2030-02-01')->and($milestone->status)->toBe('pending');
+
+        expect(aiData(aiCall($this, $users['manager'], 'list_milestones', ['project' => 'Website Redesign']))['milestones'][0])
+            ->toMatchArray(['title' => 'Beta release', 'status' => 'pending', 'due_date' => '2030-02-01']);
+
+        $card = aiCall($this, $users['manager'], 'update_milestone', ['milestone' => 'Beta release', 'status' => 'completed'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($milestone->fresh())->status->toBe('completed')->and($milestone->fresh()->completed_at)->not->toBeNull()
+            ->and($milestone->fresh()->completed_by)->toBe($users['manager']->id);
+
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect($milestone->fresh())->status->toBe('pending')->and($milestone->fresh()->completed_at)->toBeNull();
+    });
+
+    test('sprints: plan, start (one active per project) and complete, unfinished work back to the backlog', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+
+        $card = aiCall($this, $users['manager'], 'create_sprint', ['project' => 'Website Redesign', 'goal' => 'Checkout'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        $sprint = \App\Models\Sprint::withoutGlobalScopes()->where('project_id', $project->id)->firstOrFail();
+        expect($sprint->name)->toBe('Sprint 1')->and($sprint->status)->toBe('planning');
+
+        $done = aiTask($project, $users['owner'], 'Cart', ['task_stage_id' => TaskStage::where('workspace_id', $workspace->id)->where('is_completed', true)->value('id')]);
+        $open = aiTask($project, $users['owner'], 'Coupon');
+        $sprint->tasks()->attach([$done->id, $open->id]);
+
+        $card = aiCall($this, $users['manager'], 'start_sprint', ['sprint' => 'Sprint 1', 'project' => 'Website Redesign'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($sprint->fresh())->status->toBe('active')->and($sprint->fresh()->end_date->toDateString())->toBe(now()->startOfDay()->addWeeks(2)->toDateString());
+
+        \App\Models\Sprint::withoutGlobalScopes()->create(['project_id' => $project->id, 'workspace_id' => $workspace->id, 'name' => 'Sprint 2', 'status' => 'planning', 'created_by' => $users['owner']->id]);
+        $call = aiCall($this, $users['manager'], 'start_sprint', ['sprint' => 'Sprint 2', 'project' => 'Website Redesign']);
+        expect($call['card'])->toBeNull()->and($call['result'])->toContain('Complete "Sprint 1"');
+
+        $card = aiCall($this, $users['manager'], 'complete_sprint', ['project' => 'Website Redesign'])['card'];
+        expect($card['items'])->toBe(["Coupon (#{$open->id})"]);
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($sprint->fresh())->status->toBe('completed')->and($sprint->fresh()->completed_tasks)->toBe(1)
+            ->and($sprint->tasks()->pluck('tasks.id')->all())->toBe([$done->id]);
+    });
+
+    test('update_project puts a project on hold, and undo makes it active again', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+
+        $card = aiCall($this, $users['owner'], 'update_project', ['project' => 'Website Redesign', 'status' => 'on_hold', 'priority' => 'high'])['card'];
+        aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($project->fresh())->status->toBe('on_hold')->and($project->fresh()->priority)->toBe('high');
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect($project->fresh())->status->toBe('active')->and($project->fresh()->priority)->toBe('medium');
+    });
+
+    test('remove_project_members: a manager cannot take a project manager off; the owner can, and undo puts them back', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        \App\Models\ProjectMember::create(['project_id' => $project->id, 'user_id' => $users['manager']->id, 'role' => 'manager', 'assigned_by' => $users['owner']->id, 'assigned_at' => now()]);
+        \App\Models\ProjectMember::create(['project_id' => $project->id, 'user_id' => $users['member']->id, 'role' => 'member', 'assigned_by' => $users['owner']->id, 'assigned_at' => now()]);
+
+        $call = aiCall($this, $users['manager'], 'remove_project_members', ['project' => 'Website Redesign', 'people' => $users['manager']->email]);
+        expect($call['card'])->toBeNull()->and($call['result'])->toContain('only the company owner');
+
+        $card = aiCall($this, $users['owner'], 'remove_project_members', ['project' => 'Website Redesign', 'people' => $users['member']->email])['card'];
+        aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($project->members()->pluck('user_id')->all())->toBe([$users['manager']->id]);
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect($project->members()->where('user_id', $users['member']->id)->value('role'))->toBe('member');
+    });
+
+    test('update_epic marks an epic done and gives it an owner from the project team', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $epic = \App\Models\Epic::create(['workspace_id' => $workspace->id, 'project_id' => $project->id, 'name' => 'Checkout', 'status' => 'open', 'color' => '#8b5cf6', 'created_by' => $users['owner']->id]);
+
+        $call = aiCall($this, $users['manager'], 'update_epic', ['epic' => 'Checkout', 'owner' => $users['member']->email]);
+        expect($call['card'])->toBeNull()->and($call['result'])->toContain('is not on project');
+
+        $card = aiCall($this, $users['manager'], 'update_epic', ['epic' => 'Checkout', 'status' => 'done', 'owner' => $users['owner']->email])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($epic->fresh())->status->toBe('done')->and($epic->fresh()->owner_id)->toBe($users['owner']->id);
+    });
+
+    test('reschedule_meeting moves a meeting and undo moves it back; cancel_meeting removes it; others cannot touch the owner\'s meeting', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $start = now()->addDays(2)->setTime(10, 0);
+        $meeting = \App\Models\ZoomMeeting::withoutGlobalScopes()->create([
+            'title' => 'Sprint review', 'start_time' => $start, 'end_time' => $start->copy()->addHour(), 'duration' => 60, 'timezone' => config('app.timezone'),
+            'user_id' => $users['owner']->id, 'workspace_id' => $workspace->id, 'project_id' => $project->id, 'zoom_meeting_id' => 'local_1', 'status' => 'scheduled',
+        ]);
+        $meeting->members()->attach($users['manager']->id);
+
+        $call = aiCall($this, $users['manager'], 'reschedule_meeting', ['meeting' => 'Sprint review', 'start' => $start->copy()->addDay()->format('Y-m-d H:i')]);
+        expect($call['card'])->toBeNull()->and($call['result'])->toContain('Only the person who scheduled');
+
+        $new = $start->copy()->addDay()->setTime(15, 30);
+        $card = aiCall($this, $users['owner'], 'reschedule_meeting', ['meeting' => 'Sprint review', 'start' => $new->format('Y-m-d H:i'), 'duration' => 30])['card'];
+        aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($meeting->fresh()->start_time->format('Y-m-d H:i'))->toBe($new->format('Y-m-d H:i'))->and($meeting->fresh()->duration)->toBe(30);
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect($meeting->fresh()->start_time->format('Y-m-d H:i'))->toBe($start->format('Y-m-d H:i'))->and($meeting->fresh()->duration)->toBe(60);
+
+        $card = aiCall($this, $users['owner'], 'cancel_meeting', ['meeting' => 'Sprint review'])['card'];
+        aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect(\App\Models\ZoomMeeting::withoutGlobalScopes()->find($meeting->id))->toBeNull();
+    });
+
+    test('Knowledge Base: write an article (draft) and publish it with more text', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        \App\Models\KbCategory::create(['workspace_id' => $workspace->id, 'name' => 'Policies', 'created_by' => $users['owner']->id]);
+
+        $card = aiCall($this, $users['manager'], 'create_kb_article', ['title' => 'Leave policy', 'content' => 'Ask two weeks ahead.'])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        $article = \App\Models\KbArticle::where('title', 'Leave policy')->firstOrFail();
+        expect($article->is_published)->toBeFalse()->and($article->created_by)->toBe($users['manager']->id);
+
+        $card = aiCall($this, $users['manager'], 'update_kb_article', ['article' => 'Leave policy', 'append' => 'Sick leave needs no notice.', 'publish' => true])['card'];
+        aiConfirm($this, $users['manager'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($article->fresh())->is_published->toBeTrue()
+            ->and($article->fresh()->content)->toBe("Ask two weeks ahead.\n\nSick leave needs no notice.");
+    });
+
+    test('change_contract_status is the owner\'s, stamps when it was sent, and undo clears it', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $type = \App\Models\ContractType::create(['workspace_id' => $workspace->id, 'name' => 'Std', 'is_active' => true, 'created_by' => $users['owner']->id]);
+        $contract = \App\Models\Contract::create([
+            'subject' => 'Website retainer', 'contract_type_id' => $type->id, 'contract_value' => 10, 'start_date' => now(), 'end_date' => now()->addMonth(),
+            'status' => 'pending', 'client_id' => $users['client']->id, 'workspace_id' => $workspace->id, 'created_by' => $users['owner']->id,
+        ]);
+
+        $card = aiCall($this, $users['owner'], 'change_contract_status', ['contract' => 'Website retainer', 'status' => 'sent'])['card'];
+        aiConfirm($this, $users['owner'], $card['id'])->assertJsonPath('card.status', 'done');
+        expect($contract->fresh())->status->toBe('sent')->and($contract->fresh()->sent_at)->not->toBeNull();
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.tool-calls.undo', $card['id']))->assertJsonPath('card.status', 'undone');
+        expect($contract->fresh())->status->toBe('pending')->and($contract->fresh()->sent_at)->toBeNull();
+    });
+
+    test('read tools: calendar, timesheet report, risk radar, resource conflicts and stand-up', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        \App\Models\ProjectMember::create(['project_id' => $project->id, 'user_id' => $users['member']->id, 'role' => 'member', 'assigned_by' => $users['owner']->id, 'assigned_at' => now()]);
+        foreach (['A', 'B', 'C'] as $i => $name) {
+            aiTask($project, $users['owner'], "Task {$name}", ['assigned_to' => $users['member']->id, 'end_date' => now()->addDays($i + 1)->toDateString(), 'priority' => 'high']);
+        }
+        aiTimesheet($workspace, $project, $users['member'], $users['owner']);
+
+        $calendar = aiData(aiCall($this, $users['owner'], 'get_calendar', []));
+        expect($calendar['deadlines'])->toBe(3)
+            ->and($calendar['days'][now()->addDay()->toDateString()][0])->toMatchArray(['kind' => 'task due', 'title' => 'Task A', 'project' => 'Website Redesign']);
+
+        $report = aiData(aiCall($this, $users['owner'], 'get_timesheet_report', ['from' => now()->startOfWeek()->toDateString(), 'to' => now()->endOfWeek()->toDateString()]));
+        expect($report['total']['hours'])->toEqual(8)->and($report['by_person'][0]['person'])->toBe($users['member']->name);
+
+        $radar = aiData(aiCall($this, $users['owner'], 'get_risk_radar', []));
+        expect($radar['projects'][0]['project'])->toBe('Website Redesign')->and($radar['projects'][0])->toHaveKeys(['health_score', 'health', 'reasons']);
+
+        $conflicts = aiData(aiCall($this, $users['owner'], 'get_resource_conflicts', []));
+        expect($conflicts['overloaded'])->toBe(1)->and($conflicts['people'][0])->toMatchArray(['name' => $users['member']->name, 'open_tasks_due_in_14_days' => 3]);
+
+        $standup = aiData(aiCall($this, $users['owner'], 'get_standup', ['person' => $users['member']->email]));
+        expect($standup['people'])->toHaveCount(1)->and($standup['people'][0]['today'])->toHaveCount(3);
+    });
+
+    test('open_page opens the menu pages that were missing, Team with the workspace in its address', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        $pages = [
+            'team' => route('team.index', $workspace->id, false),
+            'calendar' => route('task-calendar.index', [], false),
+            'reports' => route('timesheet-reports.index', [], false),
+            'risk_radar' => route('risk-radar.index', [], false),
+        ];
+        foreach ($pages as $page => $url) {
+            aiCall($this, $users['manager'], 'open_page', ['page' => $page]);
+            expect(AiToolCall::where('tool', 'open_page')->latest('id')->first()->result['ui']['url'])->toBe($url);
+        }
     });
 });

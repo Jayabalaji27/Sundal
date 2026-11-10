@@ -258,7 +258,7 @@ class Project extends Model
     {
         $tasks = $this->tasks;
         if ($tasks->isEmpty()) {
-            return $this->progress; // Return manual progress if no tasks
+            return (int) $this->progress; // Return manual progress if no tasks
         }
         
         return (int) $tasks->avg('progress');

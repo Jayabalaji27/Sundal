@@ -145,6 +145,10 @@ return [
     | Boolean value
     |
     */
-    'updaterEnabled' => 'true',
+    // Off: its /update route has no sign-in check and runs the full db:seed,
+    // which brings back the default accounts and resets plans and templates on
+    // a live site. The superadmin's System update page (/system-update) runs
+    // the safe steps instead.
+    'updaterEnabled' => 'false',
 
 ];

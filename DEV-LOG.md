@@ -1149,10 +1149,114 @@ Tests: one more in `tests/Feature/BusinessValidationFixesTest.php` (B1).
 
 ---
 
+### RP-29 · 2026-11-10 · AI Assistant covers every owner and manager module
+
+Every module in the owner's and manager's menus can now be used from AI chat, AI mode and voice.
+That's 23 new tools: the owner has 81 (was 58). As before, every change shows a confirm card first,
+and most can be undone for 10 minutes. Tools follow each role's permissions (`RoleSeeder`).
+
+- **Tasks and bugs:** `update_task`, `update_bug` (details, dates, priority, story points, milestone;
+  severity and the bug report fields), `add_comment`, `update_checklist` (add items, tick them; the
+  task's progress follows).
+- **Projects:** `update_project` (status, priority, dates, estimate), `remove_project_members` (only
+  the owner removes project managers), `update_epic`.
+- **Milestones:** `list_milestones`, `create_milestone`, `update_milestone`.
+- **Sprints:** `create_sprint`, `start_sprint`, `complete_sprint`. Unfinished tasks go to the backlog,
+  a planned sprint or a new sprint. Sprints were left out on purpose before; now they are included.
+- **Meetings:** `reschedule_meeting`, `cancel_meeting`. Zoom or Google is updated first. Only the
+  person who scheduled the meeting, or the owner, can change it, as on the Meetings pages.
+- **Calendar, Reports, AI tools page:** `get_calendar`, `get_timesheet_report`, `get_risk_radar`,
+  `get_resource_conflicts`, `get_standup`.
+- **Knowledge Base:** `create_kb_article` (a draft unless the user says publish), `update_kb_article`.
+- **Contracts (owner):** `change_contract_status`.
+- **`open_page`:** adds Meetings, Approvals, Reports, Team, Calendar, Knowledge Base, AI tools,
+  Risk Radar, Resource Conflicts, Standup Bot and Settings. Pages switched off in
+  `config/features.php` are refused.
+- **New "Reports" topic button.** The new tools are also added to the existing topics
+  (`Topics.php`), so voice mode reaches them as well.
+- **Still left out on purpose** (`ToolRegistry` comment): roles and permissions, plans and payments,
+  settings and integrations, API keys, webhooks, changing a member's workspace role, removing users,
+  deleting a workspace or a project, and creating contracts (they need the contract file).
+
+Shared logic moved out of the controllers. The pages and the assistant now follow the same rules:
+- `App\Actions\Sprints\StartSprint`, `CompleteSprint` (from `SprintController`)
+- `App\Actions\Projects\UpdateMilestone`
+- `App\Services\StandupReport`, `ResourceConflicts`
+- AI-only actions: `App\Actions\Meetings\RescheduleMeeting`, `CancelMeeting`, `App\Actions\Tasks\UpdateTaskDetails`
+
+Fixed:
+- Completing a milestone from its Edit form never saved when or by whom it was completed.
+- `Project::calculateProgressFromTasks()` threw a TypeError when the project had no tasks and an
+  empty progress value.
+
+Deploy: `npm run build`. No migrations or seeder changes.
+
+Tests: `AiAssistantTest` "module coverage" (15 new); the owner tool count is now 81. `tests/AiEval/prompts.json`
+has 20 new manager prompts and 14 new owner prompts. Run `php artisan ai:eval` per role before release.
+`AiAssistantTest`, `AiToolsAccessTest`, `SprintLifecycleTest` and `FunctionalTest`: 291 passed, 2 failed. The 2
+(`FunctionalTest`, project health 403) fail on the code before this change too, as do the 15 in `AiModulesTest`.
+
+Eval on the real provider (OpenRouter `nvidia/nemotron-3.5-lightning:free`, free, $0), new prompts only
+because a free key allows 50 requests a day: owner 13/14, manager 20/20. The miss ("Publish the leave policy
+article." → `search_knowledge_base`) led to a sharper description of that tool; not re-run yet (daily limit).
+- `ai:eval` now uses the assistant's own output limit (4096) instead of 512: reasoning models spent the 512
+  thinking and never reached the tool call, so they scored far below what users get.
+- `ai:eval --skip=N` starts after the first N prompts (with `--limit`, a slice), for keys with few requests a day.
+  New owner prompts: `--skip=57`; new manager prompts: `--skip=59`.
+
+---
+
+### RP-30 · 2026-11-10 · Deploy without a terminal; live site hardening
+
+The server has no terminal, so `php artisan migrate` and the seeders could not run there.
+
+Found on `codecartz.com/sundal` (checked from outside, status codes only):
+- Its build is from about the first commit (2026-10-02): no AI Assistant, 18 migrations behind.
+- Served to anyone: `storage/logs/laravel.log`, `composer.json`, `artisan`, `deploy.ps1`, and
+  `extract-translations.php` ran (it rewrites `resources/lang/en.json`). `.env` was already refused.
+- The installer's `/update` wizard has no sign-in check: while migrations are pending anyone could run
+  `migrate` plus the full `db:seed`, which brings back `superadmin@example.com` / `company@example.com`
+  and resets plans, landing page and email templates.
+
+Changes:
+- System update page `/system-update` (superadmin; `App\Services\SystemUpdate`): lists the pending
+  migrations and the `public/storage` link, then runs `migrate --force`, `PermissionSeeder`, `RoleSeeder`,
+  `permission:cache-reset`, `optimize:clear` and, if missing, `storage:link` (last, as some hosts turn
+  symlinks off). Stops at the first failure; one run at a time (file lock); result kept in
+  `storage/framework/system-update-last.json`. Plain Blade, not Inertia, and not behind a permission, so it
+  opens while the database is still on the old version. Linked from Settings → Cache Settings.
+- `CheckInstallation` sends the superadmin there when migrations are pending (was the installer's
+  `/update`); `config/installer.php` `updaterEnabled` is now `false`.
+- Root `.htaccess`: an existing file or folder in the project root is refused (403) unless it is
+  `index.php` or under `public/`. All other rules unchanged. Checked on Apache 2.4 with `/sundal/` like the
+  server: pages, `public/` assets, images, uploads through `storage/` and the `storage/{path}` route still
+  work; logs, code, config, `vendor/`, scripts, composer and Markdown files give 403.
+
+Rehearsed on a copy of the old schema (the 125 migrations of 2026-10-02, old permission/role seeders, two
+old bugs with a comment): the superadmin signs in, is sent to the page, sees 18 changes; the run takes 2.7 s,
+the bugs become tasks of type bug in the matching stages with their comment, and the role permissions
+then equal an up-to-date database.
+
+Deploy (no terminal): `sundal-update-2026-11-10.zip` holds the whole app with a `vendor` built with
+`--no-dev`; its `DEPLOY-NOTES.txt` has the cPanel steps (back up the database, upload, extract, sign in as
+superadmin, Run update). Leaves `.env`, `storage/` and `resources/lang` (translations edited on the
+server) as they are.
+
+CloudPanel server `168-231-102-225.sslip.io` (Nginx, web root `public/`, nothing private served): its build
+is exactly `a5edd6475` (2026-11-02) and `/update` answers 404, so its migrations are complete. From there to
+`52c9efc5c` there are no migrations, seeders or packages: `sundal-cloudpanel-update-2026-11-10.zip` (58 files
+plus `public/build`), extract in CloudPanel File Manager, then Settings → Cache Settings → Clear Cache.
+Earlier releases there probably ran through the installer's `/update` (full `db:seed`): check the Users list
+for `superadmin@example.com` / `company@example.com` (password `password`).
+
+Tests: `tests/Feature/SystemUpdateTest.php` (4).
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)
-- [ ] Run `php artisan migrate` on production after deploy
+- [ ] After uploading a new version: sign in as superadmin, System update page (`/system-update`) → Run update
 - [ ] AI Assistant: `npm run build` (new page) + `php artisan migrate` + scheduler running for `ai:prune-conversations`
 - [ ] AI Assistant: run `php artisan ai:eval` per role on each provider before release (plan gate: 90%)
 - [ ] AI Assistant: set `AI_ASSISTANT_QUEUE=true` once a queue worker runs in production

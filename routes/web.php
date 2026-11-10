@@ -197,6 +197,14 @@ Route::get('/page/{slug}', [CustomPageController::class, 'show'])->name('custom-
 
 Route::get('/translations/{locale}', [TranslationController::class, 'getTranslations'])->name('translations');
 Route::get('/initial-locale', [TranslationController::class, 'getInitialLocale'])->name('initial-locale');
+
+// System update: the superadmin runs a new version's database changes from the
+// browser (servers without a terminal). Checked in the controller, not by a
+// permission, which would only exist after the update.
+Route::middleware('auth')->group(function () {
+    Route::get('system-update', [\App\Http\Controllers\SystemUpdateController::class, 'show'])->name('system-update.show');
+    Route::post('system-update', [\App\Http\Controllers\SystemUpdateController::class, 'run'])->name('system-update.run');
+});
 // Notification Templates route
 Route::get('notification-templates', [NotificationTemplateController::class, 'index'])->middleware(['auth', 'verified', 'permission:notification_template_view_any', 'block.superadmin.workspace'])->name('notification-templates.index');
 

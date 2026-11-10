@@ -3,12 +3,13 @@ namespace App\Http\Controllers;
 
 use App\Actions\ActionException;
 use App\Actions\Sprints\AddTasksToSprint;
+use App\Actions\Sprints\CompleteSprint;
+use App\Actions\Sprints\StartSprint;
 use App\Models\Project;
 use App\Models\Sprint;
 use App\Models\Task;
 use App\Traits\PresentsAgileBoard;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -42,11 +43,6 @@ class SprintController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => ['nullable', 'date', Rule::when($request->filled('start_date'), 'after_or_equal:start_date')],
         ];
-    }
-
-    private function nextSprintName(int $projectId): string
-    {
-        return 'Sprint ' . (Sprint::where('project_id', $projectId)->count() + 1);
     }
 
     /** The active sprint first, then the planned ones, each with its tasks. */
@@ -106,7 +102,7 @@ class SprintController extends Controller
             'backlogSummary' => ['tasks' => $backlog->count(), 'points' => (int) $backlog->sum('story_points')],
             'completedSprints' => $completed->values(),
             'velocity' => $velocity,
-            'nextSprintName' => $this->nextSprintName($project->id),
+            'nextSprintName' => CompleteSprint::nextName($project->id),
             'stages' => $this->boardStages(),
             'taskForm' => $this->taskFormData($project),
         ]);
@@ -126,7 +122,7 @@ class SprintController extends Controller
                 ...$this->sprintSummary($sprint),
                 'tasks' => $sprint->tasks->map(fn (Task $task) => $this->taskCard($task))->values(),
             ])->values(),
-            'nextSprintName' => $this->nextSprintName($project->id),
+            'nextSprintName' => CompleteSprint::nextName($project->id),
             'stages' => $this->boardStages(),
             'taskForm' => $this->taskFormData($project),
         ]);
@@ -216,30 +212,16 @@ class SprintController extends Controller
     public function start(Request $request, Sprint $sprint)
     {
         $this->abortUnlessSprintVisible($sprint);
-        if ($sprint->status !== 'planning') {
-            return back()->with('error', __('Only a planned sprint can be started.'));
-        }
-        $active = Sprint::where('project_id', $sprint->project_id)->where('status', 'active')->first();
-        if ($active) {
-            return back()->with('error', __('Complete ":name" before starting another sprint.', ['name' => $active->name]));
-        }
-
         $data = $request->validate([
             'goal' => 'nullable|string|max:1000',
             ...$this->dateRules($request),
         ]);
-        $start = Carbon::parse($data['start_date'] ?? $sprint->start_date ?? now())->startOfDay();
-        $end = isset($data['end_date']) ? Carbon::parse($data['end_date']) : ($sprint->end_date ?? $start->copy()->addWeeks(2));
-        if ($end->lt($start)) {
-            return back()->with('error', __('The sprint must end on or after its start date.'));
-        }
 
-        $sprint->update([
-            'status' => 'active',
-            'start_date' => $start->toDateString(),
-            'end_date' => $end->toDateString(),
-            'goal' => array_key_exists('goal', $data) ? $data['goal'] : $sprint->goal,
-        ]);
+        try {
+            app(StartSprint::class)->handle($sprint, $data);
+        } catch (ActionException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
         return back()->with('success', __(':name started.', ['name' => $sprint->name]));
     }
@@ -251,59 +233,21 @@ class SprintController extends Controller
     public function complete(Request $request, Sprint $sprint)
     {
         $this->abortUnlessSprintVisible($sprint);
-        if ($sprint->status !== 'active') {
-            return back()->with('error', __('Only the active sprint can be completed.'));
-        }
 
         $moveTo = (string) $request->input('move_to', 'backlog');
-        $target = null;
         if (!in_array($moveTo, ['backlog', 'new'], true)) {
-            $target = Sprint::where('project_id', $sprint->project_id)->where('status', 'planning')->find((int) $moveTo);
-            if (!$target) {
+            $moveTo = Sprint::where('project_id', $sprint->project_id)->where('status', 'planning')->find((int) $moveTo);
+            if (!$moveTo) {
                 return back()->with('error', __('Choose a planned sprint of this project for the unfinished tasks.'));
             }
         }
 
-        $moved = DB::transaction(function () use ($sprint, $moveTo, $target) {
-            $all = $sprint->tasks()->with('taskStage:id,is_completed')->get();
-            $finished = $all->filter(fn (Task $task) => $task->isCompleted());
-            $unfinished = $all->reject(fn (Task $task) => $task->isCompleted())->values();
+        try {
+            [$count, $targetName] = app(CompleteSprint::class)->handle(auth()->user(), $sprint, $moveTo);
+        } catch (ActionException $e) {
+            return back()->with('error', $e->getMessage());
+        }
 
-            if ($moveTo === 'new') {
-                $target = Sprint::create([
-                    'project_id' => $sprint->project_id,
-                    'workspace_id' => $sprint->workspace_id,
-                    'name' => $this->nextSprintName($sprint->project_id),
-                    'status' => 'planning',
-                    'created_by' => auth()->id(),
-                ]);
-            }
-
-            $sprint->tasks()->detach($unfinished->pluck('id'));
-            if ($target && $unfinished->isNotEmpty()) {
-                app(AddTasksToSprint::class)->handle(auth()->user(), $target, $unfinished);
-            }
-
-            // Freeze what was committed and finished: the unfinished tasks leave the sprint now.
-            $sprint->update([
-                'status' => 'completed',
-                'end_date' => $sprint->end_date ?? now()->toDateString(),
-                'committed_tasks' => $all->count(),
-                'committed_points' => (int) $all->sum('story_points'),
-                'completed_tasks' => $finished->count(),
-                'completed_points' => (int) $finished->sum('story_points'),
-            ]);
-
-            return [$unfinished->count(), $target?->name];
-        });
-
-        [$count, $targetName] = $moved;
-        $message = $count === 0
-            ? __(':name completed.', ['name' => $sprint->name])
-            : ($targetName
-                ? trans_choice(':name completed. :count unfinished task moved to :target.|:name completed. :count unfinished tasks moved to :target.', $count, ['name' => $sprint->name, 'count' => $count, 'target' => $targetName])
-                : trans_choice(':name completed. :count unfinished task moved to the backlog.|:name completed. :count unfinished tasks moved to the backlog.', $count, ['name' => $sprint->name, 'count' => $count]));
-
-        return back()->with('success', $message);
+        return back()->with('success', CompleteSprint::message($sprint, $count, $targetName));
     }
 }

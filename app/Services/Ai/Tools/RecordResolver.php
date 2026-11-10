@@ -4,12 +4,16 @@ namespace App\Services\Ai\Tools;
 
 use App\Models\AiAttachment;
 use App\Models\BudgetCategory;
+use App\Models\Contract;
 use App\Models\Epic;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\KbArticle;
+use App\Models\KbCategory;
 use App\Models\Project;
 use App\Models\ProjectBudget;
 use App\Models\ProjectExpense;
+use App\Models\ProjectMilestone;
 use App\Models\Sprint;
 use App\Models\Task;
 use App\Models\TaskStage;
@@ -87,6 +91,49 @@ class RecordResolver
         }
 
         return $this->one($query, $ref, 'name', __('sprint'));
+    }
+
+    /** Milestones of the projects the user can see. */
+    public function milestones(User $user): Builder
+    {
+        return ProjectMilestone::query()->whereIn('project_id', $this->projects($user)->select('id'))->with('project:id,title');
+    }
+
+    /** Milestone names repeat across projects ("Launch"): a project narrows the search. */
+    public function milestone(User $user, string $ref, ?string $projectRef = null): ProjectMilestone
+    {
+        $query = $this->milestones($user);
+        if ($projectRef) {
+            $query->where('project_id', $this->project($user, $projectRef)->id);
+        }
+
+        return $this->one($query, $ref, 'title', __('milestone'));
+    }
+
+    /** Knowledge Base articles of the workspace, drafts included. */
+    public function articles(User $user): Builder
+    {
+        return KbArticle::query()->where('workspace_id', $user->current_workspace_id);
+    }
+
+    public function article(User $user, string $ref): KbArticle
+    {
+        return $this->one($this->articles($user), $ref, 'title', __('Knowledge Base article'));
+    }
+
+    public function kbCategory(User $user, string $ref): KbCategory
+    {
+        return $this->one(KbCategory::query()->where('workspace_id', $user->current_workspace_id), $ref, 'name', __('Knowledge Base category'));
+    }
+
+    public function contracts(User $user): Builder
+    {
+        return Contract::query()->where('contracts.workspace_id', $user->current_workspace_id)->with('client:id,name');
+    }
+
+    public function contract(User $user, string $ref): Contract
+    {
+        return $this->one($this->contracts($user), $ref, 'subject', __('contract'));
     }
 
     /** Files the user gave the assistant in this workspace that were read (or wait for OCR). */

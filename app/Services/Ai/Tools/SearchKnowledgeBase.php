@@ -19,7 +19,7 @@ class SearchKnowledgeBase extends AiTool
 
     public function description(): string
     {
-        return 'Search this workspace\'s Knowledge Base articles to answer "how do I…" and policy questions. Answer only from the returned text and link the article.';
+        return 'Search this workspace\'s Knowledge Base articles to answer "how do I…" and policy questions. Answer only from the returned text and link the article. Not for writing, changing or publishing an article: use create_kb_article or update_kb_article.';
     }
 
     public function permissions(): array

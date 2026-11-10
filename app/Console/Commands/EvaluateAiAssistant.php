@@ -24,6 +24,7 @@ class EvaluateAiAssistant extends Command
     protected $signature = 'ai:eval
         {--user= : Email of an owner or manager in the workspace to test}
         {--set= : owner or manager (default: the user\'s role)}
+        {--skip=0 : Start after the first N prompts (with --limit, a slice; free models allow few requests a day)}
         {--limit=0 : Only the first N prompts}
         {--threshold=90 : Minimum % of correct picks}';
 
@@ -51,9 +52,7 @@ class EvaluateAiAssistant extends Command
 
         $set = $this->option('set') ?: $role;
         $prompts = json_decode(file_get_contents(base_path('tests/AiEval/prompts.json')), true)[$set] ?? [];
-        if ((int) $this->option('limit') > 0) {
-            $prompts = array_slice($prompts, 0, (int) $this->option('limit'));
-        }
+        $prompts = array_slice($prompts, max(0, (int) $this->option('skip')), (int) $this->option('limit') > 0 ? (int) $this->option('limit') : null);
 
         $tools = $registry->forUser($user, $settings->isReadOnlyModel());
         $provider = $providers->make($settings);
@@ -95,7 +94,8 @@ class EvaluateAiAssistant extends Command
                     messages: [['role' => 'user', 'content' => $case['prompt']]],
                     tools: $specs,
                     maxSteps: 1,
-                    maxTokens: 512,
+                    // The assistant's own limit (AiRequest's default): reasoning
+                    // models think before the tool call, and 512 cut them off.
                 ));
             } catch (AiProviderException $e) {
                 $this->error($e->getMessage());
