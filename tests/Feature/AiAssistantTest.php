@@ -3054,6 +3054,24 @@ describe('faster voice', function () {
         expect(toolNames($fake))->toContain('create_task', 'list_bugs', 'create_invoice');
     });
 
+    test('while a card waits, the model is told it cannot confirm it', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner']);
+
+        fakeAi([['tool' => 'create_task', 'args' => ['title' => 'login page', 'project' => 'Website Redesign']], ['text' => 'Please confirm.']]);
+        $chat = asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'create a task login page in Website Redesign', 'voice' => true])
+            ->assertJsonPath('messages.1.cards.0.status', 'pending')->json('conversation.id');
+
+        $fake = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat, 'content' => 'thats that you can close it', 'voice' => true])->assertOk();
+        expect($fake->requests[0]->system)->toContain('still waiting for the user')->toContain('say "yes"');
+
+        $fresh = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today'])->assertOk();
+        expect($fresh->requests[0]->system)->not->toContain('still waiting for the user');
+    });
+
     test('a greeting or thanks gets no tools at all', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);

@@ -336,6 +336,8 @@ async function cardAction(card: ToolCard, action: 'confirm' | 'cancel' | 'undo')
  * streamed: each sentence is spoken as soon as it arrives.
  */
 async function ask(text: string): Promise<void> {
+    // A card already waiting when the words went to the AI: the AI cannot confirm it.
+    const waitingBefore = waitingCards().map(card => card.id);
     const optimistic = localMessage('user', text);
     addMessages([optimistic]);
     setVoice({ status: 'thinking' });
@@ -417,6 +419,18 @@ async function ask(text: string): Promise<void> {
     setVoice({ status: 'speaking' });
     await speech.finish();
     if (getVoice().status !== 'speaking') return;
+
+    // The words went to the AI while a card waited, and it still waits: the AI cannot
+    // confirm it (even if its reply says so), so say how to.
+    const stillWaiting = waitingCards();
+    if (stillWaiting.length === 1 && waitingBefore.includes(stillWaiting[0].id)) {
+        const reminder = speechQueue(speechLang());
+        reminder.aside(voiceConfirmable(stillWaiting[0])
+            ? t('The card is still waiting. Say yes to confirm, or no to cancel.')
+            : t('The card is still waiting. Please check it and press Confirm.'));
+        await reminder.finish();
+        if (getVoice().status !== 'speaking') return;
+    }
 
     setVoice({ status: 'idle' });
     void listen();

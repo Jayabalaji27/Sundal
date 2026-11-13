@@ -170,16 +170,17 @@ class AiAssistant
             $tools += array_intersect_key($this->registry->forUser($user, $settings->isReadOnlyModel()), array_flip(self::FILE_TOOLS));
         }
 
+        $waiting = AiToolCall::where('ai_conversation_id', $conversation->id)->where('user_id', $user->id)
+            ->where('status', AiToolCall::PENDING)->pluck('tool')->all();
+
         // A draft still waiting in this conversation keeps its tool when the tools
         // are narrowed, so an answer to it can still fill it in.
         if ($toolTopics || $smallTalk) {
-            $waiting = AiToolCall::where('ai_conversation_id', $conversation->id)->where('user_id', $user->id)
-                ->where('status', AiToolCall::PENDING)->pluck('tool')->all();
             $tools += array_intersect_key($this->registry->forUser($user, $settings->isReadOnlyModel()), array_flip($waiting));
         }
 
         $request = new AiRequest(
-            system: $this->systemPrompt($user, $tools, $topic, $client, $hasFiles),
+            system: $this->systemPrompt($user, $tools, $topic, $client, $hasFiles, $waiting !== []),
             messages: $this->history($conversation, $voice ? (int) config('ai_assistant.voice.history_messages', 6) : null),
             tools: array_values(array_map(fn (AiTool $tool) => new ToolSpec(
                 $tool->name(),
@@ -966,7 +967,8 @@ class AiAssistant
 
     /** @param  AiTool[]  $tools */
     /** @param  bool  $files  the chat has attached files (their rules are left out otherwise, to save tokens) */
-    private function systemPrompt(User $user, array $tools, ?string $topic = null, array $client = [], bool $files = true): string
+    /** @param  bool  $cardWaiting  a confirmation card in this chat is still waiting for the user */
+    private function systemPrompt(User $user, array $tools, ?string $topic = null, array $client = [], bool $files = true, bool $cardWaiting = false): string
     {
         $workspace = Workspace::find($user->current_workspace_id);
         $role = AiAccess::role($user) === 'owner' ? 'company owner' : 'manager';
@@ -989,6 +991,7 @@ class AiAssistant
             $files ? '- To create bugs or tasks from an attached spreadsheet, use import_bugs_from_sheet or import_tasks_from_sheet. To turn an attached document (BRD, spec, user stories) into tasks, use plan_tasks_from_document; it can also put them in a new project (new_project). Never create the items one by one.' : null,
             '- You can only do what your tools allow. For anything else, say so and point the user to the normal Sundal screen.',
             $readOnly ? '- In this workspace you can only answer questions; you cannot change anything.' : null,
+            $cardWaiting ? '- A confirmation card in this chat is still waiting for the user. Only the user can confirm it, by pressing Confirm' . (!empty($client['voice']) ? ' or saying "yes"' : '') . '; you cannot, and it is NOT done yet. Never say it was created, saved or done. If the user seems to approve it, tell them to ' . (!empty($client['voice']) ? 'say "yes"' : 'press Confirm on the card') . '.' : null,
             $topic ? '- ' . Topics::prompt($topic) : null,
             isset($tools['open_page']) ? '- When the user asks to see, open, show or go to something, put it on their screen with open_page, show_list or open_record, as well as answering.' : null,
             '- Keep answers short and plain. Reply in the language the user writes in. Include record links from tool results when useful.',
