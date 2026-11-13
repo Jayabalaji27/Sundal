@@ -172,7 +172,10 @@ export function NavMain({ items = [], position, sidebarStyle = 'plain', collapsi
     };
 
     const isColored = sidebarStyle === 'colored' || sidebarStyle === 'gradient';
-    const activeClass = isColored ? 'data-[active=true]:bg-white/20 data-[active=true]:text-white' : '';
+    // Icons: a lighter 1.75 stroke so they sit evenly with the label text, and a
+    // heavier stroke on the current page so the active item reads at a glance.
+    const iconClass = '[&_svg]:[stroke-width:1.75] data-[active=true]:[&_svg]:[stroke-width:2.25]';
+    const activeClass = `${iconClass} ${isColored ? 'data-[active=true]:bg-white/20 data-[active=true]:text-white' : ''}`;
 
     const renderSubMenu = (children: NavItem[], level: number = 1): React.ReactNode => {
         return (

@@ -53,6 +53,9 @@ class CalendarController extends Controller
                     'task_id' => $task->id,
                     'description' => $task->description,
                     'stage' => $task->taskStage?->name ?? 'To Do',
+                    // The calendar shows tasks on their due day and marks done or overdue ones.
+                    'is_completed' => (bool) ($task->taskStage?->is_completed ?? false),
+                    'due_day' => $task->end_date->toDateString(),
                     'priority' => $task->priority,
                     'start_date' => $task->start_date,
                     'due_date' => $task->end_date,
