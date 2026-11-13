@@ -18,12 +18,14 @@ import {
   Briefcase,
   FileText,
   Calendar,
-  CheckCheck
+  CheckCheck,
+  AtSign
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { type SharedData } from '@/types';
 
 const notificationTypeIcons: Record<string, React.ReactNode> = {
+  mention: <AtSign className="h-4 w-4" />,
   chat_message: <MessageSquare className="h-4 w-4" />,
   comment: <MessageSquare className="h-4 w-4" />,
   task: <CheckCircle2 className="h-4 w-4" />,
@@ -36,6 +38,7 @@ const notificationTypeIcons: Record<string, React.ReactNode> = {
 };
 
 const notificationTypeColors: Record<string, string> = {
+  mention: 'bg-ds-brand-soft text-ds-brand-soft-fg',
   chat_message: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
   comment: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
   task: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',

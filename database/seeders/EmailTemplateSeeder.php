@@ -806,6 +806,10 @@ class EmailTemplateSeeder extends Seeder
 
         }
 
+        // "Comment Mention" (@mentions in task comments), kept in its own class so
+        // the migration that adds it to existing installs uses the same text.
+        \App\Support\EmailTemplates\CommentMentionTemplate::install($supportedLanguages, auth()->id() ?? 1);
+
         // Enable "Workspace Invitation" notification for all existing users
         $this->enableWorkspaceInvitationForExistingUsers();
     }

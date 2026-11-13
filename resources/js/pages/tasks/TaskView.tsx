@@ -185,6 +185,7 @@ export default function TaskView({ task, activeTab, onTabChange, members = [], w
                         task={task}
                         comments={task.comments || []}
                         currentUser={members[0]}
+                        members={members}
                         onUpdate={onUpdate}
                         canAddComments={workspaceRole !== 'client'}
                     />

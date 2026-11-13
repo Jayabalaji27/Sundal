@@ -106,6 +106,8 @@ class EmailTemplateController extends Controller
                 '{company_name}' => 'Company name',
                 '{app_name}' => 'Application name'
             ];
+        } elseif ($template->name === \App\Support\EmailTemplates\CommentMentionTemplate::NAME) {
+            $variables = \App\Support\EmailTemplates\CommentMentionTemplate::VARIABLES;
         } elseif ($template->name === 'New Contract') {
             $variables = [
                 '{client_name}' => 'Name of the client',
