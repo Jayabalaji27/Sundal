@@ -122,13 +122,12 @@ export function AiModeToggle() {
         <div className="flex items-center gap-2">
             {/* A regular header button; highlighted while the AI tab is open. */}
             <Button
-                variant="outline"
-                size="sm"
+                variant="ghost"
                 onClick={toggle}
                 aria-pressed={open}
                 aria-label={t('AI mode')}
                 title={open ? t('Close AI mode') : t('Open the AI Assistant in its own tab')}
-                className={cn('gap-1.5 px-3', open && 'border-brand-soft-border bg-brand-soft text-brand-soft-fg hover:bg-ds-surface-selected hover:text-brand-soft-fg')}
+                className={cn('h-9 gap-1.5 rounded-full px-3 text-ds-fg-secondary', open && 'bg-brand-soft text-brand-soft-fg ring-1 ring-brand-soft-border hover:bg-ds-surface-selected hover:text-brand-soft-fg')}
             >
                 <Sparkles className="h-4 w-4 text-brand-500" aria-hidden="true" />
                 <span className="hidden md:inline">{t('AI')}</span>

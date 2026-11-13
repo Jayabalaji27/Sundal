@@ -141,7 +141,7 @@ export function NotificationDropdown() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative"
+          className="relative rounded-full text-ds-fg-secondary"
           aria-label={unreadCount > 0 ? t('Notifications ({{count}} unread)', { count: unreadCount }) : t('Notifications')}
         >
           <Bell />

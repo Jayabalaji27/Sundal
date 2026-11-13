@@ -67,6 +67,13 @@ return [
     // How many earlier messages are sent back to the model as context.
     'history_messages' => 20,
 
+    // With no topic button, offer only the tools of the topics a message names
+    // (or that the user's last few messages named), and none for a greeting or
+    // thanks. Every tool is about 18,000 tokens per call, which free models are
+    // slow to read. A message that names no topic still gets every tool.
+    'tools_by_topic' => env('AI_ASSISTANT_TOOLS_BY_TOPIC', true),
+    'topic_lookback_messages' => 3,
+
     // Messages a single user may send per minute.
     'messages_per_minute' => 20,
 

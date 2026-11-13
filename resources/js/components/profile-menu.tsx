@@ -58,12 +58,18 @@ export function ProfileMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-9 shrink-0 gap-2 rounded-full p-1 md:rounded-md md:pr-2" aria-label={t('Account menu')} title={user?.name}>
+        <Button variant="ghost" className="h-9 shrink-0 gap-2 rounded-full p-1 md:pr-2.5" aria-label={t('Account menu')} title={user?.name}>
           <Avatar className="h-7 w-7 shrink-0">
             <AvatarImage src={user?.avatar} alt="" />
             <AvatarFallback seed={user?.name}>{initials}</AvatarFallback>
           </Avatar>
-          <span className="hidden max-w-32 truncate text-sm font-medium text-ds-fg md:inline">{user?.name}</span>
+          {/* Name and role stacked, so a long name has room instead of cutting off early. */}
+          <span className="hidden min-w-0 flex-col items-start text-left leading-tight lg:flex">
+            <span className="max-w-44 truncate text-sm font-medium text-ds-fg">{user?.name}</span>
+            {user?.workspace_role && (
+              <span className="text-[11px] capitalize text-ds-fg-muted">{t(user.workspace_role === 'company' ? 'owner' : user.workspace_role)}</span>
+            )}
+          </span>
           <ChevronDown className="hidden size-4 text-ds-fg-muted md:block" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>

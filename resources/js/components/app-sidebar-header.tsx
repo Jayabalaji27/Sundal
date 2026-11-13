@@ -11,6 +11,8 @@ import { usePage } from '@inertiajs/react';
 import { useTranslation } from 'react-i18next';
 import { Search } from 'lucide-react';
 
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
 export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: BreadcrumbItemType[] }) {
     const { t } = useTranslation();
     const { position } = useLayout();
@@ -33,18 +35,22 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                     {showTrail && <Breadcrumbs items={trail.map(b => ({ label: b.title, href: b.href }))} />}
                 </div>
                 {/* Standard order: search, create, then icon actions and the account. */}
-                <div className="flex shrink-0 items-center justify-end gap-2">
-                    {/* Command palette trigger (the keyboard shortcut still works) */}
+                <div className="flex shrink-0 items-center justify-end gap-1.5">
+                    {/* Command palette trigger (the keyboard shortcut still works).
+                        A soft filled field rather than a boxed input, with the shortcut shown. */}
                     <button
                         type="button"
                         onClick={() => window.dispatchEvent(new CustomEvent('open-command-palette'))}
-                        className="flex h-9 w-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-ds-border-strong bg-ds-surface text-sm text-ds-fg-placeholder shadow-ds-xs transition-colors duration-150 hover:border-ds-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus md:w-64 md:justify-start md:px-3"
+                        className="mr-1 flex h-9 w-9 cursor-pointer items-center justify-center gap-2 rounded-full bg-ds-surface-subtle text-sm text-ds-fg-placeholder ring-1 ring-transparent transition-all duration-150 hover:bg-ds-surface-hover hover:ring-ds-border-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus md:w-64 md:justify-start md:pl-3 md:pr-1.5"
                         title={t('Search everything')}
                         aria-label={t('Search everything')}
                         aria-keyshortcuts="Control+K Meta+K"
                     >
-                        <Search className="h-[18px] w-[18px] shrink-0 text-ds-fg-muted" aria-hidden="true" />
+                        <Search className="h-4 w-4 shrink-0 text-ds-fg-muted" aria-hidden="true" />
                         <span className="hidden flex-1 text-left md:inline">{t('Search...')}</span>
+                        <kbd className="hidden h-6 items-center rounded-full border border-ds-border-subtle bg-ds-surface px-2 font-sans text-[11px] font-medium text-ds-fg-muted md:inline-flex">
+                            {isMac ? '⌘K' : 'Ctrl K'}
+                        </kbd>
                     </button>
                     {/* Leaving impersonation is offered by the banner above the header. */}
                     <GlobalCreateMenu />
@@ -55,6 +61,8 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                     {/* Language is picked on the Profile page, for every role; managing
                         languages is under Settings. */}
                     <NotificationDropdown />
+                    {/* Separates the workspace actions from the account. */}
+                    <span className="mx-1 hidden h-6 w-px bg-ds-border-subtle sm:block" aria-hidden="true" />
                     <ProfileMenu />
                     {position === 'right' && <SidebarTrigger className="-mr-2 size-9 text-ds-fg-muted" />}
                 </div>
