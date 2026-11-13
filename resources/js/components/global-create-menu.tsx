@@ -46,8 +46,9 @@ export function GlobalCreateMenu() {
         <>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="gap-1.5 px-3" aria-label={t('Create')}>
-                        <Plus className="h-4 w-4" />
+                    {/* The header's one primary action: filled, so it stands out from the icon buttons. */}
+                    <Button className="h-9 gap-1.5 rounded-full px-3.5 shadow-ds-xs sm:pl-3" aria-label={t('Create')}>
+                        <Plus className="h-4 w-4" strokeWidth={2.5} />
                         <span className="hidden sm:inline">{t('Create')}</span>
                     </Button>
                 </DropdownMenuTrigger>

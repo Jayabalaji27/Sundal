@@ -112,8 +112,11 @@ export default function EmailNotificationSettings() {
         }));
     };
 
-    const setAll = (enabled: boolean) => {
-        setNotifications(Object.fromEntries(availableNotifications.map(item => [item.name, enabled])));
+    const setMany = (names: string[], enabled: boolean) => {
+        setNotifications(prev => ({
+            ...prev,
+            ...Object.fromEntries(names.map(name => [name, enabled])),
+        }));
     };
 
     const handleSave = (e: React.FormEvent) => {
@@ -156,24 +159,42 @@ export default function EmailNotificationSettings() {
                     <p className="text-sm text-ds-fg-secondary">
                         {t('{{on}} of {{total}} emails on', { on: onCount, total })}
                     </p>
-                    <div className="flex gap-2">
-                        <Button type="button" variant="outline" size="sm" onClick={() => setAll(true)} disabled={onCount === total}>
-                            {t('Turn all on')}
-                        </Button>
-                        <Button type="button" variant="outline" size="sm" onClick={() => setAll(false)} disabled={onCount === 0}>
-                            {t('Turn all off')}
-                        </Button>
+                    <div className="flex items-center gap-3">
+                        <Label htmlFor="email-all" className="cursor-pointer text-sm font-medium text-ds-fg">
+                            {t('All emails')}
+                        </Label>
+                        <Switch
+                            id="email-all"
+                            checked={onCount === total}
+                            onCheckedChange={(checked) => setMany(availableNotifications.map(item => item.name), checked)}
+                        />
                     </div>
                 </div>
             )}
 
             {/* Two balanced columns on wide screens; a group never splits across them. */}
             <div className="gap-4 lg:columns-2">
-                {groups.map(group => (
+                {groups.map(group => {
+                    const names = group.items.map(item => item.name);
+                    const groupOn = names.filter(name => notifications[name]).length;
+                    return (
                     <div key={group.title} className="mb-4 break-inside-avoid overflow-hidden rounded-lg border border-ds-border-subtle">
-                        <h4 className="border-b border-ds-border-subtle bg-ds-surface-subtle px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ds-fg-muted">
-                            {t(group.title)}
-                        </h4>
+                        <div className="flex items-center justify-between gap-3 border-b border-ds-border-subtle bg-ds-surface-subtle px-4 py-1.5">
+                            <h4 className="text-xs font-semibold uppercase tracking-wide text-ds-fg-muted">
+                                {t(group.title)}
+                            </h4>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs tabular-nums text-ds-fg-muted">
+                                    {groupOn}/{names.length}
+                                </span>
+                                <Switch
+                                    className="origin-right scale-75"
+                                    checked={groupOn === names.length}
+                                    onCheckedChange={(checked) => setMany(names, checked)}
+                                    aria-label={t('All {{group}} emails', { group: t(group.title) })}
+                                />
+                            </div>
+                        </div>
                         <ul className="divide-y divide-ds-border-subtle">
                             {group.items.map(item => (
                                 <li key={item.name} className="flex items-center justify-between gap-4 px-4 py-2.5">
@@ -194,7 +215,8 @@ export default function EmailNotificationSettings() {
                             ))}
                         </ul>
                     </div>
-                ))}
+                    );
+                })}
             </div>
         </SettingsSection>
     );

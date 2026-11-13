@@ -72,15 +72,13 @@ interface DashboardData {
   }>;
 }
 
-interface PageAction {
-  label: string;
-  icon: React.ReactNode;
-  variant: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
-  onClick: () => void;
-}
+type PageAction = import('@/components/page-template').PageAction;
 
 export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = true, hasRoleDashboardAccess = false, userWorkspaceRole }: { dashboardData: DashboardData; isSuperAdmin?: boolean; isSaasMode?: boolean; hasRoleDashboardAccess?: boolean; userWorkspaceRole?: string }) {
   const { t } = useTranslation();
+  // Refetch the dashboard's data in place (no full page reload), spinning the icon meanwhile.
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = () => router.reload({ onStart: () => setRefreshing(true), onFinish: () => setRefreshing(false) });
   const { auth } = usePage().props as any;
   // If super admin, render super admin dashboard
   if (isSuperAdmin) {
@@ -100,9 +98,11 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
           }] : []),
           {
             label: t('Refresh'),
-            icon: <RefreshCw className="h-4 w-4" />,
-            variant: 'outline',
-            onClick: () => window.location.reload()
+            icon: <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />,
+            variant: 'ghost',
+            size: 'icon',
+            className: 'rounded-full text-ds-fg-secondary',
+            onClick: refresh
           }
         ]}
       >
@@ -577,9 +577,11 @@ export default function Dashboard({ dashboardData, isSuperAdmin, isSaasMode = tr
   const pageActions: PageAction[] = [
     {
       label: t('Refresh'),
-      icon: <RefreshCw className="h-4 w-4" />,
-      variant: 'outline',
-      onClick: () => window.location.reload()
+      icon: <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />,
+      variant: 'ghost',
+      size: 'icon',
+      className: 'rounded-full text-ds-fg-secondary',
+      onClick: refresh
     }
   ];
 
