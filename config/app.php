@@ -64,6 +64,10 @@ return [
     */
 
     'is_saas' => (bool) env('IS_SAAS', true),
+
+    // Development only: every workspace may have at most this many projects,
+    // whatever its plan (and also without SaaS mode). Empty: the plan decides.
+    'dev_max_projects_per_workspace' => env('DEV_MAX_PROJECTS_PER_WORKSPACE') ? (int) env('DEV_MAX_PROJECTS_PER_WORKSPACE') : null,
     
     /*
     |--------------------------------------------------------------------------

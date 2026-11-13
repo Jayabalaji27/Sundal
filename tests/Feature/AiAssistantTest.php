@@ -2260,6 +2260,19 @@ describe('document plans', function () {
         expect(Task::where('project_id', $web->id)->pluck('priority', 'title')->all())->toBe(['Sign in' => 'critical', 'Weekly report export' => 'medium']);
     });
 
+    test('the development project cap applies to every workspace, whatever the plan', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiProject($workspace, $users['owner']);
+        $users['owner']->getCurrentPlan()->update(['max_projects_per_workspace' => 100]);
+        $limits = app(\App\Services\PlanLimitService::class);
+
+        expect($limits->canCreateProject($workspace)['allowed'])->toBeTrue();
+
+        config(['app.dev_max_projects_per_workspace' => 1]);
+        expect($limits->canCreateProject($workspace))->toMatchArray(['allowed' => false])
+            ->and($limits->canCreateProject($workspace)['message'])->toContain('can have 1 projects');
+    });
+
     test('a full plan cannot take a new project: the card says so and an existing project still works', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
