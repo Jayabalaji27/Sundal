@@ -166,6 +166,7 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
                                     task={currentTask}
                                     comments={currentTask.comments || []}
                                     currentUser={members[0]}
+                                    members={currentTask.project?.members?.filter(m => m.user?.type !== 'client').map(m => m.user) || members}
                                     onUpdate={refreshTask}
                                     canAddComments={workspaceRole !== 'client'}
                                 />
