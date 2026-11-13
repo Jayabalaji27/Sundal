@@ -9,11 +9,13 @@ import { useBrand } from '@/contexts/BrandContext';
 import { type NavItem } from '@/types';
 import { Link, usePage, router } from '@inertiajs/react';
 import {
-    LayoutGrid, Settings, FileText, CheckSquare, Calendar, CreditCard,
-    Ticket, Gift, DollarSign, MessageSquare, Globe, FolderOpen,
-    ClipboardList, Clock, Bot, Video, Building2, BarChart3, BookOpen,
+    Settings, CreditCard,
+    Ticket, Gift, DollarSign, Globe,
+    ClipboardList, Clock, Video, Building2,
     TrendingUp, Radio, Bug, ListTodo, Receipt, FileIcon, Zap, AlertTriangle,
-    Bell, Mail, FolderKanban, Users, History, Sparkles, ClipboardCheck
+    Bell, Mail, FolderKanban, Users, History, Sparkles,
+    LayoutDashboard, ListChecks, BadgeCheck, Wallet, ReceiptText, PiggyBank, FileSignature,
+    ChartColumn, ChartPie, CalendarDays, MessagesSquare, LibraryBig, NotebookPen, Layers, BrainCircuit
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import AppLogo from './app-logo';
@@ -45,7 +47,7 @@ export function AppSidebar() {
     const getSuperAdminNavItems = (): NavItem[] => {
         const items: NavItem[] = [];
         if (hasPermission(permissions, 'dashboard_view')) {
-            items.push({ title: t('Dashboard'), href: route('dashboard'), icon: LayoutGrid });
+            items.push({ title: t('Dashboard'), href: route('dashboard'), icon: LayoutDashboard });
         }
         if (hasPermission(permissions, 'company_view_any')) {
             items.push({ title: t('Companies'), href: route('companies.index'), icon: Building2 });
@@ -111,14 +113,14 @@ export function AppSidebar() {
         const currentWorkspaceId = auth?.user?.current_workspace_id;
 
         if (can('dashboard_view')) {
-            main.push({ title: t('Dashboard'), href: route('dashboard'), icon: LayoutGrid });
+            main.push({ title: t('Dashboard'), href: route('dashboard'), icon: LayoutDashboard });
         }
         if (can('project_view_any')) {
-            main.push({ title: t('Projects'), href: route('projects.index'), icon: FolderOpen });
+            main.push({ title: t('Projects'), href: route('projects.index'), icon: FolderKanban });
         }
         if (can('task_view_any')) {
             // Members only see their own tasks there, so say so.
-            main.push({ title: isMember ? t('My Tasks') : t('Tasks'), href: route('tasks.index'), icon: CheckSquare });
+            main.push({ title: isMember ? t('My Tasks') : t('Tasks'), href: route('tasks.index'), icon: ListChecks });
         }
         // One timesheet page: the week, submitted from the same screen. Owners log
         // time from the header timer; reviewing time is in Approvals.
@@ -139,31 +141,31 @@ export function AppSidebar() {
             main.push({
                 title: t('Approvals'),
                 href: auth?.approvalsHref ?? route('approvals.index'),
-                icon: ClipboardCheck,
+                icon: BadgeCheck,
                 badge: waiting ? { label: String(waiting) } : undefined,
                 matches: [route('timesheet-approvals.index'), route('expense-approvals.index')],
             });
         }
         // Members claim expenses; owners and managers review them in Approvals.
         if (isMember && can('expense_view_any')) {
-            main.push({ title: t('Expenses'), href: route('expenses.index'), icon: Receipt });
+            main.push({ title: t('Expenses'), href: route('expenses.index'), icon: Wallet });
         }
         if (can('invoice_view_any') && !isMember) {
-            main.push({ title: t('Invoices'), href: route('invoices.index'), icon: Receipt });
+            main.push({ title: t('Invoices'), href: route('invoices.index'), icon: ReceiptText });
         }
         if (flags.budgets_page && can('budget_view_any') && !isClient) {
-            main.push({ title: t('Budgets'), href: route('budgets.index'), icon: DollarSign });
+            main.push({ title: t('Budgets'), href: route('budgets.index'), icon: PiggyBank });
         }
         // Contracts are between the owner and the client (e-signature).
         if (flags.contracts && can('contract_view_any') && (isOwner || isClient)) {
-            try { main.push({ title: t('Contracts'), href: route('contracts.index'), icon: FileText }); } catch {}
+            try { main.push({ title: t('Contracts'), href: route('contracts.index'), icon: FileSignature }); } catch {}
         }
         // Reports: hours and amounts by project and person.
         if (can('report_timesheet')) {
-            main.push({ title: t('Reports'), href: route('timesheet-reports.index'), icon: BarChart3 });
+            main.push({ title: t('Reports'), href: route('timesheet-reports.index'), icon: ChartColumn });
         }
         if (flags.project_reports && can('project_report_view_any')) {
-            main.push({ title: t('Project Reports'), href: route('project-reports.index'), icon: BarChart3 });
+            main.push({ title: t('Project Reports'), href: route('project-reports.index'), icon: ChartPie });
         }
         if (can('team_view') && currentWorkspaceId && (isOwner || isManager)) {
             main.push({ title: t('Team'), href: route('team.index', currentWorkspaceId), icon: Users });
@@ -174,27 +176,27 @@ export function AppSidebar() {
             tools.push({ title: t('Bugs'), href: route('tasks.index', { type: 'bug' }), icon: Bug, group: TOOLS_GROUP });
         }
         if (flags.calendar && can('task_calendar_view')) {
-            try { tools.push({ title: t('Calendar'), href: route('task-calendar.index'), icon: Calendar, group: TOOLS_GROUP }); } catch {}
+            try { tools.push({ title: t('Calendar'), href: route('task-calendar.index'), icon: CalendarDays, group: TOOLS_GROUP }); } catch {}
         }
         if (flags.chat && !modulesLocked && can('chat_view')) {
-            tools.push({ title: t('Chat'), href: route('chat.index'), icon: MessageSquare, group: TOOLS_GROUP });
+            tools.push({ title: t('Chat'), href: route('chat.index'), icon: MessagesSquare, group: TOOLS_GROUP });
         }
         if (flags.knowledge_base && !modulesLocked && can('kb_view_any')) {
-            tools.push({ title: t('Knowledge Base'), href: route('kb.index'), icon: BookOpen, group: TOOLS_GROUP });
+            tools.push({ title: t('Knowledge Base'), href: route('kb.index'), icon: LibraryBig, group: TOOLS_GROUP });
         }
         if (flags.notes && can('note_view_any')) {
-            tools.push({ title: t('Notes'), href: route('notes.index'), icon: BookOpen, group: TOOLS_GROUP });
+            tools.push({ title: t('Notes'), href: route('notes.index'), icon: NotebookPen, group: TOOLS_GROUP });
         }
         // Forms are built by owners and managers; members only fill in the public link.
         if (flags.forms && can('form_view_any') && !isMember) {
             tools.push({ title: t('Forms'), href: route('forms.index'), icon: ClipboardList, group: TOOLS_GROUP });
         }
         if (flags.portfolios && can('project_view_any')) {
-            try { tools.push({ title: t('Portfolios'), href: route('portfolios.index'), icon: FolderKanban, group: TOOLS_GROUP }); } catch {}
+            try { tools.push({ title: t('Portfolios'), href: route('portfolios.index'), icon: Layers, group: TOOLS_GROUP }); } catch {}
         }
         // AI Tools (Risk Radar, Resource Conflicts, Standup Bot, custom agents): owners and managers.
         if (flags.ai && !modulesLocked && can('agent_advanced_insights')) {
-            tools.push({ title: t('AI'), href: route('ai.index'), icon: Bot, group: TOOLS_GROUP });
+            tools.push({ title: t('AI'), href: route('ai.index'), icon: BrainCircuit, group: TOOLS_GROUP });
         }
         // AI Assistant: owners and managers only (aiAssistant is null for other roles).
         // Owners without the AI add-on still see it, and the route sends them to the
@@ -262,7 +264,9 @@ export function AppSidebar() {
             key={`sidebar-${effectivePosition}-${isRtl}`}
             side={effectivePosition}
             collapsible={collapsible}
-            variant={variant}
+            // The app frame is the floating panel (inset) unless "floating" is picked
+            // in Brand settings; older saved values ("sidebar", "minimal") map to inset.
+            variant={variant === 'floating' ? 'floating' : 'inset'}
             className={style !== 'plain' ? 'sidebar-custom-style' : ''}
         >
             <SidebarHeader className={style !== 'plain' ? 'sidebar-styled' : ''} style={sidebarStyle}>

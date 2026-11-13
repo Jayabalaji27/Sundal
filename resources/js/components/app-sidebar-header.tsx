@@ -25,7 +25,8 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
     const showTrail = trail.length > 1;
 
     return (
-        <header className="flex h-13 shrink-0 items-center gap-2 border-b border-ds-border-subtle bg-ds-surface px-4 sm:px-6 lg:px-8">
+        // rounded-t-[inherit] follows the page panel's rounded top corners.
+        <header className="flex h-13 shrink-0 items-center gap-2 rounded-t-[inherit] border-b border-ds-border-subtle bg-ds-surface px-4 sm:px-6 lg:px-8">
             <div className="flex w-full items-center justify-between gap-2">
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                     {position === 'left' && <SidebarTrigger className="-ml-2 size-9 shrink-0 text-ds-fg-muted" />}

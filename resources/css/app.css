@@ -110,11 +110,11 @@
     --input: var(--ds-border-strong);
     --ring: var(--ds-brand-500);
     --radius: 0.625rem;
-    --sidebar: var(--ds-surface);
+    --sidebar: var(--ds-shell);
     --sidebar-foreground: var(--ds-text-control);
     --sidebar-primary: var(--ds-brand-600);
     --sidebar-primary-foreground: var(--ds-text-on-brand);
-    --sidebar-accent: var(--ds-nav-hover);
+    --sidebar-accent: var(--ds-shell-hover);
     --sidebar-accent-foreground: var(--ds-text-primary);
     --sidebar-border: var(--ds-border-subtle);
     --sidebar-ring: var(--ds-brand-500);
