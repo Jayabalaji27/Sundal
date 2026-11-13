@@ -18,6 +18,14 @@ class PlanLimitService
     {
         return config('app.is_saas', false);
     }
+
+    /** The development project cap per workspace, or null when the plan decides. */
+    public function devProjectLimit(): ?int
+    {
+        $limit = config('app.dev_max_projects_per_workspace');
+
+        return $limit ? (int) $limit : null;
+    }
     /**
      * Check if user can create a new workspace
      */
@@ -208,6 +216,15 @@ class PlanLimitService
      */
     public function canCreateProject(Workspace $workspace): array
     {
+        // Development cap (DEV_MAX_PROJECTS_PER_WORKSPACE): the same limit for every workspace.
+        if ($devLimit = $this->devProjectLimit()) {
+            $currentProjects = $workspace->projects()->count();
+
+            return $currentProjects >= $devLimit
+                ? ['allowed' => false, 'message' => __('Project limit reached. This workspace can have :limit projects, you currently have :current.', ['limit' => $devLimit, 'current' => $currentProjects])]
+                : ['allowed' => true];
+        }
+
         // Override limits if SaaS mode is disabled
         if (!$this->isSaasMode()) {
             return ['allowed' => true];
@@ -400,8 +417,8 @@ class PlanLimitService
                 ],
                 'projects' => [
                     'current' => $workspace->projects->count(),
-                    'limit' => $plan->max_projects_per_workspace,
-                    'unlimited' => !$plan->max_projects_per_workspace
+                    'limit' => $this->devProjectLimit() ?? $plan->max_projects_per_workspace,
+                    'unlimited' => !($this->devProjectLimit() ?? $plan->max_projects_per_workspace)
                 ]
             ];
         }

@@ -14,10 +14,41 @@ const PHRASES: Record<LocalCommand, string[]> = {
     stop: ['stop', 'stop listening', 'thats all', 'that is all', 'goodbye', 'bye', 'thank you thats all'],
 };
 
+/**
+ * Looser answers to a card, said in a few words: "okay that's fine, create it",
+ * "yes go ahead and save it". Every word must be one of these or a filler, and
+ * the answer must lean one way only, so "yes but make it high priority" still
+ * goes to the AI.
+ */
+const ANSWER_WORDS: Record<'confirm' | 'cancel', string[]> = {
+    confirm: [
+        'yes', 'yeah', 'yep', 'yup', 'ya', 'yah', 'sure', 'ok', 'okay', 'okey', 'alright', 'confirm', 'confirmed', 'approve', 'approved',
+        'proceed', 'create', 'save', 'submit', 'add', 'fine', 'good', 'perfect', 'correct', 'right', 'great', 'absolutely', 'definitely',
+    ],
+    cancel: ['no', 'nope', 'nah', 'cancel', 'cancelled', 'dont', 'discard', 'skip', 'forget'],
+};
+
+const FILLER_WORDS = [
+    'please', 'it', 'its', 'that', 'thats', 'this', 'is', 'the', 'now', 'just', 'you', 'can', 'and', 'all', 'set', 'looks', 'sounds',
+    'go', 'ahead', 'do', 'everything', 'then', 'so', 'thanks', 'thank', 'about', 'with', 'one', 'fine', 'good', 'ok', 'okay',
+];
+
 export function matchCommand(text: string): LocalCommand | null {
     const said = text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
 
-    return (Object.keys(PHRASES) as LocalCommand[]).find(command => PHRASES[command].includes(said)) ?? null;
+    const exact = (Object.keys(PHRASES) as LocalCommand[]).find(command => PHRASES[command].includes(said));
+    if (exact) return exact;
+
+    const words = said.split(' ').filter(Boolean);
+    if (words.length === 0 || words.length > 10) return null;
+    const known = new Set([...ANSWER_WORDS.confirm, ...ANSWER_WORDS.cancel, ...FILLER_WORDS]);
+    if (!words.every(word => known.has(word))) return null;
+
+    const confirms = words.some(word => ANSWER_WORDS.confirm.includes(word)) || ` ${said} `.includes(' go ahead ') || ` ${said} `.includes(' do it ');
+    const cancels = words.some(word => ANSWER_WORDS.cancel.includes(word));
+    if (confirms === cancels) return null;
+
+    return confirms ? 'confirm' : 'cancel';
 }
 
 /** Most items a card may touch and still be confirmed by voice. */

@@ -2260,6 +2260,19 @@ describe('document plans', function () {
         expect(Task::where('project_id', $web->id)->pluck('priority', 'title')->all())->toBe(['Sign in' => 'critical', 'Weekly report export' => 'medium']);
     });
 
+    test('the development project cap applies to every workspace, whatever the plan', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiProject($workspace, $users['owner']);
+        $users['owner']->getCurrentPlan()->update(['max_projects_per_workspace' => 100]);
+        $limits = app(\App\Services\PlanLimitService::class);
+
+        expect($limits->canCreateProject($workspace)['allowed'])->toBeTrue();
+
+        config(['app.dev_max_projects_per_workspace' => 1]);
+        expect($limits->canCreateProject($workspace))->toMatchArray(['allowed' => false])
+            ->and($limits->canCreateProject($workspace)['message'])->toContain('can have 1 projects');
+    });
+
     test('a full plan cannot take a new project: the card says so and an existing project still works', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
@@ -3052,6 +3065,24 @@ describe('faster voice', function () {
 
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today', 'voice' => true])->assertOk();
         expect(toolNames($fake))->toContain('create_task', 'list_bugs', 'create_invoice');
+    });
+
+    test('while a card waits, the model is told it cannot confirm it', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        aiProject($workspace, $users['owner']);
+
+        fakeAi([['tool' => 'create_task', 'args' => ['title' => 'login page', 'project' => 'Website Redesign']], ['text' => 'Please confirm.']]);
+        $chat = asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'create a task login page in Website Redesign', 'voice' => true])
+            ->assertJsonPath('messages.1.cards.0.status', 'pending')->json('conversation.id');
+
+        $fake = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat, 'content' => 'thats that you can close it', 'voice' => true])->assertOk();
+        expect($fake->requests[0]->system)->toContain('still waiting for the user')->toContain('say "yes"');
+
+        $fresh = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today'])->assertOk();
+        expect($fresh->requests[0]->system)->not->toContain('still waiting for the user');
     });
 
     test('a greeting or thanks gets no tools at all', function () {
