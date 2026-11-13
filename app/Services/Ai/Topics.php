@@ -50,8 +50,11 @@ class Topics
 
     /** Words that show a message is about a topic, for the out-of-topic check. */
     private const KEYWORDS = [
-        'tasks' => ['task', 'tasks', 'todo', 'to-do', 'story', 'stories', 'sprint', 'sprints', 'stage', 'kanban', 'backlog', 'epic', 'epics'],
-        'bugs' => ['bug', 'bugs', 'defect', 'defects', 'issue', 'issues', 'crash', 'crashes'],
+        'tasks' => [
+            'task', 'tasks', 'todo', 'to-do', 'story', 'stories', 'sprint', 'sprints', 'stage', 'kanban', 'backlog', 'epic', 'epics',
+            'assign', 'assigned', 'assignee', 'due', 'overdue', 'deadline', 'priority', 'checklist', 'subtask', 'subtasks', 'board',
+        ],
+        'bugs' => ['bug', 'bugs', 'defect', 'defects', 'issue', 'issues', 'crash', 'crashes', 'fix', 'severity', 'assign', 'assigned'],
         'projects' => ['project', 'projects', 'milestone', 'milestones', 'report', 'reports', 'progress', 'epic', 'epics', 'meeting', 'meetings', 'call', 'stand-up', 'standup', 'review', 'reschedule'],
         'time' => ['hours', 'hour', 'hrs', 'timer', 'log time', 'logged', 'worked', 'timesheet', 'timesheets', 'time entry', 'time entries', 'my time', 'clock'],
         'approvals' => ['approve', 'approval', 'approvals', 'reject', 'timesheet', 'timesheets', 'expense', 'expenses', 'pending'],
@@ -66,6 +69,22 @@ class Topics
         'team' => ['invite', 'invitation', 'team', 'member', 'members', 'people', 'colleague', 'colleagues'],
         'help' => ['how do i', 'how to', 'how can i', 'policy', 'guide', 'help', 'documentation', 'knowledge base', 'article', 'articles', 'kb'],
     ];
+
+    /**
+     * Whole messages that need no tools: greetings, thanks, goodbyes. Kept
+     * strict ("ok" and "yes" are left out: they often answer a question that
+     * does need tools).
+     */
+    private const SMALL_TALK = [
+        'hi', 'hii', 'hiii', 'hello', 'helo', 'hey', 'heya', 'hlo', 'hai', 'yo', 'vanakkam', 'namaste',
+        'good morning', 'good afternoon', 'good evening', 'good night', 'gm', 'morning',
+        'thanks', 'thank you', 'thankyou', 'thanks a lot', 'thank you so much', 'thx', 'ty', 'tq',
+        'bye', 'goodbye', 'good bye', 'see you', 'see ya', 'cya',
+        'how are you', 'how r u', 'who are you', 'what can you do', 'what is your name', 'nice', 'great', 'cool', 'awesome',
+    ];
+
+    /** Words that may come with small talk without changing it ("hi there", "thanks Sundal"). */
+    private const SMALL_TALK_FILLER = ['there', 'all', 'everyone', 'sundal', 'assistant', 'ai', 'bot', 'buddy', 'friend', 'sir', 'madam', 'again', 'and', 'so', 'much', 'very'];
 
     public static function label(string $topic): string
     {
@@ -136,6 +155,29 @@ class Topics
             ->filter(fn (array $words) => collect($words)->contains(fn (string $w) => str_contains($said, " {$w} ")))
             ->keys()
             ->all();
+    }
+
+    /** The whole message is only a greeting, thanks or goodbye: the model needs no tools for it. */
+    public static function isSmallTalk(string $text): bool
+    {
+        $said = ' ' . trim(preg_replace('/[^\p{L}\p{N}]+/u', ' ', mb_strtolower($text))) . ' ';
+        if (trim($said) === '' || mb_strlen($said) > 60) {
+            return false;
+        }
+
+        // Longest phrases first, so "thank you" goes before "thank".
+        $phrases = collect(self::SMALL_TALK)->sortByDesc(fn ($p) => mb_strlen($p));
+        $found = false;
+        foreach ($phrases as $phrase) {
+            while (str_contains($said, " {$phrase} ")) {
+                $said = str_replace(" {$phrase} ", ' ', $said);
+                $found = true;
+            }
+        }
+
+        return $found && collect(explode(' ', trim($said)))
+            ->filter()
+            ->every(fn (string $word) => in_array($word, self::SMALL_TALK_FILLER, true));
     }
 
     /** The line added to the system prompt while a topic is on. */

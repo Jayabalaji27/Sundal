@@ -37,6 +37,9 @@ use Throwable;
  */
 class AiAssistant
 {
+    /** Tools a chat with attached files always keeps when the tools are narrowed. */
+    private const FILE_TOOLS = ['read_attachment', 'get_sheet_rows', 'import_bugs_from_sheet', 'import_tasks_from_sheet', 'plan_tasks_from_document'];
+
     public function __construct(
         private readonly ToolRegistry $registry,
         private readonly AiProviderFactory $providers,
@@ -146,24 +149,37 @@ class AiAssistant
         // the right tool too often ("assign the login bug fix" is a task).
         $topic = Topics::valid($conversation->topic) && Topics::appliesTo($conversation->topic, $text) ? $conversation->topic : null;
         $voice = !empty($client['voice']);
-        // A spoken turn with no topic button gets only the tools of the topics its
-        // words mention (all tools when they mention none): far fewer tokens, so
-        // free and small models answer much sooner.
-        $toolTopics = $topic ?? ($voice && config('ai_assistant.voice.tools_by_topic', true) ? Topics::mentioned($text) : []);
+        // Which tools the model gets. Every tool description is sent on every call
+        // (all of them are about 18,000 tokens), and free and small models are slow
+        // to read them, so send only what the message can need:
+        //  - a topic button: that topic's tools;
+        //  - a greeting, thanks or goodbye: none;
+        //  - otherwise the topics the message names, or else those of the last few
+        //    messages (so "assign it to Ravi" keeps the task tools);
+        //  - nothing named anywhere: every tool.
+        $smallTalk = $topic === null && Topics::isSmallTalk($text);
+        $toolTopics = $topic !== null ? [$topic] : ($smallTalk ? [] : $this->toolTopics($conversation, $text, $voice));
+
+        $hasFiles = AiAttachment::withoutGlobalScope('workspace')->where('ai_conversation_id', $conversation->id)->exists();
 
         $turn = new AiTurn($conversation, $user, $text, $settings, $client);
-        $tools = $this->registry->forUser($user, $settings->isReadOnlyModel(), $toolTopics ?: null);
+        $tools = $smallTalk ? [] : $this->registry->forUser($user, $settings->isReadOnlyModel(), $toolTopics ?: null);
 
-        // A draft still waiting in this conversation keeps its tool under a topic,
-        // so an answer to it can still fill it in.
-        if ($toolTopics) {
+        // A chat with files keeps the tools that turn files into work, whatever the words.
+        if ($hasFiles && $toolTopics) {
+            $tools += array_intersect_key($this->registry->forUser($user, $settings->isReadOnlyModel()), array_flip(self::FILE_TOOLS));
+        }
+
+        // A draft still waiting in this conversation keeps its tool when the tools
+        // are narrowed, so an answer to it can still fill it in.
+        if ($toolTopics || $smallTalk) {
             $waiting = AiToolCall::where('ai_conversation_id', $conversation->id)->where('user_id', $user->id)
                 ->where('status', AiToolCall::PENDING)->pluck('tool')->all();
             $tools += array_intersect_key($this->registry->forUser($user, $settings->isReadOnlyModel()), array_flip($waiting));
         }
 
         $request = new AiRequest(
-            system: $this->systemPrompt($user, $tools, $topic, $client, AiAttachment::withoutGlobalScope('workspace')->where('ai_conversation_id', $conversation->id)->exists()),
+            system: $this->systemPrompt($user, $tools, $topic, $client, $hasFiles),
             messages: $this->history($conversation, $voice ? (int) config('ai_assistant.voice.history_messages', 6) : null),
             tools: array_values(array_map(fn (AiTool $tool) => new ToolSpec(
                 $tool->name(),
@@ -220,6 +236,7 @@ class AiAssistant
             'provider' => $settings->provider,
             'model' => $settings->model,
             'tools_offered' => count($tools),
+            'tool_topics' => $topic === null ? ($smallTalk ? ['small_talk'] : $toolTopics) : null,
             // In order, as "tool:status", e.g. ["list_tasks:done", "create_task:pending"].
             'tool_calls' => $turn->toolCallIds
                 ? AiToolCall::whereIn('id', $turn->toolCallIds)->orderBy('id')->get(['tool', 'status'])->map(fn (AiToolCall $c) => "{$c->tool}:{$c->status}")->all()
@@ -891,6 +908,34 @@ class AiAssistant
     }
 
     /** @return array<int, array{role: string, content: string}> */
+    /**
+     * With no topic button: the topics this message names, or else the topics
+     * named in the user's last few messages. Empty means every tool.
+     *
+     * @return string[]
+     */
+    private function toolTopics(AiConversation $conversation, string $text, bool $voice): array
+    {
+        if (!config($voice ? 'ai_assistant.voice.tools_by_topic' : 'ai_assistant.tools_by_topic', true)) {
+            return [];
+        }
+        if ($mentioned = Topics::mentioned($text)) {
+            return $mentioned;
+        }
+
+        // The current message is already saved: skip it.
+        return $conversation->messages()
+            ->where('role', 'user')
+            ->reorder('id', 'desc')
+            ->skip(1)
+            ->limit((int) config('ai_assistant.topic_lookback_messages', 3))
+            ->pluck('content')
+            ->flatMap(fn (string $earlier) => Topics::mentioned($earlier))
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     private function history(AiConversation $conversation, ?int $limit = null): array
     {
         $limit ??= config('ai_assistant.history_messages', 20);

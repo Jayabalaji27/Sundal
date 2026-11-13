@@ -380,7 +380,7 @@ describe('chat', function () {
         aiSettings($workspace);
         $fake = fakeAi([['text' => 'ok']]);
 
-        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today'])->assertOk();
 
         expect(toolNames($fake))->toBe(collect(app(\App\Services\Ai\ToolRegistry::class)->all())->keys()->sort()->values()->all())
             ->and(toolNames($fake))->toHaveCount(81);
@@ -391,7 +391,7 @@ describe('chat', function () {
         aiSettings($workspace);
         $fake = fakeAi([['text' => 'ok']]);
 
-        asAi($this, $users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today'])->assertOk();
 
         expect(toolNames($fake))->toContain(
             'list_tasks', 'create_task', 'assign_task', 'change_task_status', 'assign_bug', 'create_bug', 'change_bug_status',
@@ -409,7 +409,7 @@ describe('chat', function () {
         aiSettings($workspace, ['model' => 'claude-haiku-4-5-20251001']);
         $fake = fakeAi([['text' => 'ok']]);
 
-        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today'])->assertOk();
 
         $registry = app(\App\Services\Ai\ToolRegistry::class);
         expect(toolNames($fake))->toContain('list_projects', 'get_project_report', 'search_knowledge_base')
@@ -767,6 +767,8 @@ describe('task screens still work through the shared actions', function () {
 /** Ask the fake model to call one tool; return the resulting card and the tool's reply. */
 function aiCall($test, User $user, string $tool, array $args): array
 {
+    // This checks what the tool does, not which tools a message gets.
+    config(['ai_assistant.tools_by_topic' => false]);
     $fake = fakeAi([['tool' => $tool, 'args' => $args], ['text' => 'ok']]);
     // The user's message names every value, so the form's "did they say it" check keeps them.
     $said = 'go ' . implode(' ', array_map(fn ($v) => is_array($v) ? implode(' ', $v) : (string) $v, $args));
@@ -1243,7 +1245,7 @@ describe('deterministic forms', function () {
         aiSettings($workspace);
         $fake = fakeAi([['text' => 'ok']]);
 
-        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'add a task'])->assertOk();
 
         $createTask = collect($fake->requests[0]->tools)->firstWhere('name', 'create_task');
         expect(collect($createTask->parameters)->pluck('required')->unique()->all())->toBe([false]);
@@ -1278,12 +1280,12 @@ describe('deterministic forms', function () {
 
         // Removed: every tool again.
         $fake = fakeAi([['text' => 'ok']]);
-        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $conversationId, 'content' => 'hi', 'topic' => ''])
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $conversationId, 'content' => 'what should I do today', 'topic' => ''])
             ->assertJsonPath('conversation.topic', null);
         expect(toolNames($fake))->toHaveCount(count(app(\App\Services\Ai\ToolRegistry::class)->all()));
     });
 
-    test('a message clearly about another topic gets every tool, in the same single AI call', function () {
+    test('a message clearly about another topic gets the tools of that topic, in the same single AI call', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
 
@@ -1291,7 +1293,8 @@ describe('deterministic forms', function () {
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'approve the pending timesheets', 'topic' => 'tasks'])->assertOk();
 
         expect($fake->requests)->toHaveCount(1)
-            ->and(toolNames($fake))->toContain('decide_timesheets', 'create_task')
+            ->and(toolNames($fake))->toContain('decide_timesheets', 'list_timesheet_approvals')
+            ->and(toolNames($fake))->not->toContain('create_task')
             ->and($fake->requests[0]->system)->not->toContain('picked the');
     });
 
@@ -1505,7 +1508,8 @@ describe('finance and time tools', function () {
 
         $fake = fakeAi([['tool' => 'create_invoice', 'args' => []], ['text' => 'Which tasks?']]);
         $chat = asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'create an invoice please'])->json('conversation.id');
-        expect(toolNames($fake))->toContain('create_invoice', 'create_task', 'log_time');
+        expect(toolNames($fake))->toContain('create_invoice', 'list_invoices')
+            ->and(toolNames($fake))->not->toContain('create_task', 'log_time');
 
         $fake = fakeAi([['text' => 'ok']]);
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat, 'content' => 'what about the login page task from yesterday?', 'topic' => 'tasks'])->assertOk();
@@ -3037,7 +3041,8 @@ describe('faster voice', function () {
         $typed = fakeAi([['text' => 'ok']]);
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat->id, 'content' => 'list the open bugs'])->assertOk();
         expect(count($typed->requests[0]->messages))->toBeGreaterThan(6)
-            ->and(toolNames($typed))->toContain('create_task', 'create_invoice');
+            ->and(toolNames($typed))->toContain('list_bugs', 'create_bug')
+            ->and(toolNames($typed))->not->toContain('create_invoice');
     });
 
     test('a spoken turn that names no topic keeps every tool', function () {
@@ -3047,6 +3052,49 @@ describe('faster voice', function () {
 
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today', 'voice' => true])->assertOk();
         expect(toolNames($fake))->toContain('create_task', 'list_bugs', 'create_invoice');
+    });
+
+    test('a greeting or thanks gets no tools at all', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+
+        foreach (['hi', 'Hello there!', 'good morning', 'thank you so much', 'bye'] as $said) {
+            $fake = fakeAi([['text' => 'Hello!']]);
+            asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => $said])->assertOk();
+            expect($fake->requests[0]->tools)->toBe([], $said);
+        }
+    });
+
+    test('a typed message with no topic button gets only the tools of the topics it names', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $fake = fakeAi([['text' => 'ok']]);
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'show my overdue tasks'])->assertOk();
+        expect(toolNames($fake))->toContain('list_tasks', 'create_task', 'open_page')
+            ->and(toolNames($fake))->not->toContain('create_invoice', 'decide_expenses');
+    });
+
+    test('a follow-up that names no topic keeps the topics of the last messages', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $chat = AiConversation::create(['user_id' => $users['owner']->id, 'workspace_id' => $workspace->id]);
+        $chat->messages()->create(['role' => 'user', 'content' => 'list the open bugs']);
+        $chat->messages()->create(['role' => 'assistant', 'content' => 'There are 2: Login fails, Logo blurry.']);
+
+        $fake = fakeAi([['text' => 'ok']]);
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['conversation_id' => $chat->id, 'content' => 'give the first one to Ravi'])->assertOk();
+        expect(toolNames($fake))->toContain('list_bugs', 'assign_bug')
+            ->and(toolNames($fake))->not->toContain('create_invoice');
+    });
+
+    test('a typed message that names no topic anywhere keeps every tool', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $fake = fakeAi([['text' => 'ok']]);
+
+        asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today'])->assertOk();
+        expect(toolNames($fake))->toHaveCount(81);
     });
 
     test('a spoken question never becomes a create card, but a spoken command still does', function () {
@@ -3293,7 +3341,7 @@ describe('module coverage', function () {
         aiSettings($workspace);
         $fake = fakeAi([['text' => 'ok']]);
 
-        asAi($this, $users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'hi'])->assertOk();
+        asAi($this, $users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today'])->assertOk();
 
         expect(toolNames($fake))->toContain(
             'update_task', 'update_bug', 'add_comment', 'update_checklist', 'update_project', 'remove_project_members', 'update_epic',
