@@ -125,7 +125,7 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
                     <div className="md:col-span-2 flex flex-col space-y-4 overflow-hidden">
                         <div>
                             <h3 className="text-sm font-medium text-gray-900 mb-2">{t('Description')}</h3>
-                            <div className="text-sm text-gray-600 max-h-32 overflow-y-auto pr-2">
+                            <div className="text-sm text-gray-600 max-h-32 overflow-y-auto pr-2 whitespace-pre-wrap [overflow-wrap:anywhere]">
                                 {currentTask.description || t('-')}
                             </div>
                         </div>

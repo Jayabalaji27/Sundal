@@ -174,7 +174,7 @@ export default function TaskView({ task, activeTab, onTabChange, members = [], w
                                 <CheckSquare className="h-4 w-4" />
                                 {t('Description')}
                             </label>
-                            <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white whitespace-pre-wrap">{task.description}</p>
+                            <p className="mt-1 text-sm font-medium text-gray-900 dark:text-white whitespace-pre-wrap [overflow-wrap:anywhere]">{task.description}</p>
                         </div>
                     )}
                 </TabsContent>
