@@ -510,7 +510,10 @@ class SystemSettingsController extends Controller
                 ->where('workspace_id', $workspaceId)
                 ->first();
 
-            $settings[$template->name] = $userTemplate ? $userTemplate->is_active : false;
+            // Never chosen: on only for the emails that start on (EmailTemplate::DEFAULT_ON).
+            $settings[$template->name] = $userTemplate
+                ? (bool) $userTemplate->is_active
+                : in_array($template->name, \App\Models\EmailTemplate::DEFAULT_ON, true);
         }
 
         return response()->json($settings);

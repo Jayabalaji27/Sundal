@@ -1427,16 +1427,9 @@ if (! function_exists('isEmailTemplateEnabled')) {
             $userId = auth()->id();
         }
 
-        $template = \App\Models\EmailTemplate::where('name', $templateName)->first();
-        if (!$template) {
-            return false;
-        }
-
-        $userTemplate = \App\Models\UserEmailTemplate::where('user_id', $userId)
-            ->where('template_id', $template->id)
-            ->first();
-
-        return $userTemplate ? $userTemplate->is_active : false;
+        // Any workspace's choice counts here (as before); emails in
+        // EmailTemplate::DEFAULT_ON count as on when the owner never chose.
+        return \App\Models\EmailTemplate::isOnFor($templateName, $userId ? (int) $userId : null, anyWorkspace: true);
     }
 }
 

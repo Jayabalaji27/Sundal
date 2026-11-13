@@ -10,6 +10,7 @@ class UserEmailTemplate extends Model
     protected $fillable = [
         'template_id',
         'user_id',
+        'workspace_id',
         'is_active',
     ];
 

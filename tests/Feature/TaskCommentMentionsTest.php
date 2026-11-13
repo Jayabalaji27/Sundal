@@ -184,3 +184,61 @@ describe('notifications', function () {
             ->and($comment->fresh()->mentions)->toBe([$manager->id, $member->id]);
     });
 });
+
+describe('mention email', function () {
+    test('the template is installed by the migration, in every language', function () {
+        $template = \App\Models\EmailTemplate::where('name', 'Comment Mention')->first();
+
+        expect($template)->not->toBeNull()
+            ->and($template->emailTemplateLangs()->count())->toBeGreaterThanOrEqual(16)
+            ->and($template->emailTemplateLangs()->where('lang', 'en')->value('subject'))->toBe('{sender_name} mentioned you on "{task_title}"');
+    });
+
+    test('a mention emails the mentioned person, escaped, in their language, with a link to the task', function () {
+        [$owner, $ws, [$manager]] = tcmWorkspace();
+        $manager->update(['lang' => 'fr']);
+        $task = tcmTask($ws, $owner, [$manager]);
+
+        $this->mock(\App\Services\EmailTemplateService::class, function ($mock) use ($manager, $task, $ws) {
+            $mock->shouldReceive('sendTemplateEmailWithLanguage')->once()->withArgs(
+                fn ($name, $vars, $to, $toName, $lang, $business) => $name === 'Comment Mention'
+                    && $to === $manager->email && $lang === 'fr' && $business->id === $ws->id
+                    && $vars['{comment}'] === '&lt;b&gt;hi&lt;/b&gt;'
+                    && str_contains($vars['{task_url}'], 'task_id=' . $task->id)
+            );
+        });
+
+        $this->actingAs($owner)->post(route('task-comments.store', $task), ['comment' => '<b>hi</b>', 'mentions' => [$manager->id]])
+            ->assertRedirect();
+    });
+
+    test('no email when the owner switched it off, and none for plain comments', function () {
+        [$owner, $ws, [$manager, $member]] = tcmWorkspace();
+        $task = tcmTask($ws, $owner, [$manager, $member], assignee: $member);
+
+        $this->mock(\App\Services\EmailTemplateService::class)->shouldNotReceive('sendTemplateEmailWithLanguage');
+
+        // A comment without mentions emails nobody (the assignee gets the bell notice only).
+        $this->actingAs($owner)->post(route('task-comments.store', $task), ['comment' => 'update']);
+
+        \App\Models\UserEmailTemplate::create([
+            'user_id' => $owner->id, 'workspace_id' => $ws->id, 'is_active' => false,
+            'template_id' => \App\Models\EmailTemplate::where('name', 'Comment Mention')->value('id'),
+        ]);
+        $this->actingAs($owner)->post(route('task-comments.store', $task), ['comment' => '@m', 'mentions' => [$manager->id]]);
+
+        expect(tcmBell($manager))->toBe(['mention' => 1]);
+    });
+
+    test('it starts on in Settings; other emails still start off', function () {
+        [$owner, $ws] = tcmWorkspace([]);
+        \App\Models\EmailTemplate::firstOrCreate(['name' => 'Task Assignment'], ['from' => 'x', 'user_id' => 1]);
+
+        $settings = $this->actingAs($owner)->getJson(route('settings.email-notifications.get'))->assertOk()->json();
+
+        expect($settings['Comment Mention'])->toBeTrue()
+            ->and($settings['Task Assignment'])->toBeFalse()
+            ->and(isEmailTemplateEnabled('Task Assignment', $owner->id))->toBeFalse()
+            ->and(isEmailTemplateEnabled('Comment Mention', $owner->id))->toBeTrue();
+    });
+});

@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\EmailTemplate;
 use App\Models\Task;
 use App\Models\TaskComment;
 use App\Models\User;
 use App\Models\WorkspaceMember;
 use App\Notifications\TaskCommentNotification;
+use App\Services\EmailTemplateService;
+use App\Support\EmailTemplates\CommentMentionTemplate;
 use Illuminate\Http\Request;
 
 class TaskCommentController extends Controller
@@ -146,9 +149,55 @@ class TaskCommentController extends Controller
             : [];
         $followers = array_values(array_diff($followers, $mentionIds, [$authorId]));
 
-        User::whereIn('id', $mentionIds)->get()
-            ->each(fn (User $user) => $user->notify(new TaskCommentNotification($comment, 'mention')));
+        $mentioned = User::whereIn('id', $mentionIds)->get();
+        $mentioned->each(fn (User $user) => $user->notify(new TaskCommentNotification($comment, 'mention')));
         User::whereIn('id', $followers)->get()
             ->each(fn (User $user) => $user->notify(new TaskCommentNotification($comment, 'comment')));
+
+        $this->emailMentioned($comment, $mentioned);
+    }
+
+    /**
+     * "Comment Mention" email to each mentioned person, when the workspace owner
+     * hasn't switched it off (it starts on). Sent after the response so posting
+     * the comment never waits on, or fails because of, the mail server.
+     */
+    private function emailMentioned(TaskComment $comment, $mentioned): void
+    {
+        $task = $comment->task;
+        $workspace = $task->project->workspace;
+
+        if ($mentioned->isEmpty() || !$workspace
+            || !EmailTemplate::isOnFor(CommentMentionTemplate::NAME, (int) $workspace->owner_id, (int) $workspace->id)) {
+            return;
+        }
+
+        $sender = $comment->user?->name ?? '';
+        $base = [
+            '{sender_name}' => e($sender),
+            '{task_title}' => e($task->title),
+            '{project_name}' => e($task->project->title ?? '-'),
+            '{comment}' => nl2br(e($comment->comment)),
+            '{task_url}' => route('tasks.index', ['task_id' => $task->id]),
+            '{company_name}' => e($workspace->name ?: config('app.name')),
+        ];
+
+        dispatch(function () use ($mentioned, $base, $workspace) {
+            $mailer = app(EmailTemplateService::class);
+            foreach ($mentioned as $user) {
+                try {
+                    $mailer->sendTemplateEmailWithLanguage(
+                        templateName: CommentMentionTemplate::NAME,
+                        variables: $base + ['{mentioned_user_name}' => e($user->name)],
+                        toEmail: $user->email,
+                        toName: $user->name,
+                        language: $user->lang ?: 'en',
+                        business: $workspace,
+                    );
+                } catch (\Throwable $e) {
+                    // Logged by EmailTemplateService (IntegrationLog); the bell notice already went out.
+                }
+            }
+        })->afterResponse();
     }
 }
