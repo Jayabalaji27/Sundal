@@ -327,7 +327,7 @@ export default function TaskComments({ task, comments, onUpdate, canAddComments 
                                             rows={2}
                                             listAbove={false}
                                             onSubmitShortcut={() => handleUpdate(comment.id)}
-                                            className="resize-none focus-visible:ring-primary"
+                                            className="resize-none"
                                         />
                                         <div className="flex gap-2">
                                             <Button size="sm" onClick={() => handleUpdate(comment.id)}>
@@ -369,7 +369,7 @@ export default function TaskComments({ task, comments, onUpdate, canAddComments 
                                 placeholder={people.length ? t('Write a comment… type @ to mention someone') : t('Write a comment…')}
                                 rows={3}
                                 onSubmitShortcut={submit}
-                                className="resize-none rounded-xl py-3 pr-12 focus-visible:border-primary focus-visible:ring-primary"
+                                className="resize-none rounded-xl py-3 pr-12"
                             />
                             <div className="absolute bottom-2 right-2">
                                 <Button aria-label={t('Send')}

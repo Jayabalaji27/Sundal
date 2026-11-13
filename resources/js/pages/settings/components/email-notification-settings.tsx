@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { router } from '@inertiajs/react';
 import { Save } from 'lucide-react';
@@ -14,6 +14,49 @@ interface NotificationItem {
     label: string;
     description?: string;
 }
+
+// Groups and one-line "who gets it" for the known emails. Templates not listed
+// here (e.g. one added later) still show, under "Other".
+const GROUPS: { title: string; items: Record<string, string> }[] = [
+    {
+        title: 'Team',
+        items: {
+            'Workspace Invitation': 'To people invited to join the workspace',
+            'User Created': 'Sign-in details to a newly created user',
+        },
+    },
+    {
+        title: 'Projects & tasks',
+        items: {
+            'Project Assignment': 'To a person added to a project',
+            'Task Assignment': 'To the person a task is assigned to',
+            'Comment Mention': 'To a person @mentioned in a task comment',
+        },
+    },
+    {
+        title: 'Clients',
+        items: {
+            'Invoice Notification': 'Invoice emailed to the client',
+            'New Contract': 'Contract emailed to the client',
+            'Expense Notification': 'Expense details emailed to the client',
+        },
+    },
+    {
+        title: 'Meetings',
+        items: {
+            'Zoom Meeting Notification': 'Invitation to the Zoom meeting’s members',
+            'Google Meeting Notification': 'Invitation to the Google Meet’s members',
+        },
+    },
+    {
+        title: 'To-dos',
+        items: {
+            'Todo Created': 'To the to-do’s members when it is created',
+            'Todo Status Updated': 'When a to-do’s status changes',
+            'Todo Comments Added': 'To the to-do’s members on a new comment',
+        },
+    },
+];
 
 export default function EmailNotificationSettings() {
     const { t } = useTranslation();
@@ -40,11 +83,37 @@ export default function EmailNotificationSettings() {
             });
     }, []);
 
+    // The emails this account has, sorted into GROUPS; anything unknown goes to "Other".
+    const groups = useMemo(() => {
+        const available = new Map(availableNotifications.map(item => [item.name, item]));
+        const used = new Set<string>();
+        const result: { title: string; items: NotificationItem[] }[] = GROUPS.map(group => ({
+            title: group.title,
+            items: Object.entries(group.items)
+                .filter(([name]) => available.has(name))
+                .map(([name, description]) => {
+                    used.add(name);
+                    return { ...available.get(name)!, description };
+                }),
+        })).filter(group => group.items.length > 0);
+
+        const other = availableNotifications.filter(item => !used.has(item.name));
+        if (other.length) result.push({ title: 'Other', items: other });
+        return result;
+    }, [availableNotifications]);
+
+    const total = availableNotifications.length;
+    const onCount = availableNotifications.filter(item => notifications[item.name]).length;
+
     const handleToggle = (key: string, enabled: boolean) => {
         setNotifications(prev => ({
             ...prev,
             [key]: enabled
         }));
+    };
+
+    const setAll = (enabled: boolean) => {
+        setNotifications(Object.fromEntries(availableNotifications.map(item => [item.name, enabled])));
     };
 
     const handleSave = (e: React.FormEvent) => {
@@ -82,19 +151,48 @@ export default function EmailNotificationSettings() {
                 </Button>
             }
         >
-            <div className="space-y-4">
-                {availableNotifications.map(item => (
-                    <div key={item.name} className="flex items-center justify-between p-4 border rounded-md">
-                        <div>
-                            <Label htmlFor={item.name} className="text-sm font-medium">
-                                {t(item.label)}
-                            </Label>
-                        </div>
-                        <Switch
-                            id={item.name}
-                            checked={notifications[item.name] || false}
-                            onCheckedChange={(checked) => handleToggle(item.name, checked)}
-                        />
+            {total > 0 && (
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm text-ds-fg-secondary">
+                        {t('{{on}} of {{total}} emails on', { on: onCount, total })}
+                    </p>
+                    <div className="flex gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => setAll(true)} disabled={onCount === total}>
+                            {t('Turn all on')}
+                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setAll(false)} disabled={onCount === 0}>
+                            {t('Turn all off')}
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {/* Two balanced columns on wide screens; a group never splits across them. */}
+            <div className="gap-4 lg:columns-2">
+                {groups.map(group => (
+                    <div key={group.title} className="mb-4 break-inside-avoid overflow-hidden rounded-lg border border-ds-border-subtle">
+                        <h4 className="border-b border-ds-border-subtle bg-ds-surface-subtle px-4 py-2 text-xs font-semibold uppercase tracking-wide text-ds-fg-muted">
+                            {t(group.title)}
+                        </h4>
+                        <ul className="divide-y divide-ds-border-subtle">
+                            {group.items.map(item => (
+                                <li key={item.name} className="flex items-center justify-between gap-4 px-4 py-2.5">
+                                    <div className="min-w-0">
+                                        <Label htmlFor={`email-${item.name}`} className="cursor-pointer text-sm font-medium text-ds-fg">
+                                            {t(item.label)}
+                                        </Label>
+                                        {item.description && (
+                                            <p className="mt-0.5 text-xs text-ds-fg-muted">{t(item.description)}</p>
+                                        )}
+                                    </div>
+                                    <Switch
+                                        id={`email-${item.name}`}
+                                        checked={notifications[item.name] || false}
+                                        onCheckedChange={(checked) => handleToggle(item.name, checked)}
+                                    />
+                                </li>
+                            ))}
+                        </ul>
                     </div>
                 ))}
             </div>
