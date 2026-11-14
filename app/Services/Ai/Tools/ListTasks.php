@@ -29,7 +29,7 @@ class ListTasks extends AiTool
         return [
             'project' => ['type' => 'string', 'description' => 'Project title or id.'],
             'assignee' => ['type' => 'string', 'description' => '"me", a person\'s name or email, or "unassigned".'],
-            'stage' => ['type' => 'string', 'description' => 'Task stage name, e.g. To Do, In Progress, Done.'],
+            'stage' => ['type' => 'string', 'description' => 'Task stage name, e.g. To Do, In Progress, Done. "Open" means every stage but done.'],
             'search' => ['type' => 'string', 'description' => 'Part of the task title.'],
             'type' => ['type' => 'enum', 'options' => ['task', 'bug'], 'description' => 'Bugs are tasks of type bug. Leave out for both.'],
             'epic' => ['type' => 'string', 'description' => 'Epic name or id: only its items.'],
@@ -57,7 +57,9 @@ class ListTasks extends AiTool
                 : $query->where('assigned_to', $this->resolver->member($user, $args['assignee'])->id);
         }
         if (!empty($args['stage'])) {
-            $query->where('task_stage_id', $this->resolver->taskStage($user, $args['stage'])->id);
+            RecordResolver::meansOpen($args['stage'])
+                ? $query->whereHas('taskStage', fn ($s) => $s->where('is_completed', false))
+                : $query->where('task_stage_id', $this->resolver->taskStage($user, $args['stage'])->id);
         }
         if (!empty($args['search'])) {
             $query->where('title', 'like', '%' . addcslashes($args['search'], '%_\\') . '%');

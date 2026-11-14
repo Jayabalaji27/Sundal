@@ -312,6 +312,12 @@ class RecordResolver
         return round((float) $number, 2);
     }
 
+    /** A list filter word that means "every stage but done" ("open bugs", "pending tasks"), not one stage. */
+    public static function meansOpen(string $word): bool
+    {
+        return in_array(strtolower(trim($word)), ['open', 'opened', 'active', 'unresolved', 'not done', 'not completed', 'pending', 'outstanding', 'remaining', 'incomplete', 'all open'], true);
+    }
+
     public function taskStage(User $user, string $ref): TaskStage
     {
         return $this->one(TaskStage::forWorkspace($user->current_workspace_id), $ref, 'name', __('task stage'));

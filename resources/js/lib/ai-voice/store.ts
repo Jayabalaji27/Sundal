@@ -29,6 +29,18 @@ export interface VoiceState {
     level: number;
     /** A problem to show (mic blocked, provider error…). */
     notice: string | null;
+    /** Talking over the reply interrupts it (remembered in this browser). */
+    bargeIn: boolean;
+}
+
+const BARGE_IN_KEY = 'sundal.voice.bargeIn';
+
+function savedBargeIn(): boolean {
+    try {
+        return window.localStorage.getItem(BARGE_IN_KEY) !== '0';
+    } catch {
+        return true;
+    }
 }
 
 const MAX_MESSAGES = 30;
@@ -44,9 +56,26 @@ let state: VoiceState = {
     interim: '',
     level: 0,
     notice: null,
+    bargeIn: typeof window === 'undefined' ? true : savedBargeIn(),
 };
 
 const listeners = new Set<() => void>();
+
+/** Turn "interrupt by talking" on or off, and remember it in this browser. */
+export function setBargeIn(on: boolean): void {
+    try {
+        window.localStorage.setItem(BARGE_IN_KEY, on ? '1' : '0');
+    } catch {
+        // Storage blocked: the choice lasts until the page reloads.
+    }
+    setVoice({ bargeIn: on });
+}
+
+/** Called after every change (for code outside React). */
+export function subscribeVoice(listener: () => void): () => void {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+}
 
 export function getVoice(): VoiceState {
     return state;
