@@ -54,6 +54,15 @@ const SPEECH_LEVEL = 0.025;
 const END_SILENCE_MS = 800;
 /** Give up when nothing is said for this long. */
 const NO_SPEECH_MS = 7000;
+/** Browser speech: finish when the words stop changing for this long (Chrome alone waits longer). */
+const QUICK_END_MS = 800;
+
+/** Talking over the reply: louder than this (and than the reply's own echo)… */
+const BARGE_MIN_LEVEL = 0.06;
+/** …for this long interrupts it. */
+const BARGE_HOLD_MS = 400;
+/** The first moments of the reply set how loud its own echo is in the mic. */
+const BARGE_CALIBRATE_MS = 700;
 
 export function browserSpeechSupported(): boolean {
     return recognitionClass() !== undefined;
@@ -178,7 +187,18 @@ export function listenWithBrowser(options: { lang: string; onInterim: (text: str
     recognition.maxAlternatives = 1;
 
     let finalText = '';
+    let heard = '';
+    let changedAt = 0;
     let cancelled = false;
+
+    // Finish once the words stop changing for a moment, instead of waiting for
+    // Chrome's own (longer) end of speech.
+    const quickEnd = window.setInterval(() => {
+        if (heard && Date.now() - changedAt > QUICK_END_MS) {
+            window.clearInterval(quickEnd);
+            recognition.stop();
+        }
+    }, 100);
 
     const result = new Promise<string>((resolve, reject) => {
         recognition.onresult = event => {
@@ -189,15 +209,22 @@ export function listenWithBrowser(options: { lang: string; onInterim: (text: str
                 if (event.results[i].isFinal) finalText += text;
                 else interim += text;
             }
-            options.onInterim((finalText + ' ' + interim).trim());
+            const now = (finalText + ' ' + interim).trim();
+            if (now !== heard) {
+                heard = now;
+                changedAt = Date.now();
+            }
+            options.onInterim(now);
         };
         recognition.onerror = event => {
             if (event.error === 'not-allowed' || event.error === 'service-not-allowed') reject(new MicBlockedError(event.error));
             // 'no-speech', 'aborted', 'network'…: end with what was heard.
         };
         recognition.onend = () => {
+            window.clearInterval(quickEnd);
             options.onInterim('');
-            resolve(cancelled ? '' : finalText.trim());
+            // Stopped early: the last words may not be marked final yet.
+            resolve(cancelled ? '' : finalText.trim() || heard);
         };
         recognition.start();
     });
@@ -207,7 +234,68 @@ export function listenWithBrowser(options: { lang: string; onInterim: (text: str
         stop: () => recognition.stop(),
         cancel: () => {
             cancelled = true;
+            window.clearInterval(quickEnd);
             recognition.abort();
         },
     };
+}
+
+/**
+ * Listen to the mic while the reply is spoken, and call onSpeech once when
+ * the user talks over it. Echo cancellation removes most of the reply from the
+ * mic; what is left is measured in the first moments and the user must be
+ * clearly louder than that. Returns a function that stops listening.
+ */
+export function watchForSpeech(onSpeech: () => void): () => void {
+    let stopped = false;
+    let stream: MediaStream | null = null;
+    let context: AudioContext | null = null;
+    let timer = 0;
+
+    const stop = () => {
+        stopped = true;
+        window.clearInterval(timer);
+        stream?.getTracks().forEach(track => track.stop());
+        context?.close().catch(() => undefined);
+    };
+
+    if (!recordingSupported()) return stop;
+
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(media => {
+        stream = media;
+        if (stopped) {
+            stop();
+            return;
+        }
+        context = new AudioContext();
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 1024;
+        context.createMediaStreamSource(media).connect(analyser);
+        const samples = new Float32Array(analyser.fftSize);
+        const started = Date.now();
+        let echo = 0;
+        let loudSince = 0;
+
+        timer = window.setInterval(() => {
+            analyser.getFloatTimeDomainData(samples);
+            const level = Math.sqrt(samples.reduce((sum, s) => sum + s * s, 0) / samples.length);
+            const now = Date.now();
+
+            if (now - started < BARGE_CALIBRATE_MS) {
+                echo = Math.max(echo, level);
+                return;
+            }
+            if (level > Math.max(BARGE_MIN_LEVEL, echo * 2)) {
+                loudSince ||= now;
+                if (now - loudSince >= BARGE_HOLD_MS) {
+                    stop();
+                    onSpeech();
+                }
+            } else {
+                loudSince = 0;
+            }
+        }, 50);
+    }, () => undefined);
+
+    return stop;
 }

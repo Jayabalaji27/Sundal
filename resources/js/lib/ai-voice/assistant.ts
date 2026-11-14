@@ -13,8 +13,8 @@ import i18next from 'i18next';
 import { router } from '@inertiajs/react';
 import { errorMessage, isSundalPath, type Message, type ToolCard } from '@/components/ai-confirm-card';
 import { post as postToTabs } from '@/lib/ai-mode';
-import { addMessages, getVoice, setVoice, updateCard } from './store';
-import { MicBlockedError, browserSpeechSupported, listenWithBrowser, listenWithServer, recordingSupported, type ListenHandle } from './recognizer';
+import { addMessages, getVoice, setVoice, subscribeVoice, updateCard } from './store';
+import { MicBlockedError, browserSpeechSupported, listenWithBrowser, listenWithServer, recordingSupported, watchForSpeech, type ListenHandle } from './recognizer';
 import { speak, speechQueue, stopSpeaking } from './speaker';
 import { matchCommand, voiceConfirmable, type LocalCommand } from './commands';
 
@@ -29,10 +29,12 @@ const IDLE_PAUSE_MS = 2 * 60 * 1000;
 /** A listening turn that ends this fast with nothing heard (a recognizer error) waits before the next. */
 const RETRY_DELAY_MS = 1000;
 /**
- * Say "One moment." only when the reply is unusually slow to start. Free models
- * often take 3–6 s even for "hi", so a shorter wait made it play on almost every turn.
+ * A short "let me check" when the reply has not started by then, so the wait
+ * is not silent. Greetings (no tools) answer in about 1–2 s and skip it.
  */
-const FILLER_AFTER_MS = 8000;
+const FILLER_AFTER_MS = 2500;
+const FILLERS = ['One moment.', 'Let me check.', 'Okay, checking.', 'Just a second.'];
+let fillerTurn = 0;
 /** Sentences of a reply that are spoken; the full answer stays on screen. */
 const SPOKEN_SENTENCES = 2;
 
@@ -192,14 +194,36 @@ export function setMicMuted(muted: boolean): void {
     void listen();
 }
 
+/** Stop the reply and listen: the orb was tapped, or the user talked over it. */
+function interrupt(): void {
+    if (getVoice().status !== 'speaking') return;
+    stopSpeaking();
+    setVoice({ status: 'idle' });
+    lastSpeechAt = Date.now();
+    void listen();
+}
+
+// Interrupt by talking: listen for the user while a reply is spoken.
+let stopWatching: (() => void) | null = null;
+if (typeof window !== 'undefined') {
+    subscribeVoice(() => {
+        const { live, status, bargeIn, micMuted } = getVoice();
+        const watch = live && status === 'speaking' && bargeIn && !micMuted;
+        if (watch && !stopWatching) {
+            stopWatching = watchForSpeech(interrupt);
+        } else if (!watch && stopWatching) {
+            const stop = stopWatching;
+            stopWatching = null;
+            stop();
+        }
+    });
+}
+
 /** The orb: interrupt the reply, finish listening now, or continue after a pause. */
 export function tapOrb(): void {
     const { status, idlePaused, micMuted } = getVoice();
     if (status === 'speaking') {
-        stopSpeaking();
-        setVoice({ status: 'idle' });
-        lastSpeechAt = Date.now();
-        void listen();
+        interrupt();
     } else if (status === 'listening') {
         current?.stop();
     } else if (idlePaused || micMuted) {
@@ -352,7 +376,7 @@ async function ask(text: string): Promise<void> {
         if (getVoice().status === 'thinking') setVoice({ status: 'speaking' });
     };
     const filler = window.setTimeout(() => {
-        if (!streamed && getVoice().live && getVoice().status === 'thinking') speech.aside(t('One moment.'));
+        if (!streamed && getVoice().live && getVoice().status === 'thinking') speech.aside(t(FILLERS[fillerTurn++ % FILLERS.length]));
     }, FILLER_AFTER_MS);
 
     const body = () => ({ conversation_id: getVoice().conversationId, content: text, voice: true, page: pageContext() });

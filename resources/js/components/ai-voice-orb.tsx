@@ -1,9 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { Maximize2, Mic, MicOff, PictureInPicture2, X } from 'lucide-react';
+import { Ear, EarOff, Maximize2, Mic, MicOff, PictureInPicture2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ConfirmCard, FormattedText } from '@/components/ai-confirm-card';
 import { endLive, setMicMuted, tapOrb } from '@/lib/ai-voice/assistant';
-import { updateCard, type VoiceState } from '@/lib/ai-voice/store';
+import { setBargeIn, updateCard, type VoiceState } from '@/lib/ai-voice/store';
 
 /**
  * The parts of voice mode shared by the docked view (over the AI Assistant
@@ -24,7 +24,7 @@ export function useVoiceStatusText(voice: VoiceState): string {
         case 'thinking':
             return t('Working on it…');
         case 'speaking':
-            return t('Speaking. Tap the orb to interrupt.');
+            return voice.bargeIn ? t('Speaking. Talk or tap the orb to interrupt.') : t('Speaking. Tap the orb to interrupt.');
         default:
             return t('Starting…');
     }
@@ -98,6 +98,18 @@ export function VoiceControls({ voice, onFloat, onExpand, compact = false }: {
                 title={voice.micMuted ? t('Turn the mic on') : t('Turn the mic off')}
             >
                 {voice.micMuted ? <MicOff className={icon} /> : <Mic className={icon} />}
+            </Button>
+            <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className={`${size} rounded-full ${voice.bargeIn ? '' : 'text-muted-foreground'}`}
+                onClick={() => setBargeIn(!voice.bargeIn)}
+                aria-pressed={voice.bargeIn}
+                aria-label={t('Interrupt by talking')}
+                title={voice.bargeIn ? t('Interrupt by talking: on (turn off if your speakers stop the reply by themselves)') : t('Interrupt by talking: off')}
+            >
+                {voice.bargeIn ? <Ear className={icon} /> : <EarOff className={icon} />}
             </Button>
             {onFloat && (
                 <Button type="button" variant="outline" size="icon" className={`${size} rounded-full`} onClick={onFloat} aria-label={t('Float over Sundal')} title={t('Float over Sundal')}>
