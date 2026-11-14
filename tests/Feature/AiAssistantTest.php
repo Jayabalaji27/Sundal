@@ -261,6 +261,40 @@ describe('settings', function () {
             ->toThrow(\App\Services\Ai\AiProviderException::class, 'No API key is saved for this AI provider.');
     });
 
+    test('OpenRouter is asked not to think first, and a model that must think is asked again without it', function () {
+        $ok = ['id' => 'gen-1', 'model' => 'some/model', 'choices' => [['message' => ['role' => 'assistant', 'content' => 'Hello'], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 2]];
+        $request = new \App\Services\Ai\AiRequest('system', [['role' => 'user', 'content' => 'hi']]);
+
+        // One fake for both drivers: a later Http::fake would not replace the first.
+        \Illuminate\Support\Facades\Http::fake(['*' => \Illuminate\Support\Facades\Http::sequence()
+            ->push($ok)
+            ->push(['error' => ['code' => 400, 'message' => 'Reasoning is mandatory for this endpoint and cannot be disabled.']], 400)
+            ->push($ok)]);
+
+        $driver = new \App\Services\Ai\Providers\PrismProvider(\Prism\Prism\Enums\Provider::OpenRouter, 'some/model', 'test-key-12345678', reasoning: 'none');
+        expect($driver->run($request)->text)->toBe('Hello');
+
+        // A model that must think refuses "none": asked once more, without the setting.
+        $mustThink = new \App\Services\Ai\Providers\PrismProvider(\Prism\Prism\Enums\Provider::OpenRouter, 'some/model', 'test-key-12345678', reasoning: 'none');
+        expect($mustThink->run($request)->text)->toBe('Hello');
+
+        $sent = \Illuminate\Support\Facades\Http::recorded()->map(fn ($pair) => $pair[0]->data())->values();
+        expect($sent)->toHaveCount(3)
+            ->and($sent[0]['reasoning'] ?? null)->toBe(['effort' => 'none'])
+            ->and($sent[1]['reasoning'] ?? null)->toBe(['effort' => 'none'])
+            ->and($sent[2])->not->toHaveKey('reasoning');
+    });
+
+    test('the workspace OpenRouter model gets the reasoning setting from config', function () {
+        [$workspace] = aiWorkspace();
+        $settings = aiSettings($workspace, ['provider' => 'openrouter', 'model' => 'some/model', 'api_key' => 'test-key-12345678']);
+        $reasoning = fn ($driver) => (new \ReflectionProperty($driver, 'reasoning'))->getValue($driver);
+
+        expect($reasoning(app(AiProviderFactory::class)->make($settings)))->toBe('none');
+        config(['ai_assistant.openrouter_reasoning' => '']);
+        expect($reasoning(app(AiProviderFactory::class)->make($settings)))->toBeNull();
+    });
+
     test('a used-up OpenRouter free model says what its limits are', function () {
         $limited = \Prism\Prism\Exceptions\PrismRateLimitedException::make();
 
@@ -3083,6 +3117,24 @@ describe('faster voice', function () {
         $fresh = fakeAi([['text' => 'ok']]);
         asAi($this, $users['owner'])->postJson(route('ai-assistant.send'), ['content' => 'what should I do today'])->assertOk();
         expect($fresh->requests[0]->system)->not->toContain('still waiting for the user');
+    });
+
+    test('"open" bugs and tasks are every stage but done', function () {
+        [$workspace, $users] = aiWorkspace();
+        aiSettings($workspace);
+        $project = aiProject($workspace, $users['owner']);
+        $stages = TaskStage::where('workspace_id', $workspace->id)->orderBy('order')->get();
+        $done = $stages->firstWhere('is_completed', true);
+        $middle = $stages->first(fn ($stage) => !$stage->is_completed && $stage->id !== $stages->first()->id);
+        aiBug($project, $users['owner'], 'New bug');
+        aiBug($project, $users['owner'], 'Bug being fixed', ['task_stage_id' => $middle->id]);
+        aiBug($project, $users['owner'], 'Fixed bug', ['task_stage_id' => $done->id]);
+
+        $bugs = collect(aiData(aiCall($this, $users['owner'], 'list_bugs', ['status' => 'open']))['bugs'])->pluck('title')->sort()->values()->all();
+        expect($bugs)->toBe(['Bug being fixed', 'New bug']);
+
+        $tasks = collect(aiData(aiCall($this, $users['owner'], 'list_tasks', ['stage' => 'pending']))['tasks'])->pluck('title')->sort()->values()->all();
+        expect($tasks)->toBe(['Bug being fixed', 'New bug']);
     });
 
     test('a greeting or thanks gets no tools at all', function () {

@@ -33,6 +33,8 @@ class PrismProvider implements StreamsReplies
         private readonly string $apiKey,
         private readonly ?string $organization = null,
         private readonly ?int $timeout = null,
+        /** OpenRouter reasoning effort ("none" turns thinking off); null leaves it to the model. */
+        private ?string $reasoning = null,
     ) {}
 
     public function run(AiRequest $request): AiResult
@@ -42,7 +44,14 @@ class PrismProvider implements StreamsReplies
         try {
             $response = $pending->asText();
         } catch (Throwable $e) {
-            throw ProviderErrors::wrap($e, $this->provider->value, $this->model);
+            if (!$this->dropReasoning($e)) {
+                throw ProviderErrors::wrap($e, $this->provider->value, $this->model);
+            }
+            try {
+                $response = $this->pending($request)->asText();
+            } catch (Throwable $e) {
+                throw ProviderErrors::wrap($e, $this->provider->value, $this->model);
+            }
         }
 
         return new AiResult(
@@ -57,8 +66,7 @@ class PrismProvider implements StreamsReplies
         $text = '';
         $usage = null;
 
-        $pending = $this->pending($request);
-        try {
+        $read = function (PendingRequest $pending) use (&$text, &$usage, $onDelta): void {
             foreach ($pending->asStream() as $event) {
                 if ($event instanceof TextDeltaEvent && $event->delta !== '') {
                     $text .= $event->delta;
@@ -68,8 +76,21 @@ class PrismProvider implements StreamsReplies
                     $usage = $event->usage;
                 }
             }
+        };
+
+        $pending = $this->pending($request);
+        try {
+            $read($pending);
         } catch (Throwable $e) {
-            throw ProviderErrors::wrap($e, $this->provider->value, $this->model);
+            // Ask again without the reasoning setting only when nothing was said yet.
+            if ($text !== '' || !$this->dropReasoning($e)) {
+                throw ProviderErrors::wrap($e, $this->provider->value, $this->model);
+            }
+            try {
+                $read($this->pending($request));
+            } catch (Throwable $e) {
+                throw ProviderErrors::wrap($e, $this->provider->value, $this->model);
+            }
         }
 
         return new AiResult(
@@ -81,7 +102,7 @@ class PrismProvider implements StreamsReplies
 
     private function pending(AiRequest $request): PendingRequest
     {
-        return Prism::text()
+        $pending = Prism::text()
             ->using($this->provider, $this->model, $this->providerConfig())
             ->withSystemPrompt($request->system)
             ->withMessages($this->messages($request))
@@ -89,6 +110,26 @@ class PrismProvider implements StreamsReplies
             ->withMaxSteps($request->maxSteps)
             ->withMaxTokens($request->maxTokens)
             ->withClientOptions(['timeout' => $this->timeout ?? config('ai_assistant.request_timeout', 60)]);
+
+        if ($this->provider === Provider::OpenRouter && $this->reasoning) {
+            $pending->withProviderOptions(['reasoning' => ['effort' => $this->reasoning]]);
+        }
+
+        return $pending;
+    }
+
+    /**
+     * The model refused the reasoning setting (some always think): forget it,
+     * for this and later calls, so the caller can ask again. False otherwise.
+     */
+    private function dropReasoning(Throwable $e): bool
+    {
+        if (!$this->reasoning || !str_contains(strtolower($e->getMessage()), 'reasoning')) {
+            return false;
+        }
+        $this->reasoning = null;
+
+        return true;
     }
 
     /**

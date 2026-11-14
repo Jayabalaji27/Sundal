@@ -29,7 +29,7 @@ class ListBugs extends AiTool
         return [
             'project' => ['type' => 'string', 'description' => 'Project title or id.'],
             'assignee' => ['type' => 'string', 'description' => '"me", a person\'s name or email, or "unassigned".'],
-            'status' => ['type' => 'string', 'description' => 'Stage name, e.g. To Do, In Progress, Done. "Resolved" or "Closed" mean the done stage.'],
+            'status' => ['type' => 'string', 'description' => 'Stage name, e.g. To Do, In Progress, Done. "Resolved" or "Closed" mean the done stage. "Open" means every stage but done.'],
             'severity' => ['type' => 'enum', 'options' => Task::SEVERITIES, 'description' => 'Bug severity.'],
             'search' => ['type' => 'string', 'description' => 'Part of the bug title.'],
         ];
@@ -48,7 +48,9 @@ class ListBugs extends AiTool
                 : $query->where('assigned_to', $this->resolver->member($user, $args['assignee'])->id);
         }
         if (!empty($args['status'])) {
-            $query->where('task_stage_id', $this->resolver->bugStage($user, $args['status'])->id);
+            RecordResolver::meansOpen($args['status'])
+                ? $query->whereHas('taskStage', fn ($s) => $s->where('is_completed', false))
+                : $query->where('task_stage_id', $this->resolver->bugStage($user, $args['status'])->id);
         }
         if (!empty($args['severity'])) {
             $query->where('severity', $args['severity']);

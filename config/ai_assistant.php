@@ -86,6 +86,12 @@ return [
 
     'request_timeout' => env('AI_ASSISTANT_REQUEST_TIMEOUT', 60),
 
+    // OpenRouter "thinking" before answering (reasoning effort): none, minimal,
+    // low, medium or high; empty leaves it to the model. Free models can spend
+    // 10+ seconds thinking, so it is off by default. A model that cannot turn it
+    // off is asked again without the setting. Not used for reading images.
+    'openrouter_reasoning' => env('AI_ASSISTANT_OPENROUTER_REASONING', 'none'),
+
     /*
     | AI mode: the assistant in its own browser tab, opened with the "AI mode"
     | switch in the Sundal header.
