@@ -68,15 +68,23 @@ export default function TimesheetReports({ members, projects, defaultFilters, de
                 },
                 body: JSON.stringify(requested)
             });
-            const data = await response.json();
-            if (!response.ok) {
+            // A proxy or PHP fatal error answers with an HTML page, not JSON - read the
+            // body as text first so the toast can still say what went wrong.
+            const raw = await response.text();
+            let data: any = null;
+            try { data = raw ? JSON.parse(raw) : null; } catch { data = undefined; }
+            if (!response.ok || data === undefined) {
                 const firstError = data?.errors ? (Object.values(data.errors)[0] as string[])?.[0] : null;
-                toast.error(firstError || data?.message || t('Failed to generate report.'));
+                const reason = firstError || data?.message || `HTTP ${response.status} ${response.statusText}`.trim();
+                console.error('Failed to generate report:', response.status, raw.slice(0, 2000));
+                toast.error(`${t('Failed to generate report.')} ${reason}`);
                 return;
             }
-            setReportData(data);
+            // Laravel serialises json(null) as {} - treat an empty object as "no entries".
+            const empty = data === null || (typeof data === 'object' && Object.keys(data).length === 0);
+            setReportData(empty ? null : data);
             setAppliedFilters(requested);
-            if (data === null) {
+            if (empty) {
                 toast.error(t('No timesheet entries found for the selected filters.'));
             }
         } catch (error) {
@@ -170,9 +178,9 @@ export default function TimesheetReports({ members, projects, defaultFilters, de
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="all">{t('All (incl. draft & rejected)')}</SelectItem>
                                     <SelectItem value="counted">{t('Submitted & approved')}</SelectItem>
                                     <SelectItem value="approved">{t('Approved only')}</SelectItem>
-                                    <SelectItem value="all">{t('All (incl. draft & rejected)')}</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

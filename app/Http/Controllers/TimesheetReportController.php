@@ -55,7 +55,7 @@ class TimesheetReportController extends Controller
         // Generate default latest report (summary for last 30 days)
         $defaultQuery = $this->visibleEntries($user)
             ->whereHas('timesheet', function($q) use ($workspace) {
-                $q->where('workspace_id', $workspace->id)->whereIn('status', self::STATUS_FILTERS['counted']);
+                $q->where('workspace_id', $workspace->id); // default status filter is "all"
             })
             ->whereBetween('date', [$startDate, $endDate])
             ->orderBy('date', 'desc');
@@ -76,7 +76,7 @@ class TimesheetReportController extends Controller
                 'end_date' => $endDate,
                 'user_id' => 'all',
                 'project_id' => 'all',
-                'status' => 'counted',
+                'status' => 'all',
             ],
             'defaultReportData' => $defaultReportData
         ]);

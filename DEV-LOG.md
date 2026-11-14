@@ -1253,6 +1253,22 @@ Tests: `tests/Feature/SystemUpdateTest.php` (4).
 
 ---
 
+### RP-31 · 2026-11-15 · Timesheet Reports: "All" by default, real error in the toast
+
+- **Every filter starts on "All".** Timesheet Status now defaults to "All (incl. draft & rejected)"
+  (was "Submitted & approved"), and the report shown on opening the page counts every status, so a
+  period with only draft timesheets no longer opens on "No timesheet data found". "All" is listed first.
+- **"Failed to generate report." now says why.** Timesheet and Customer Report read the reply as text
+  first; an HTML error page (proxy timeout, PHP fatal) shows `HTTP <status>` in the toast and logs the
+  body to the console, instead of the bare message.
+- The server answers "no entries" as `{}` (Laravel's `json(null)`); the page now treats that as no data
+  and shows the "No timesheet entries found" toast.
+- Note: codecartz.com/sundal was still serving a pre-RP-22 Reports build on 2026-11-14.
+
+Deploy: no migrations. PHP: `TimesheetReportController.php`; plus the rebuilt `public/build`.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)

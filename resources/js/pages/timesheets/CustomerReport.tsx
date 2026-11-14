@@ -76,10 +76,16 @@ export default function CustomerReport({ projects, members }: Props) {
                 },
                 body: JSON.stringify(payload)
             });
-            const data = await response.json();
-            if (!response.ok) {
+            // A proxy or PHP fatal error answers with an HTML page, not JSON - read the
+            // body as text first so the toast can still say what went wrong.
+            const raw = await response.text();
+            let data: any = null;
+            try { data = raw ? JSON.parse(raw) : null; } catch { data = undefined; }
+            if (!response.ok || data === undefined) {
                 const firstError = data?.errors ? (Object.values(data.errors)[0] as string[])?.[0] : null;
-                toast.error(firstError || data?.message || t('Failed to generate report.'));
+                const reason = firstError || data?.message || `HTTP ${response.status} ${response.statusText}`.trim();
+                console.error('Failed to generate report:', response.status, raw.slice(0, 2000));
+                toast.error(`${t('Failed to generate report.')} ${reason}`);
                 return;
             }
             setReportData(data);
