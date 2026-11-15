@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { hasPermission } from '@/utils/authorization';
 import { cn } from '@/lib/utils';
+import { changeTaskStage } from '@/components/tasks/task-stage-reason-dialog';
 
 const VIEW_KEY = 'sundal.board.view';
 
@@ -76,7 +77,7 @@ export default function ProjectBoard() {
         setCards(prev => prev.map(card => card.id === taskId
             ? { ...card, task_stage_id: stageId, stage: stage ? { id: stage.id, name: stage.name, color: stage.color } : card.stage, is_completed: !!stage?.is_completed }
             : card));
-        router.put(route('tasks.change-stage', taskId), { task_stage_id: stageId }, { preserveScroll: true, preserveState: true });
+        changeTaskStage(taskId, stageId);
     };
 
     const showingSprint = filters.scope === 'sprint' && activeSprint;

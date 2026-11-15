@@ -86,7 +86,7 @@ export function AiVoiceAssistant() {
         return (
             <section
                 aria-label={t('Voice mode')}
-                className="fixed bottom-4 right-4 z-40 flex max-h-[min(70vh,560px)] w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-3 overflow-hidden rounded-2xl border bg-background/95 p-3 shadow-2xl backdrop-blur print:hidden"
+                className="width-before-scroll-bar fixed bottom-4 right-4 z-40 flex max-h-[min(70vh,560px)] w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-3 overflow-hidden rounded-2xl border bg-background/95 p-3 shadow-2xl backdrop-blur print:hidden"
             >
                 <div className="flex items-center gap-3">
                     <VoiceOrb voice={voice} size="sm" />
@@ -113,7 +113,7 @@ export function AiVoiceAssistant() {
         <button
             type="button"
             onClick={() => startLive({ floating: true })}
-            className="fixed bottom-4 right-4 z-40 flex h-11 items-center gap-2 rounded-full bg-violet-600 pl-3 pr-4 text-sm font-medium text-white shadow-lg transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 print:hidden"
+            className="width-before-scroll-bar fixed bottom-4 right-4 z-40 flex h-11 items-center gap-2 rounded-full bg-violet-600 pl-3 pr-4 text-sm font-medium text-white shadow-lg transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 print:hidden"
             title={t('Talk to the assistant (Alt+V)')}
             aria-label={t('Start voice mode')}
         >

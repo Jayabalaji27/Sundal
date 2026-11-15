@@ -84,9 +84,9 @@ export default function ChatbotPage() {
                             <Bot className="h-8 w-8 text-muted-foreground" />
                         </div>
                         <div>
-                            <h2 className="text-lg font-semibold">{t('ChatGPT not configured')}</h2>
+                            <h2 className="text-lg font-semibold">{t('AI is not set up yet')}</h2>
                             <p className="mt-1 text-sm text-muted-foreground max-w-sm">
-                                {t('Add your OpenAI API key in Settings to enable the AI assistant.')}
+                                {t('Connect an AI provider under Settings → AI Assistant to enable the chatbot.')}
                             </p>
                         </div>
                         <Button onClick={() => router.get(settingsUrl + '#chatgpt-settings')}>

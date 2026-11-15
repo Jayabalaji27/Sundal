@@ -41,6 +41,7 @@ class ChangeTaskStageTool extends AiTool implements HasForm
             'task' => ['type' => 'string', 'required' => true, 'description' => 'Task title or id.'],
             'project' => ['type' => 'string', 'description' => 'Project title or id, to narrow the task search.'],
             'stage' => ['type' => 'string', 'required' => true, 'description' => 'Target stage name.'],
+            'reason' => ['type' => 'string', 'description' => 'Why it moves back. Required when the target stage comes before the current one; ask the user, never invent it.'],
         ];
     }
 
@@ -67,6 +68,13 @@ class ChangeTaskStageTool extends AiTool implements HasForm
             throw new ToolInputException(__('Task ":title" is already in :stage.', ['title' => $task->title, 'stage' => $stage->name]));
         }
 
+        // The process rules (unassigned, reopen, reason for moving back) before the card.
+        try {
+            $this->changeStage->check($user, $task, $task->taskStage, $stage, $args['reason'] ?? null);
+        } catch (\App\Actions\Tasks\StageMoveRefused $e) {
+            throw new ToolInputException($e->getMessage() . ($e->needsReason ? ' ' . __('Ask the user for the reason.') : ''));
+        }
+
         return new PreparedAction(
             summary: __('Move task ":title" to :stage', ['title' => $task->title, 'stage' => $stage->name]),
             details: array_filter([
@@ -74,8 +82,9 @@ class ChangeTaskStageTool extends AiTool implements HasForm
                 __('Project') => $task->project?->title,
                 __('From') => $task->taskStage?->name,
                 __('To') => $stage->name,
+                __('Reason') => $args['reason'] ?? null,
             ]),
-            payload: ['task_id' => $task->id, 'stage_id' => $stage->id],
+            payload: ['task_id' => $task->id, 'stage_id' => $stage->id, 'reason' => $args['reason'] ?? null],
         );
     }
 
@@ -85,7 +94,11 @@ class ChangeTaskStageTool extends AiTool implements HasForm
         $stage = $this->resolver->byId(TaskStage::forWorkspace($user->current_workspace_id), (int) $payload['stage_id'], __('task stage'));
 
         $fromStageId = $task->task_stage_id;
-        $this->changeStage->handle($user, $task, $stage);
+        try {
+            $this->changeStage->handle($user, $task, $stage, $payload['reason'] ?? null);
+        } catch (\App\Actions\Tasks\StageMoveRefused $e) {
+            throw new ToolInputException($e->getMessage());
+        }
 
         return new ToolOutcome(
             __('Moved task ":title" to :stage.', ['title' => $task->title, 'stage' => $stage->name]),
@@ -103,7 +116,7 @@ class ChangeTaskStageTool extends AiTool implements HasForm
         }
 
         $stage = $this->resolver->byId(TaskStage::forWorkspace($user->current_workspace_id), (int) $undo['from_stage_id'], __('task stage'));
-        $this->changeStage->handle($user, $task, $stage);
+        $this->changeStage->handle($user, $task, $stage, enforceRules: false); // undoing one's own move
 
         return __('Task ":title" moved back to :stage.', ['title' => $task->title, 'stage' => $stage->name]);
     }

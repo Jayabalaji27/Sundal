@@ -856,6 +856,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('tasks/{task}', [\App\Http\Controllers\TaskController::class, 'destroy'])->middleware('permission:task_delete')->name('tasks.destroy');
 
         Route::post('tasks/{task}/duplicate', [\App\Http\Controllers\TaskController::class, 'duplicate'])->middleware('permission:task_duplicate')->name('tasks.duplicate');
+        Route::get('tasks/{task}/history', [\App\Http\Controllers\TaskController::class, 'history'])->middleware('permission:task_view')->name('tasks.history');
         Route::put('tasks/{task}/stage', [\App\Http\Controllers\TaskController::class, 'changeStage'])->middleware('permission:task_change_status')->name('tasks.change-stage');
         Route::get('api/tasks/calendar', [\App\Http\Controllers\TaskController::class, 'getCalendarTasks'])->middleware('permission:task_view_any|task_calendar_view_tasks')->name('api.tasks.calendar');
 

@@ -82,11 +82,11 @@ export default function AgentsIndex() {
                 <div className="mb-6 flex items-center gap-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
                     <Settings className="h-5 w-5 shrink-0 text-amber-600" />
                     <div className="flex-1">
-                        <p className="font-medium text-amber-800 dark:text-amber-200">OpenAI API key not configured</p>
+                        <p className="font-medium text-amber-800 dark:text-amber-200">{t('AI is not set up yet')}</p>
                         <p className="text-sm text-amber-700 dark:text-amber-300">
                             {hasPermission(permissions, 'settings_chatgpt')
-                                ? t('Agents need a ChatGPT API key to respond.')
-                                : t('Agents need a ChatGPT API key to respond. Please contact your admin or manager to configure it.')}
+                                ? t('Agents answer with the AI connected under Settings → AI Assistant. Connect a provider there to enable them.')
+                                : t('Agents need the workspace AI. Please ask the workspace owner to connect it under Settings → AI Assistant.')}
                         </p>
                     </div>
                     {hasPermission(permissions, 'settings_chatgpt') && (

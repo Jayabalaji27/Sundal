@@ -7,7 +7,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { DatesSetArg, DayHeaderContentArg, EventContentArg } from '@fullcalendar/core';
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Circle, Video } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, ChevronLeft, ChevronRight, Circle, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -200,22 +200,26 @@ export default function CalendarIndex() {
                     type="button"
                     onClick={() => toggleType(type)}
                     aria-pressed={on}
+                    // On: tinted in the event colour with a check. Off: dashed, faded, struck through.
+                    style={on ? { borderColor: color, backgroundColor: `${color}1f` } : undefined}
                     className={cn(
-                      'inline-flex h-8 cursor-pointer items-center gap-2 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus',
+                      'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus',
                       on
-                        ? 'border-ds-border bg-ds-surface text-ds-fg hover:bg-ds-surface-hover'
-                        : 'border-dashed border-ds-border text-ds-fg-muted hover:text-ds-fg',
+                        ? 'text-ds-fg'
+                        : 'border-dashed border-ds-border text-ds-fg-muted opacity-70 hover:opacity-100',
                     )}
                   >
-                    <span className="size-2 rounded-full" style={{ backgroundColor: on ? color : 'var(--ds-border-strong)' }} />
-                    {t(label)}
-                    <span className="tabular-nums text-ds-fg-muted">{countByType(type)}</span>
+                    {on
+                      ? <Check className="size-3.5" style={{ color }} strokeWidth={3} />
+                      : <span className="size-2 rounded-full border border-ds-border-strong" />}
+                    <span className={cn(!on && 'line-through')}>{t(label)}</span>
+                    <span className={cn('tabular-nums', on ? 'text-ds-fg-secondary' : 'text-ds-fg-muted')}>{countByType(type)}</span>
                   </button>
                 );
               })}
             </div>
 
-            <div className="inline-flex rounded-lg bg-ds-surface-sunken p-0.5" role="tablist" aria-label={t('Calendar view')}>
+            <div className="inline-flex rounded-lg border border-ds-border bg-ds-surface p-0.5" role="tablist" aria-label={t('Calendar view')}>
               {VIEWS.map(({ id, label }) => (
                 <button
                   key={id}
@@ -225,7 +229,7 @@ export default function CalendarIndex() {
                   onClick={() => api()?.changeView(id)}
                   className={cn(
                     'h-7 cursor-pointer rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus',
-                    view === id ? 'bg-ds-surface text-ds-fg shadow-ds-xs' : 'text-ds-fg-muted hover:text-ds-fg',
+                    view === id ? 'bg-primary text-primary-foreground shadow-ds-xs' : 'text-ds-fg-secondary hover:bg-ds-surface-hover hover:text-ds-fg',
                   )}
                 >
                   {t(label)}
@@ -244,8 +248,9 @@ export default function CalendarIndex() {
             <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="size-3.5 text-ds-fg-muted" />{t('Done')}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span>{t('Show tasks')}</span>
-            <div className="inline-flex rounded-md bg-ds-surface-sunken p-0.5" role="radiogroup" aria-label={t('Show tasks')}>
+            {/* A label, not an option: muted caps text, set apart from the bordered control. */}
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ds-fg-muted">{t('Show tasks')}</span>
+            <div className="inline-flex rounded-md border border-ds-border bg-ds-surface p-0.5" role="radiogroup" aria-label={t('Show tasks')}>
               {([['due', t('On due date')], ['range', t('Start to due')]] as const).map(([mode, label]) => (
                 <button
                   key={mode}
@@ -255,7 +260,7 @@ export default function CalendarIndex() {
                   onClick={() => setTaskMode(mode)}
                   className={cn(
                     'h-6 cursor-pointer rounded px-2.5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus',
-                    taskMode === mode ? 'bg-ds-surface text-ds-fg shadow-ds-xs' : 'text-ds-fg-muted hover:text-ds-fg',
+                    taskMode === mode ? 'bg-primary text-primary-foreground shadow-ds-xs' : 'text-ds-fg-secondary hover:bg-ds-surface-hover hover:text-ds-fg',
                   )}
                 >
                   {label}

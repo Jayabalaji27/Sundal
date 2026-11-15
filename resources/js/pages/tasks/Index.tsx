@@ -31,6 +31,7 @@ import { hasPermission } from '@/utils/authorization';
 import { ArrowDown, ArrowUp, ChevronsUpDown, ChevronDown, FileDown, FileUp } from 'lucide-react';
 import { ImportModal } from '@/components/ImportModal';
 import { cn } from '@/lib/utils';
+import { changeTaskStage } from '@/components/tasks/task-stage-reason-dialog';
 
 /** Remembers the view picked here, so the menu link opens on it (read by TaskController). */
 const VIEW_COOKIE = 'sundal_tasks_view';
@@ -97,7 +98,7 @@ export default function TasksIndex({ tasks, board = null, projects, stages, memb
     const [cards, setCards] = useState<AgileTask[]>(board?.cards || []);
     useEffect(() => setCards(board?.cards || []), [board]);
     const changeStage = (taskId: number, stageId: number) =>
-        router.put(route('tasks.change-stage', taskId), { task_stage_id: stageId }, { preserveScroll: true, preserveState: true });
+        changeTaskStage(taskId, stageId);
     const moveCard = (taskId: number, stageId: number) => {
         const stage = stages.find(item => item.id === stageId);
         setCards(prev => prev.map(card => card.id === taskId

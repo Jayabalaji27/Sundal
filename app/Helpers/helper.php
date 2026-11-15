@@ -114,7 +114,10 @@ if (! function_exists('sharedSettingsFor')) {
      */
     function sharedSettingsFor(array $settings, ?User $user): array
     {
-        $settings['chatgptKeySet'] = !empty($settings['chatgptKey']);
+        // The AI writing button works with the workspace's AI (Settings → AI Assistant,
+        // e.g. a free OpenRouter model) or, failing that, an OpenAI key.
+        $settings['chatgptKeySet'] = !empty($settings['chatgptKey'])
+            || ($user && \App\Services\Ai\AiAccess::settings($user) !== null);
 
         if ($user && ($user->type === 'superadmin' || $user->currentWorkspace?->isOwner($user))) {
             return $settings;

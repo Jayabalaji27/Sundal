@@ -534,6 +534,21 @@ class TaskController extends Controller
         return back()->with('success', __('Task duplicated successfully!'));
     }
 
+    /** The task window's History tab: every recorded change, comment and sprint move, newest first. */
+    public function history(Task $task)
+    {
+        $this->authorizePermission('task_view');
+
+        $user = auth()->user();
+        abort_if(
+            !$user->currentWorkspace || $task->project?->workspace_id != $user->currentWorkspace->id
+                || !\App\Models\Project::visibleTo($user)->whereKey($task->project_id)->exists(),
+            404
+        );
+
+        return response()->json(app(\App\Services\History\TaskTimeline::class)->for($task));
+    }
+
     public function changeStage(Request $request, Task $task)
     {
         $this->authorizePermission('task_change_status');
@@ -549,11 +564,22 @@ class TaskController extends Controller
             return back()->with('error', __('You can only move tasks you created or are assigned to.'));
         }
         $validated = $request->validate([
-            'task_stage_id' => 'required|exists:task_stages,id'
+            'task_stage_id' => 'required|exists:task_stages,id',
+            'reason' => 'nullable|string|max:1000',
         ]);
 
-        // Shared with the AI assistant: moves the task and fires the Slack event.
-        app(\App\Actions\Tasks\ChangeTaskStage::class)->handle($user, $task, TaskStage::findOrFail($validated['task_stage_id']));
+        // Shared with the AI assistant: applies the process rules, moves the task
+        // and fires the Slack event. A refusal comes back as a validation error;
+        // the "reason" key tells the page to ask for a reason and send it again.
+        try {
+            app(\App\Actions\Tasks\ChangeTaskStage::class)->handle(
+                $user, $task, TaskStage::findOrFail($validated['task_stage_id']), $validated['reason'] ?? null
+            );
+        } catch (\App\Actions\Tasks\StageMoveRefused $e) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                $e->needsReason ? 'reason' : 'task_stage_id' => $e->getMessage(),
+            ]);
+        }
 
         return back()->with('success', __('Task stage updated successfully!'));
     }

@@ -12,7 +12,8 @@ class ChatbotController extends Controller
     {
         $apiKey = getSetting('chatgptKey');
         return Inertia::render('chatbot/Index', [
-            'hasChatgptKey'  => !empty($apiKey),
+            // The workspace's AI (Settings → AI Assistant) or, failing that, an OpenAI key.
+            'hasChatgptKey'  => app(\App\Services\Ai\WorkspaceAi::class)->available(auth()->user()) || !empty($apiKey),
             'settingsUrl'    => route('settings'),
         ]);
     }
@@ -21,9 +22,10 @@ class ChatbotController extends Controller
     {
         $request->validate(['message' => 'required|string|max:2000']);
 
+        $ai = app(\App\Services\Ai\WorkspaceAi::class);
         $apiKey = getSetting('chatgptKey');
-        if (!$apiKey) {
-            return response()->json(['error' => 'OpenAI API key not configured. Go to Settings → ChatGPT.'], 422);
+        if (!$ai->available($request->user()) && !$apiKey) {
+            return response()->json(['error' => __('AI is not set up for this workspace yet. The workspace owner can connect it under Settings → AI Assistant.')], 422);
         }
 
         $workspaceId = auth()->user()->current_workspace_id;
@@ -45,6 +47,14 @@ class ChatbotController extends Controller
         }
 
         $systemPrompt = getSetting('chatbotSystemPrompt', 'You are a helpful assistant for this workspace. Answer concisely and professionally.');
+
+        if ($ai->available($request->user())) {
+            try {
+                return response()->json(['answer' => $ai->complete($request->user(), $systemPrompt . $kbContext, $userMessage, 1024) ?: __('No response.')]);
+            } catch (\App\Services\Ai\WorkspaceAiUnavailable|\App\Services\Ai\AiProviderException $e) {
+                return response()->json(['error' => $e->getMessage()], 422);
+            }
+        }
 
         try {
             $response = Http::withToken($apiKey)

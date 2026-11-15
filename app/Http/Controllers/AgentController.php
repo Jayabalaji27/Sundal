@@ -46,7 +46,8 @@ class AgentController extends Controller
         $categories = KbCategory::where('workspace_id', $this->ws())
             ->withCount('publishedArticles')->get(['id','name','description']);
 
-        $hasKey = !empty($this->getChatgptKey());
+        // The workspace's AI (Settings → AI Assistant) or, failing that, an OpenAI key.
+        $hasKey = app(\App\Services\Ai\WorkspaceAi::class)->available(auth()->user()) || !empty($this->getChatgptKey());
 
         return Inertia::render('agents/Index', compact('agents','categories','hasKey'));
     }
@@ -99,7 +100,8 @@ class AgentController extends Controller
     public function chat(Agent $agent)
     {
         abort_if($agent->workspace_id !== $this->ws(), 404);
-        $hasKey = !empty($this->getChatgptKey());
+        // The workspace's AI (Settings → AI Assistant) or, failing that, an OpenAI key.
+        $hasKey = app(\App\Services\Ai\WorkspaceAi::class)->available(auth()->user()) || !empty($this->getChatgptKey());
         return Inertia::render('agents/Chat', [
             'agent'  => $agent,
             'hasKey' => $hasKey,
@@ -113,9 +115,10 @@ class AgentController extends Controller
         abort_if($agent->workspace_id !== $this->ws(), 404);
         $request->validate(['message' => 'required|string|max:2000']);
 
+        $ai = app(\App\Services\Ai\WorkspaceAi::class);
         $apiKey = $this->getChatgptKey();
-        if (!$apiKey) {
-            return response()->json(['error' => 'OpenAI API key not configured. Go to Settings → ChatGPT.'], 422);
+        if (!$ai->available($request->user()) && !$apiKey) {
+            return response()->json(['error' => __('AI is not set up for this workspace yet. The workspace owner can connect it under Settings → AI Assistant.')], 422);
         }
 
         $userMessage = $request->message;
@@ -143,6 +146,15 @@ class AgentController extends Controller
 
         $systemPrompt = $agent->system_prompt
             ?: 'You are a helpful assistant. Answer concisely and professionally.';
+
+        // The workspace's AI first; the agent's own model only applies to the OpenAI fallback.
+        if ($ai->available($request->user())) {
+            try {
+                return response()->json(['answer' => $ai->complete($request->user(), $systemPrompt . $kbContext, $userMessage, 1024) ?: __('No response.')]);
+            } catch (\App\Services\Ai\WorkspaceAiUnavailable|\App\Services\Ai\AiProviderException $e) {
+                return response()->json(['error' => $e->getMessage()], 422);
+            }
+        }
 
         $model = $agent->model ?: $this->getChatgptModel();
 

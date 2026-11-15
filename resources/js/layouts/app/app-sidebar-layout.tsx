@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ShieldAlert } from 'lucide-react';
 import FlashMessages from '@/components/FlashMessages';
 import { AiVoiceAssistant } from '@/components/ai-voice-assistant';
+import { TaskStageReasonDialog } from '@/components/tasks/task-stage-reason-dialog';
 
 declare const route: any;
 
@@ -40,6 +41,7 @@ export default function AppSidebarLayout({ children, breadcrumbs = [] }: PropsWi
                 {children}
             </AppContent>
             <AiVoiceAssistant />
+            <TaskStageReasonDialog />
         </AppShell>
     );
 }

@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Task, TaskStage } from '@/types';
+import { changeTaskStage } from '@/components/tasks/task-stage-reason-dialog';
 
 interface Props {
     task: Task;
@@ -12,9 +13,7 @@ interface Props {
 
 export default function TaskStageChanger({ task, stages, variant = 'select' }: Props) {
     const handleStageChange = (stageId: string) => {
-        router.put(route('tasks.change-stage', task.id), {
-            task_stage_id: stageId
-        });
+        changeTaskStage(task.id, stageId);
     };
 
     const currentStage = stages.find(s => s.id === task.task_stage_id);
