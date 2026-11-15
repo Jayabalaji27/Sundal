@@ -8,13 +8,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, User, MessageSquare, CheckSquare, Paperclip, Flag, Layers, FolderOpen, AlertOctagon } from 'lucide-react';
+import { Calendar, User, MessageSquare, CheckSquare, Paperclip, Flag, Layers, FolderOpen, AlertOctagon, History } from 'lucide-react';
 import { Task, User as UserType, TaskStage, ProjectMilestone } from '@/types';
 import TaskComments from '@/components/tasks/TaskComments';
 import TaskChecklist from '@/components/tasks/TaskChecklist';
 import TaskAttachments from '@/components/tasks/TaskAttachments';
+import TaskHistory from '@/components/tasks/TaskHistory';
 import { toast } from '@/components/custom-toast';
 import { EpicChip, SEVERITY_OPTIONS, SeverityBadge, TypeIcon } from '@/components/tasks/agile-bits';
+import { changeTaskStage } from '@/components/tasks/task-stage-reason-dialog';
 
 interface Props {
     task: Task;
@@ -49,16 +51,7 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
 
 
     const handleStageChange = (stageId: string) => {
-        router.put(route('tasks.change-stage', task.id), {
-            task_stage_id: stageId
-        }, {
-            onSuccess: () => {
-                refreshTask();
-            },
-            onError: () => {
-                toast.error('Failed to update stage');
-            }
-        });
+        changeTaskStage(task.id, stageId, { onSuccess: () => refreshTask() });
     };
 
     /** Saves one sidebar field, sending the rest of the task as it is. */
@@ -159,6 +152,10 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
                                     <Paperclip className="h-4 w-4" />
                                     <span>{t('Files')} ({currentTask.attachments?.length || 0})</span>
                                 </TabsTrigger>
+                                <TabsTrigger value="history" className="flex items-center space-x-2">
+                                    <History className="h-4 w-4" />
+                                    <span>{t('History')}</span>
+                                </TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="comments" className="flex-1 flex flex-col overflow-hidden mt-0">
@@ -190,6 +187,14 @@ export default function TaskModal({ task, isOpen, onClose, members, stages, mile
                                     onUpdate={refreshTask}
                                     canAddAttachments={workspaceRole !== 'client' && workspaceRole !== 'member'}
                                     canManageAttachments={workspaceRole !== 'client' && workspaceRole !== 'member'}
+                                />
+                            </TabsContent>
+                            {/* Mounted only while open (Radix unmounts inactive tabs), so it loads on first view
+                                and reloads whenever the task changes. */}
+                            <TabsContent value="history" className="flex-1 flex flex-col overflow-hidden mt-0">
+                                <TaskHistory
+                                    taskId={currentTask.id}
+                                    refreshKey={`${currentTask.updated_at ?? ''}-${currentTask.comments?.length ?? 0}-${currentTask.task_stage_id}`}
                                 />
                             </TabsContent>
                         </Tabs>

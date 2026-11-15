@@ -28,18 +28,6 @@ class AiProjectController extends Controller
             'requirements' => 'required|string|min:20|max:3000',
         ]);
 
-        // getSetting() scopes to this workspace's settings; a bare Setting query
-        // returned whichever tenant's key happened to be stored first.
-        $apiKey = getSetting('chatgptKey');
-        $model  = getSetting('chatgptModel') ?: 'gpt-3.5-turbo';
-
-        if (!$apiKey || !str_starts_with(trim($apiKey), 'sk-')) {
-            return response()->json([
-                'success' => false,
-                'message' => __('OpenAI API key not configured. Go to Settings → General → Chat GPT Settings to add your key.'),
-            ], 422);
-        }
-
         $prompt = <<<PROMPT
 You are a senior project manager. A user has described a software project in plain text.
 Convert it into a structured project plan.
@@ -65,31 +53,78 @@ User's requirements:
 {$request->requirements}
 PROMPT;
 
+        $ai = app(\App\Services\Ai\WorkspaceAi::class);
         try {
-            $client   = OpenAI::client(trim($apiKey));
-            $response = $client->chat()->create([
-                'model'    => $model,
-                'messages' => [['role' => 'user', 'content' => $prompt]],
-                'temperature' => 0.4,
-            ]);
+            // The workspace's AI (Settings → AI Assistant, e.g. a free OpenRouter model);
+            // an OpenAI key under Chat GPT Settings is only the fallback.
+            if ($ai->available($request->user())) {
+                $content = $ai->complete($request->user(), 'You are a senior project manager. You reply with JSON only.', $prompt, 4096);
+            } else {
+                $apiKey = getSetting('chatgptKey');
+                if (!$apiKey || !str_starts_with(trim($apiKey), 'sk-')) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => __('AI is not set up for this workspace yet. The workspace owner can connect it under Settings → AI Assistant.'),
+                    ], 422);
+                }
+                $response = OpenAI::client(trim($apiKey))->chat()->create([
+                    'model'    => getSetting('chatgptModel') ?: 'gpt-3.5-turbo',
+                    'messages' => [['role' => 'user', 'content' => $prompt]],
+                    'temperature' => 0.4,
+                ]);
+                $content = trim($response->choices[0]->message->content);
+            }
 
-            $content = trim($response->choices[0]->message->content);
-            // Strip markdown code fences if present
-            $content = preg_replace('/^```(?:json)?\s*/i', '', $content);
-            $content = preg_replace('/\s*```$/', '', $content);
-
-            $plan = json_decode($content, true);
-            if (!$plan || !isset($plan['title'], $plan['tasks'])) {
-                throw new \Exception('Invalid AI response format');
+            $plan = $this->decodePlan($content);
+            if (!$plan) {
+                throw new \Exception(__('The AI did not return a usable plan. Please try again or add more detail.'));
             }
 
             return response()->json(['success' => true, 'plan' => $plan]);
+        } catch (\App\Services\Ai\WorkspaceAiUnavailable $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => __('AI parsing failed: :msg', ['msg' => $e->getMessage()]),
             ], 500);
         }
+    }
+
+    /**
+     * The plan JSON from the model's reply. Free models often wrap it in a code
+     * fence or a sentence, so this takes the outermost {...} block, then keeps
+     * only tasks with a title and maps priorities to the allowed values.
+     */
+    private function decodePlan(string $content): ?array
+    {
+        $content = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($content));
+        $start = strpos($content, '{');
+        $end = strrpos($content, '}');
+        if ($start === false || $end === false || $end <= $start) {
+            return null;
+        }
+
+        $plan = json_decode(substr($content, $start, $end - $start + 1), true);
+        if (!is_array($plan) || empty($plan['title']) || !is_array($plan['tasks'] ?? null)) {
+            return null;
+        }
+
+        $priority = fn ($p, array $allowed) => in_array(strtolower((string) $p), $allowed, true) ? strtolower((string) $p) : 'medium';
+        $plan['priority'] = $priority($plan['priority'] ?? null, ['low', 'medium', 'high', 'urgent']);
+        $plan['estimated_hours'] = isset($plan['estimated_hours']) ? (int) $plan['estimated_hours'] : null;
+        $plan['tasks'] = collect($plan['tasks'])
+            ->filter(fn ($t) => is_array($t) && filled($t['title'] ?? null))
+            ->map(fn ($t) => [
+                'title' => mb_substr((string) $t['title'], 0, 255),
+                'description' => (string) ($t['description'] ?? ''),
+                // Tasks allow critical, not urgent.
+                'priority' => str_replace('urgent', 'critical', $priority($t['priority'] ?? null, ['low', 'medium', 'high', 'urgent', 'critical'])),
+                'estimated_hours' => isset($t['estimated_hours']) ? (int) $t['estimated_hours'] : null,
+            ])
+            ->values()->all();
+
+        return $plan['tasks'] ? $plan : null;
     }
 
     /**

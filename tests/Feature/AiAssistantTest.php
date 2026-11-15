@@ -633,7 +633,7 @@ describe('confirm cards', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
         $project = aiProject($workspace, $users['owner']);
-        $task = aiTask($project, $users['owner'], 'API docs');
+        $task = aiTask($project, $users['owner'], 'API docs', ['assigned_to' => $users['owner']->id]);
         $bug = aiBug($project, $users['owner'], 'Login button does nothing');
 
         fakeAi([
@@ -699,7 +699,7 @@ describe('confirm cards', function () {
     test('only the user who got the card can confirm it, and only once', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
-        aiTask(aiProject($workspace, $users['owner']), $users['owner'], 'API docs');
+        aiTask(aiProject($workspace, $users['owner']), $users['owner'], 'API docs', ['assigned_to' => $users['owner']->id]);
         fakeAi([['tool' => 'change_task_status', 'args' => ['task' => 'API docs', 'stage' => 'Done']], ['text' => 'ok']]);
         $cardId = asAi($this, $users['manager'])->postJson(route('ai-assistant.send'), ['content' => 'move API docs to done'])->json('messages.1.cards.0.id');
 
@@ -787,7 +787,7 @@ describe('task screens still work through the shared actions', function () {
 
     test('changing a stage from the board still works', function () {
         [$workspace, $users] = aiWorkspace();
-        $task = aiTask(aiProject($workspace, $users['owner']), $users['owner'], 'Board card');
+        $task = aiTask(aiProject($workspace, $users['owner']), $users['owner'], 'Board card', ['assigned_to' => $users['owner']->id]);
         $done = TaskStage::where('workspace_id', $workspace->id)->where('name', 'Done')->first();
 
         $this->actingAs($users['owner'])->put(route('tasks.change-stage', $task), ['task_stage_id' => $done->id])->assertSessionHasNoErrors();
@@ -863,7 +863,7 @@ describe('bugs', function () {
         [$workspace, $users] = aiWorkspace();
         aiSettings($workspace);
         $project = aiProject($workspace, $users['owner']);
-        $bug = aiBug($project, $users['owner'], 'Crash on save');
+        $bug = aiBug($project, $users['owner'], 'Crash on save', ['assigned_to' => $users['owner']->id]);
 
         // "Resolved" is a bug word for the done stage.
         $card = aiCall($this, $users['owner'], 'change_bug_status', ['bug' => 'Crash on save', 'status' => 'Resolved'])['card'];
@@ -1250,6 +1250,7 @@ describe('screens still work through the new shared actions', function () {
         expect($bug->created_by)->toBe($owner->id)->and($bug->severity)->toBe('minor');
 
         $done = TaskStage::where('workspace_id', $workspace->id)->where('name', 'Done')->first();
+        $bug->update(['assigned_to' => $owner->id]); // an unassigned bug stays in the first stage
         $this->actingAs($owner)->put(route('tasks.change-stage', $bug), ['task_stage_id' => $done->id]);
         expect($bug->fresh()->task_stage_id)->toBe($done->id);
 

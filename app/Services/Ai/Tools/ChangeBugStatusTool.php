@@ -45,6 +45,7 @@ class ChangeBugStatusTool extends AiTool implements HasForm
             'bug' => ['type' => 'string', 'required' => true, 'description' => 'Bug title or id.'],
             'project' => ['type' => 'string', 'description' => 'Project title or id, to narrow the bug search.'],
             'status' => ['type' => 'string', 'required' => true, 'description' => 'Target stage name.'],
+            'reason' => ['type' => 'string', 'description' => 'Why it moves back. Required when the target stage comes before the current one; ask the user, never invent it.'],
         ];
     }
 
@@ -71,6 +72,13 @@ class ChangeBugStatusTool extends AiTool implements HasForm
             throw new ToolInputException(__('Bug ":title" is already in :status.', ['title' => $bug->title, 'status' => $stage->name]));
         }
 
+        // The process rules (unassigned, reopen, reason for moving back) before the card.
+        try {
+            $this->changeStage->check($user, $bug, $bug->taskStage, $stage, $args['reason'] ?? null);
+        } catch (\App\Actions\Tasks\StageMoveRefused $e) {
+            throw new ToolInputException($e->getMessage() . ($e->needsReason ? ' ' . __('Ask the user for the reason.') : ''));
+        }
+
         return new PreparedAction(
             summary: __('Move bug ":title" to :status', ['title' => $bug->title, 'status' => $stage->name]),
             details: array_filter([
@@ -78,8 +86,9 @@ class ChangeBugStatusTool extends AiTool implements HasForm
                 __('Project') => $bug->project?->title,
                 __('From') => $bug->taskStage?->name,
                 __('To') => $stage->name,
+                __('Reason') => $args['reason'] ?? null,
             ]),
-            payload: ['bug_id' => $bug->id, 'stage_id' => $stage->id],
+            payload: ['bug_id' => $bug->id, 'stage_id' => $stage->id, 'reason' => $args['reason'] ?? null],
         );
     }
 
@@ -89,7 +98,11 @@ class ChangeBugStatusTool extends AiTool implements HasForm
         $stage = $this->resolver->byId(TaskStage::forWorkspace($user->current_workspace_id), (int) $payload['stage_id'], __('task stage'));
         $from = $bug->task_stage_id;
 
-        $this->changeStage->handle($user, $bug, $stage);
+        try {
+            $this->changeStage->handle($user, $bug, $stage, $payload['reason'] ?? null);
+        } catch (\App\Actions\Tasks\StageMoveRefused $e) {
+            throw new ToolInputException($e->getMessage());
+        }
 
         return new ToolOutcome(
             __('Moved bug ":title" to :status.', ['title' => $bug->title, 'status' => $stage->name]),
@@ -107,7 +120,7 @@ class ChangeBugStatusTool extends AiTool implements HasForm
         }
 
         $stage = $this->resolver->byId(TaskStage::forWorkspace($user->current_workspace_id), (int) $undo['from_stage_id'], __('task stage'));
-        $this->changeStage->handle($user, $bug, $stage);
+        $this->changeStage->handle($user, $bug, $stage, enforceRules: false); // undoing one's own move
 
         return __('Bug ":title" moved back to :status.', ['title' => $bug->title, 'status' => $stage->name]);
     }

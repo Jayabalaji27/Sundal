@@ -23,6 +23,7 @@ import {
   BarList, BudgetBurnCard, ColumnChartCard, ComingUpCard, ContractsToSignCard, ExpiringSoonCard, InsightCard,
   RecentActivityCard, TasksByStageCard, TeamWorkloadCard, daysToColumns, monthsToColumns,
 } from '@/components/dashboard/insights';
+import { changeTaskStage } from '@/components/tasks/task-stage-reason-dialog';
 
 interface DashboardData {
   cards: Array<{
@@ -781,7 +782,7 @@ function MyTasksCard({ tasks, stageOptions, role }: { tasks: any[]; stageOptions
                     <Select
                       value={task.task_stage_id ? String(task.task_stage_id) : undefined}
                       onValueChange={(value) => {
-                        router.put(route('tasks.change-stage', task.id), { task_stage_id: value }, { preserveScroll: true });
+                        changeTaskStage(task.id, value);
                       }}
                     >
                       <SelectTrigger className="w-full sm:w-40 h-8 text-xs shrink-0" aria-label={t('Stage of {{title}}', { title: task.title })}>

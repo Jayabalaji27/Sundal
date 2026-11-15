@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Paperclip, Download, MoreHorizontal, Trash2, File, Image, FileText, FileSpreadsheet, FileArchive, FileCode, Eye } from 'lucide-react';
+import { Paperclip, Download, MoreHorizontal, Trash2, File, Image, FileText, FileSpreadsheet, FileArchive, FileCode, Eye, UploadCloud, Loader2, Images } from 'lucide-react';
 import { Task, TaskAttachment, MediaItem } from '@/types';
-import MediaPicker from '@/components/MediaPicker';
+import MediaLibraryModal from '@/components/MediaLibraryModal';
+import { toast } from '@/components/custom-toast';
+import { cn } from '@/lib/utils';
 import { CrudDeleteModal } from '@/components/CrudDeleteModal';
 
 interface TaskAttachment {
@@ -34,22 +37,68 @@ interface Props {
 }
 
 export default function TaskAttachments({ task, attachments, availableMedia = [], onUpdate, canAddAttachments = true, canManageAttachments = true }: Props) {
-    const [selectedMedia, setSelectedMedia] = useState('');
+    const { t } = useTranslation();
+    const { storageSettings } = usePage().props as any;
+    const allowedTypes: string = storageSettings?.allowed_file_types || 'jpg,jpeg,png,webp,gif,pdf';
+    const maxFileSizeKb: number = storageSettings?.max_file_size_kb || 2048;
+    const maxMb = Math.round((maxFileSizeKb / 1024) * 10) / 10;
+    const fileInput = useRef<HTMLInputElement>(null);
+    const [uploading, setUploading] = useState(0);
+    const [dragging, setDragging] = useState(false);
+    const [libraryOpen, setLibraryOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [attachmentToDelete, setAttachmentToDelete] = useState<TaskAttachment | null>(null);
 
-    const handleMediaSelect = (url: string, mediaIds?: number[]) => {
-        setSelectedMedia(url);
-        
-        if (mediaIds && mediaIds.length > 0) {
-            router.post(route('task-attachments.store', task.id), {
-                media_item_ids: mediaIds
-            }, {
-                onSuccess: () => {
-                    onUpdate?.();
-                    setSelectedMedia('');
-                }
+    /** Links media items to the task, keeping the task window as it is. */
+    const attach = (mediaIds: number[], done?: () => void) => {
+        if (!mediaIds.length) { done?.(); return; }
+        router.post(route('task-attachments.store', task.id), { media_item_ids: mediaIds }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => onUpdate?.(),
+            onError: () => toast.error(t('Could not attach the files. Please try again.')),
+            onFinish: () => done?.(),
+        });
+    };
+
+    /** Uploads files from the computer into the media library, then attaches them: one step for the user. */
+    const uploadFiles = async (list: FileList | null) => {
+        const files = Array.from(list || []);
+        if (!files.length || uploading) return;
+        files.filter(f => f.size > maxFileSizeKb * 1024)
+            .forEach(f => toast.error(t('{{name}} is larger than {{size}} MB.', { name: f.name, size: maxMb })));
+        const ok = files.filter(f => f.size <= maxFileSizeKb * 1024);
+        if (!ok.length) return;
+
+        setUploading(ok.length);
+        const formData = new FormData();
+        ok.forEach(f => formData.append('files[]', f));
+        try {
+            const response = await fetch(route('api.media.batch'), {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
             });
+            const result = await response.json().catch(() => ({}));
+            (result.errors || []).forEach((e: string) => toast.error(e));
+            if (!response.ok && !result.errors?.length) toast.error(result.message || t('Upload failed.'));
+            const ids: number[] = (result.data || []).map((item: { id: number }) => item.id);
+            if (ids.length) {
+                attach(ids, () => setUploading(0));
+                toast.success(t('{{count}} file(s) attached', { count: ids.length }));
+            } else {
+                setUploading(0);
+            }
+        } catch {
+            toast.error(t('Upload failed. Check your connection and try again.'));
+            setUploading(0);
+        } finally {
+            if (fileInput.current) fileInput.current.value = '';
         }
     };
 
@@ -211,16 +260,58 @@ export default function TaskAttachments({ task, attachments, availableMedia = []
                     )}
                 </div>
 
-                {/* Media Picker with Portal for Modal */}
+                {/* Upload: drop files or click to pick them; they attach straight away. */}
                 {canAddAttachments && (
-                    <div className="shrink-0 border-t dark:border-gray-700 pt-4 bg-white dark:bg-gray-900">
-                        <MediaPicker
-                            label="Add Media"
-                            value={selectedMedia}
-                            onChange={handleMediaSelect}
-                            placeholder="Select media..."
-                            showPreview={true}
-                            multiple={true}
+                    <div className="shrink-0 border-t border-ds-border-subtle pt-4">
+                        <input
+                            ref={fileInput}
+                            type="file"
+                            multiple
+                            className="hidden"
+                            accept={allowedTypes.split(',').map(ext => '.' + ext.trim()).join(',')}
+                            onChange={(e) => uploadFiles(e.target.files)}
+                        />
+                        <button
+                            type="button"
+                            disabled={!!uploading}
+                            onClick={() => fileInput.current?.click()}
+                            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                            onDragLeave={() => setDragging(false)}
+                            onDrop={(e) => { e.preventDefault(); setDragging(false); uploadFiles(e.dataTransfer.files); }}
+                            className={cn(
+                                'flex w-full cursor-pointer items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus disabled:cursor-wait',
+                                dragging ? 'border-primary bg-primary/5' : 'border-ds-border hover:border-primary/60 hover:bg-ds-surface-hover',
+                            )}
+                        >
+                            {uploading
+                                ? <Loader2 className="h-6 w-6 shrink-0 animate-spin text-primary" />
+                                : <UploadCloud className={cn('h-6 w-6 shrink-0', dragging ? 'text-primary' : 'text-ds-fg-muted')} />}
+                            <span className="min-w-0">
+                                <span className="block text-sm text-ds-fg">
+                                    {uploading
+                                        ? t('Uploading {{count}} file(s)…', { count: uploading })
+                                        : <>{t('Drag files here or')} <span className="font-semibold text-primary">{t('browse')}</span></>}
+                                </span>
+                                <span className="block text-xs text-ds-fg-muted">
+                                    {allowedTypes.split(',').map(x => x.trim().toUpperCase()).join(', ')} · {t('up to {{size}} MB', { size: maxMb })}
+                                </span>
+                            </span>
+                        </button>
+                        <div className="mt-2 flex justify-end">
+                            <button
+                                type="button"
+                                onClick={() => setLibraryOpen(true)}
+                                className="inline-flex cursor-pointer items-center gap-1.5 rounded text-xs font-medium text-ds-fg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-border-focus"
+                            >
+                                <Images className="h-3.5 w-3.5" />
+                                {t('Choose from media library')}
+                            </button>
+                        </div>
+                        <MediaLibraryModal
+                            isOpen={libraryOpen}
+                            onClose={() => setLibraryOpen(false)}
+                            onSelect={(_url, mediaIds) => { setLibraryOpen(false); attach(mediaIds || []); }}
+                            multiple
                         />
                     </div>
                 )}

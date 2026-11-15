@@ -83,11 +83,11 @@ export default function AgentChat() {
                     <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
                         <Bot className="h-12 w-12 text-muted-foreground" />
                         <div>
-                            <h2 className="text-lg font-semibold">{t('ChatGPT not configured')}</h2>
+                            <h2 className="text-lg font-semibold">{t('AI is not set up yet')}</h2>
                             <p className="mt-1 text-sm text-muted-foreground">
                                 {canConfigureKey
-                                    ? t('Add your OpenAI API key in Settings to enable agents.')
-                                    : t('Please contact your admin or manager to configure the OpenAI API key.')}
+                                    ? t('Connect an AI provider under Settings → AI Assistant to enable agents.')
+                                    : t('Please ask the workspace owner to connect AI under Settings → AI Assistant.')}
                             </p>
                         </div>
                         {canConfigureKey && (

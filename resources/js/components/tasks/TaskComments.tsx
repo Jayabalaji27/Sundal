@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { router, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -50,7 +50,7 @@ function Avatar({ person, size = 'sm' }: { person?: { name?: string; avatar?: st
  * people; Enter, Tab or a click inserts "@Name". Arrow keys move, Escape closes.
  */
 function MentionTextarea({
-    value, onChange, people, picked, onPick, placeholder, rows, className, onSubmitShortcut, listAbove = true,
+    value, onChange, people, picked, onPick, placeholder, rows, className, onSubmitShortcut, listAbove = true, autoGrow = false,
 }: {
     value: string;
     onChange: (value: string) => void;
@@ -62,9 +62,18 @@ function MentionTextarea({
     className?: string;
     onSubmitShortcut?: () => void;
     listAbove?: boolean;
+    /** Start at one line and grow with the text (up to the CSS max-height), like chat composers. */
+    autoGrow?: boolean;
 }) {
     const { t } = useTranslation();
     const ref = useRef<HTMLTextAreaElement>(null);
+
+    useLayoutEffect(() => {
+        const el = ref.current;
+        if (!autoGrow || !el) return;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight + 2}px`; // + the 1px top and bottom border
+    }, [value, autoGrow]);
     const [query, setQuery] = useState<string | null>(null);
     const [active, setActive] = useState(0);
 
@@ -367,11 +376,12 @@ export default function TaskComments({ task, comments, onUpdate, canAddComments 
                                 picked={newMentions}
                                 onPick={setNewMentions}
                                 placeholder={people.length ? t('Write a comment… type @ to mention someone') : t('Write a comment…')}
-                                rows={3}
+                                rows={1}
+                                autoGrow
                                 onSubmitShortcut={submit}
-                                className="resize-none rounded-xl py-3 pr-12"
+                                className="min-h-11 max-h-40 resize-none overflow-y-auto rounded-xl py-2.5 pr-12 leading-6"
                             />
-                            <div className="absolute bottom-2 right-2">
+                            <div className="absolute bottom-1.5 right-1.5">
                                 <Button aria-label={t('Send')}
                                     type="submit"
                                     size="icon"

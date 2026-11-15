@@ -1269,6 +1269,38 @@ Deploy: no migrations. PHP: `TimesheetReportController.php`; plus the rebuilt `p
 
 ---
 
+### RP-32 · 2026-11-15 · Stage rules, task History tab, one AI for every feature, UI fixes
+
+- **Stage rules** (`App\Actions\Tasks\ChangeTaskStage`, every caller: board drag, task list, task
+  window, dashboard, AI assistant):
+  - An unassigned task (no assignee, no task members) stays in the first stage until assigned.
+  - Moving back (to an earlier stage by order) needs a reason; it is saved as a task comment and
+    on the history entry. Leaving a "Blocked"/"On hold" stage is not a move back.
+  - Only the workspace owner or a manager can reopen a task from a completed stage.
+  - Refusals come back as validation errors; `reason` makes the page open the "Reason for moving
+    back" dialog (`task-stage-reason-dialog.tsx`, mounted in the sidebar layout) and resend.
+  - AI tools `change_task_status` / `change_bug_status` take a `reason`; AI undo skips the rules.
+- **History tab** in the task window (`GET tasks/{task}/history`, `App\Services\History\TaskTimeline`):
+  stage moves, edits (old → new, ids turned into names), comments, sprint moves, grouped by day,
+  filter All / Stage changes / Comments / Edits. Move-back reasons show on the move, older ones too.
+- **One AI everywhere** (`App\Services\Ai\WorkspaceAi`): AI Project Generator, AI agents and the
+  chatbot use the provider connected under Settings → AI Assistant (e.g. a free OpenRouter model);
+  an OpenAI key is only a fallback. Usage counts against the monthly token cap. The AI writing
+  button shows whenever the workspace AI is connected. Project plans from free models are parsed
+  leniently (JSON inside text or code fences; priorities normalised).
+- **UI:** dropdown text left-aligned (long names were centred with a gap); the Voice button no longer
+  shifts when a dropdown opens; Calendar toolbar shows the selected view / task mode / event types
+  clearly and "Show tasks" reads as a label; comment box starts at one line and grows; Files tab
+  uploads straight from the computer (drop or browse) with "Choose from media library" as an option.
+
+Deploy: no migrations or seeders. PHP + rebuilt `public/build`. AI features need the workspace AI
+connected under Settings → AI Assistant.
+
+Tests: `tests/Feature/TaskStageRulesTest.php` (9), `tests/Feature/WorkspaceAiTest.php` (3);
+5 fixtures in `AiAssistantTest.php` now assign their task before moving it.
+
+---
+
 ## Known Pending Items
 
 - [ ] Commit and deploy to `codecartz.com/sundal/` (shared hosting)
