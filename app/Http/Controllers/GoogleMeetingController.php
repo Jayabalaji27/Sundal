@@ -11,6 +11,7 @@ use App\Services\GoogleCalendarService;
 use App\Traits\HasPermissionChecks;
 use App\Events\GoogleMeetingCreated;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Carbon\Carbon;
 
@@ -106,7 +107,7 @@ class GoogleMeetingController extends Controller
         $meetings = $query->paginate($perPage)->withQueryString();
 
         // Get projects for filters and form
-        $projects = Project::forWorkspace($workspace->id)->get(['id', 'title']);
+        $projects = Project::forWorkspace($workspace->id)->schedulableBy($user)->get(['id', 'title']);
 
         // Get workspace members for meeting assignment
         $members = User::whereHas('workspaces', function ($q) use ($workspace) {
@@ -143,7 +144,7 @@ class GoogleMeetingController extends Controller
         }
 
         // Get projects for form
-        $projects = Project::forWorkspace($workspace->id)->get(['id', 'title']);
+        $projects = Project::forWorkspace($workspace->id)->schedulableBy($user)->get(['id', 'title']);
 
         // Get workspace members
         $members = User::whereHas('workspaces', function ($q) use ($workspace) {
@@ -177,9 +178,9 @@ class GoogleMeetingController extends Controller
             'description' => 'nullable|string',
             'start_time' => 'required|date|after:now',
             'duration' => 'required|integer|min:15|max:480',
-            'project_id' => 'required|exists:projects,id',
+            'project_id' => ['required', Rule::in(Project::forWorkspace($workspace->id)->schedulableBy($user)->pluck('id')->all())],
             'member_ids' => 'required|array|min:1',
-            'member_ids.*' => 'exists:users,id',
+            'member_ids.*' => [Rule::in($workspace->members()->pluck('user_id')->all())],
         ]);
 
         $startTime = Carbon::parse($request->start_time);
@@ -232,7 +233,7 @@ class GoogleMeetingController extends Controller
         }
 
         // Get projects for edit modal
-        $projects = Project::forWorkspace($workspace->id)->get(['id', 'title']);
+        $projects = Project::forWorkspace($workspace->id)->schedulableBy($user)->get(['id', 'title']);
         
         // Get workspace members
         $members = User::whereHas('workspaces', function ($q) use ($workspace) {
@@ -269,7 +270,8 @@ class GoogleMeetingController extends Controller
 
         $project = Project::find($projectId);
         
-        if (!$project || $project->workspace_id != $workspace->id) {
+        if (!$project || $project->workspace_id != $workspace->id
+            || !Project::whereKey($project->id)->schedulableBy($user)->exists()) {
             return response()->json(['error' => 'Project not found'], 404);
         }
 
@@ -319,10 +321,10 @@ class GoogleMeetingController extends Controller
             'description' => 'nullable|string',
             'start_time' => 'required|date',
             'duration' => 'required|integer|min:15|max:480',
-            'project_id' => 'required|exists:projects,id',
+            'project_id' => ['required', Rule::in(Project::forWorkspace($workspace->id)->schedulableBy($user)->pluck('id')->all())],
             'status' => 'nullable|in:scheduled,started,ended,cancelled',
             'member_ids' => 'required|array|min:1',
-            'member_ids.*' => 'exists:users,id',
+            'member_ids.*' => [Rule::in($workspace->members()->pluck('user_id')->all())],
         ]);
 
         $startTime = Carbon::parse($request->start_time);

@@ -169,6 +169,23 @@ class Project extends Model
     }
 
     /**
+     * Projects the user may schedule a meeting for (and pick in the meeting
+     * form). Owners and Managers schedule for any project in the workspace;
+     * Members only for the projects they can see (assigned, created, or
+     * workspace-wide).
+     */
+    public function scopeSchedulableBy(Builder $query, User $user): Builder
+    {
+        $role = $user->currentWorkspace?->getMemberRole($user);
+
+        if (in_array($role, ['owner', 'manager'], true)) {
+            return $query;
+        }
+
+        return $query->visibleTo($user);
+    }
+
+    /**
      * IDs of the workspace projects the client is assigned to whose shared
      * settings switch on the given section (e.g. 'task'). Clients only see a
      * project section when the owner has shared it with them.
