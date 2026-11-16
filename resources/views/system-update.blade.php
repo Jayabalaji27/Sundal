@@ -97,6 +97,38 @@
         </section>
     @endif
 
+    <section class="card" id="demo-data">
+        <h2>{{ __('Demo data') }}</h2>
+        <p class="muted" style="margin-top:0">{{ __('Fills the site with a realistic software agency, Nimbus Digital Solutions: projects, tasks, bugs, sprints, six weeks of timesheets (every project has hours, so Timesheet Reports work for any project or member), invoices, budgets, expenses, contracts, meetings and notes, plus two smaller companies and plan orders for the super admin. Dates are relative to the day you run it.') }}</p>
+        <div class="card warn" style="margin-top:12px">
+            <strong class="bad">{{ __('This deletes all existing work data first') }}</strong>
+            <span>{{ __('(projects, tasks, timesheets, invoices, meetings, budgets, expenses, notes, contracts, notifications, activity, plan orders) in every workspace. Users, roles, plans and settings stay. The demo logins below get their password reset to the demo password.') }}</span>
+            <br>{{ __('Back up the database first (phpMyAdmin → Export).') }}
+        </div>
+        <form method="POST" action="{{ route('system-update.demo-data') }}" style="margin-top:14px"
+              onsubmit="if (!confirm(@js(__('Delete all work data and load the demo company?')))) return false; this.querySelector('button').disabled = true; this.querySelector('button').textContent = @js(__('Loading… about 2 minutes, keep this tab open'));">
+            @csrf
+            <label for="demo-confirm">{{ __('Type :word to confirm', ['word' => \App\Http\Controllers\SystemUpdateController::DEMO_CONFIRM]) }}</label><br>
+            <input id="demo-confirm" name="confirm" autocomplete="off" required
+                   style="margin:6px 8px 0 0; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; width:140px">
+            <button type="submit">{{ __('Load demo data') }}</button>
+        </form>
+        <p class="muted" style="margin-bottom:0">{{ __('If the browser shows a timeout, the loading still finishes: wait three minutes and reload this page.') }}</p>
+
+        @if ($lastDemo)
+            <div class="step" style="margin-top:12px; border-top:1px solid var(--line)">
+                <strong class="{{ $lastDemo['ok'] ? 'ok' : 'bad' }}">{{ $lastDemo['ok'] ? '✓ ' . __('Demo data loaded') : '✗ ' . __('Loading stopped with an error') }}</strong>
+                <span class="muted">· {{ $lastDemo['at'] }}</span>
+                @if ($lastDemo['ok'])
+                    <p style="margin:6px 0 0">{{ __('Every demo login uses the password') }} <code>{{ $demoPassword }}</code></p>
+                @endif
+                @if ($lastDemo['output'] !== '')
+                    <details @unless ($lastDemo['ok']) open @endunless><summary class="muted">{{ __('Logins and details') }}</summary><pre>{{ $lastDemo['output'] }}</pre></details>
+                @endif
+            </div>
+        @endif
+    </section>
+
     <p style="margin-top:24px"><a href="{{ route('dashboard') }}">← {{ __('Back to the dashboard') }}</a></p>
 </main>
 </body>

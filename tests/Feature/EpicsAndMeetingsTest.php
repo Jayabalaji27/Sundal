@@ -220,13 +220,15 @@ describe('project meetings', function () {
             ->assertInertia(fn (Assert $page) => $page->has('meetings', 1)->where('meetings.0.title', 'Sprint review'));
     });
 
-    test('managers schedule, edit and cancel Zoom and Google meetings; members and clients only view and join', function () {
+    // Members gained scheduling on 2026-11-16 (limited to their own projects; see MemberMeetingsTest).
+    test('managers and members schedule, edit and cancel Zoom and Google meetings; clients only view and join', function () {
         [$workspace, $users] = emSetup();
         $abilities = ['zoom_meeting_create', 'zoom_meeting_update', 'zoom_meeting_delete', 'google_meeting_create', 'google_meeting_update', 'google_meeting_delete'];
 
         foreach ($abilities as $ability) {
             expect($users['manager']->hasPermissionTo($ability))->toBeTrue()
-                ->and($users['member']->hasPermissionTo($ability))->toBeFalse();
+                ->and($users['member']->hasPermissionTo($ability))->toBeTrue()
+                ->and(\Spatie\Permission\Models\Role::findByName('client')->hasPermissionTo($ability))->toBeFalse();
         }
         expect($users['member']->hasPermissionTo('zoom_meeting_join'))->toBeTrue()
             ->and(\Spatie\Permission\Models\Role::findByName('client')->hasPermissionTo('google_meeting_join'))->toBeTrue()

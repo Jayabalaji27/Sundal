@@ -204,6 +204,7 @@ Route::get('/initial-locale', [TranslationController::class, 'getInitialLocale']
 Route::middleware('auth')->group(function () {
     Route::get('system-update', [\App\Http\Controllers\SystemUpdateController::class, 'show'])->name('system-update.show');
     Route::post('system-update', [\App\Http\Controllers\SystemUpdateController::class, 'run'])->name('system-update.run');
+    Route::post('system-update/demo-data', [\App\Http\Controllers\SystemUpdateController::class, 'demoData'])->name('system-update.demo-data');
 });
 // Notification Templates route
 Route::get('notification-templates', [NotificationTemplateController::class, 'index'])->middleware(['auth', 'verified', 'permission:notification_template_view_any', 'block.superadmin.workspace'])->name('notification-templates.index');

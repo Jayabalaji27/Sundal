@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Project;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
 use App\Services\PlanLimitService;
 use App\Traits\HasPermissionChecks;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class TeamController extends Controller
@@ -23,6 +25,23 @@ class TeamController extends Controller
         $this->authorizePermission('team_view');
         abort_if(!auth()->user()->canAccessWorkspace($workspace), 404);
 
+        // Projects in this workspace, for the Team page's project filter and
+        // Projects column. Owner and Manager both see every project here, the
+        // same way they already see every member of the workspace.
+        // Scoped to the workspace in the URL (access checked above) rather than
+        // the user's current workspace, so it always matches the members list.
+        $projects = Project::withoutGlobalScope('workspace')
+            ->where('workspace_id', $workspace->id)
+            ->orderBy('title')
+            ->get(['id', 'title']);
+        $projectIds = $projects->pluck('id');
+
+        // Members are linked to projects via project_members, clients via project_clients.
+        $projectIdsByUser = DB::table('project_members')->whereIn('project_id', $projectIds)->get(['project_id', 'user_id'])
+            ->concat(DB::table('project_clients')->whereIn('project_id', $projectIds)->get(['project_id', 'user_id']))
+            ->groupBy('user_id')
+            ->map(fn ($links) => $links->pluck('project_id')->unique()->values());
+
         $members = $workspace->members()
             ->with('user:id,name,email,avatar,deactivated_at')
             ->orderByRaw("FIELD(role,'owner','manager','member','client')")
@@ -37,6 +56,7 @@ class TeamController extends Controller
                 'status' => $m->status,
                 'is_deactivated' => $m->user->deactivated_at !== null,
                 'joined_at' => $m->joined_at,
+                'project_ids' => $projectIdsByUser->get($m->user_id, collect())->all(),
             ]);
 
         $pendingInvitations = $workspace->pendingInvitations()
@@ -50,6 +70,7 @@ class TeamController extends Controller
         return Inertia::render('team/Index', [
             'workspace' => $workspace->only('id', 'name'),
             'members' => $members,
+            'projects' => $projects,
             'pendingInvitations' => $pendingInvitations,
             'isOwner' => $workspace->isOwner(auth()->user()),
         ]);

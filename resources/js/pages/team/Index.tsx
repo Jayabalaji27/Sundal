@@ -36,7 +36,16 @@ interface Member {
     status: string;
     is_deactivated: boolean;
     joined_at: string | null;
+    project_ids: number[];
 }
+
+interface ProjectOption {
+    id: number;
+    title: string;
+}
+
+/** How many project tags a row shows before collapsing the rest into "+N more". */
+const MAX_PROJECT_TAGS = 2;
 
 interface PendingInvitation {
     id: number;
@@ -51,6 +60,7 @@ interface PendingInvitation {
 interface Props {
     workspace: { id: number; name: string };
     members: Member[];
+    projects: ProjectOption[];
     pendingInvitations: PendingInvitation[];
     isOwner: boolean;
 }
@@ -85,7 +95,7 @@ function Section({ id, title, description, toolbar, children }: {
     );
 }
 
-export default function TeamIndex({ workspace, members, pendingInvitations, isOwner }: Props) {
+export default function TeamIndex({ workspace, members, projects = [], pendingInvitations, isOwner }: Props) {
     const { t, i18n } = useTranslation();
     const { props } = usePage();
     const { auth, flash } = props as any;
@@ -102,6 +112,8 @@ export default function TeamIndex({ workspace, members, pendingInvitations, isOw
 
     const [query, setQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
+    const [projectFilter, setProjectFilter] = useState('all');
+    const projectTitles = useMemo(() => new Map(projects.map(p => [p.id, p.title])), [projects]);
 
     // The row action in flight (e.g. "role:12"), so its button shows progress
     // and the row can't be submitted twice.
@@ -210,12 +222,40 @@ export default function TeamIndex({ workspace, members, pendingInvitations, isOw
     const normalizedQuery = query.trim().toLowerCase();
     const visibleMembers = members.filter(member =>
         (roleFilter === 'all' || member.role === roleFilter) &&
+        (projectFilter === 'all' || (member.project_ids ?? []).includes(Number(projectFilter))) &&
         (!normalizedQuery ||
             member.name.toLowerCase().includes(normalizedQuery) ||
             member.email.toLowerCase().includes(normalizedQuery) ||
             roleLabel(member.role).toLowerCase().includes(normalizedQuery)),
     );
-    const isFiltering = normalizedQuery !== '' || roleFilter !== 'all';
+    const isFiltering = normalizedQuery !== '' || roleFilter !== 'all' || projectFilter !== 'all';
+    const clearFilters = () => { setQuery(''); setRoleFilter('all'); setProjectFilter('all'); };
+
+    /** A member's projects as small tags; the rest collapse into "+N more" (full list in its tooltip). */
+    const memberProjects = (member: Member) => {
+        // The project being filtered on goes first, so it's never hidden under "+N more".
+        const selectedId = projectFilter === 'all' ? null : Number(projectFilter);
+        const titles = [...(member.project_ids ?? [])]
+            .sort((a, b) => Number(b === selectedId) - Number(a === selectedId))
+            .map(id => projectTitles.get(id))
+            .filter((title): title is string => Boolean(title));
+        if (titles.length === 0) {
+            return <span className="text-sm text-ds-fg-placeholder">{t('No projects')}</span>;
+        }
+        const shown = titles.slice(0, MAX_PROJECT_TAGS);
+        const hidden = titles.slice(MAX_PROJECT_TAGS);
+        const tagClass = 'inline-block max-w-40 truncate rounded-md border border-ds-border bg-ds-surface-subtle px-2 py-0.5 text-xs text-ds-fg-secondary';
+        return (
+            <div className="flex flex-wrap items-center gap-1">
+                {shown.map(title => <span key={title} className={tagClass} title={title}>{title}</span>)}
+                {hidden.length > 0 && (
+                    <span className={tagClass} title={hidden.join(', ')}>
+                        {t('+{{count}} more', { count: hidden.length })}
+                    </span>
+                )}
+            </div>
+        );
+    };
 
     const isInactive = (member: Member) => member.is_deactivated || member.status !== 'active';
     const canManage = (member: Member) => isOwner && member.role !== 'owner';
@@ -430,6 +470,19 @@ export default function TeamIndex({ workspace, members, pendingInvitations, isOw
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {projects.length > 0 && (
+                                <Select value={projectFilter} onValueChange={setProjectFilter}>
+                                    <SelectTrigger className="sm:w-48" aria-label={t('Filter by project')}>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">{t('All projects')}</SelectItem>
+                                        {projects.map(project => (
+                                            <SelectItem key={project.id} value={String(project.id)}>{project.title}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
                         </div>
                     )}
                 >
@@ -446,8 +499,8 @@ export default function TeamIndex({ workspace, members, pendingInvitations, isOw
                             compact
                             icon={SearchX}
                             title={t('No members found')}
-                            description={t('Try another name, email, or role.')}
-                            secondaryAction={isFiltering ? { label: t('Clear filters'), onClick: () => { setQuery(''); setRoleFilter('all'); } } : undefined}
+                            description={t('Try another name, email, role, or project.')}
+                            secondaryAction={isFiltering ? { label: t('Clear filters'), onClick: clearFilters } : undefined}
                         />
                     ) : (
                         <>
@@ -459,6 +512,7 @@ export default function TeamIndex({ workspace, members, pendingInvitations, isOw
                                         <TableRow>
                                             <TableHead scope="col">{t('Member')}</TableHead>
                                             <TableHead scope="col">{t('Role')}</TableHead>
+                                            <TableHead scope="col">{t('Projects')}</TableHead>
                                             <TableHead scope="col">{t('Joined')}</TableHead>
                                             <TableHead scope="col">{t('Status')}</TableHead>
                                             {isOwner && <TableHead scope="col" className="text-right">{t('Actions')}</TableHead>}
@@ -477,6 +531,7 @@ export default function TeamIndex({ workspace, members, pendingInvitations, isOw
                                                     </div>
                                                 </TableCell>
                                                 <TableCell><RoleBadge role={member.role}>{roleLabel(member.role)}</RoleBadge></TableCell>
+                                                <TableCell>{memberProjects(member)}</TableCell>
                                                 <TableCell className="whitespace-nowrap text-ds-fg-secondary">{formatDate(member.joined_at) ?? '—'}</TableCell>
                                                 <TableCell>{memberStatus(member)}</TableCell>
                                                 {isOwner && <TableCell className="text-right">{memberActions(member)}</TableCell>}
@@ -501,6 +556,7 @@ export default function TeamIndex({ workspace, members, pendingInvitations, isOw
                                             <RoleBadge role={member.role}>{roleLabel(member.role)}</RoleBadge>
                                             {memberStatus(member)}
                                         </div>
+                                        <div className="mt-2">{memberProjects(member)}</div>
                                         {member.joined_at && (
                                             <p className="mt-2 text-sm text-ds-fg-secondary">
                                                 {t('Joined {{date}}', { date: formatDate(member.joined_at) })}

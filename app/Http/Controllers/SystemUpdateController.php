@@ -16,6 +16,8 @@ use Illuminate\Http\Request;
  */
 class SystemUpdateController extends Controller
 {
+    public const DEMO_CONFIRM = 'DEMO';
+
     public function __construct(private readonly SystemUpdate $update) {}
 
     public function show(Request $request)
@@ -26,6 +28,8 @@ class SystemUpdateController extends Controller
             'pending' => $this->update->pending(),
             'storageLink' => $this->update->storageLink(),
             'lastRun' => $this->update->lastRun(),
+            'lastDemo' => $this->update->lastDemoData(),
+            'demoPassword' => (string) config('demo.password'),
         ]);
     }
 
@@ -40,5 +44,24 @@ class SystemUpdateController extends Controller
         }
 
         return redirect()->route('system-update.show');
+    }
+
+    /** Replaces all work data with the demo company, after a typed confirmation. */
+    public function demoData(Request $request)
+    {
+        abort_unless($request->user()?->isSuperAdmin(), 403);
+
+        if (trim((string) $request->input('confirm')) !== self::DEMO_CONFIRM) {
+            return redirect()->route('system-update.show')
+                ->with('system_update_error', __('Type :word to confirm loading the demo data.', ['word' => self::DEMO_CONFIRM]));
+        }
+
+        try {
+            $this->update->loadDemoData($request->user()->id);
+        } catch (ActionException $e) {
+            return redirect()->route('system-update.show')->with('system_update_error', $e->getMessage());
+        }
+
+        return redirect()->to(route('system-update.show') . '#demo-data');
     }
 }

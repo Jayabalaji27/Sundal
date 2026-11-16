@@ -298,11 +298,20 @@ class RoleSeeder extends Seeder
             'expense_update',
             'expense_delete',
             'expense_add_attachments',
+            // Members schedule meetings for the projects they're on (the
+            // controllers limit the project list, and edit/cancel to the
+            // meetings they scheduled themselves).
             'zoom_meeting_view_any',
             'zoom_meeting_view',
+            'zoom_meeting_create',
+            'zoom_meeting_update',
+            'zoom_meeting_delete',
             'zoom_meeting_join',
             'google_meeting_view_any',
             'google_meeting_view',
+            'google_meeting_create',
+            'google_meeting_update',
+            'google_meeting_delete',
             'google_meeting_join',
             // user_view_logs removed: members must not see other users' login history
             'note_view_any',
