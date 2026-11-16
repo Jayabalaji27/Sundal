@@ -110,3 +110,37 @@ test('the installer\'s /update wizard is off', function () {
 
     $this->get('/update')->assertNotFound();
 });
+
+describe('demo data', function () {
+    afterEach(fn () => @unlink(storage_path('framework/demo-data-last.json')));
+
+    test('only the superadmin can load it, and only after typing DEMO', function () {
+        $company = User::factory()->create(['type' => 'company']);
+        $company->assignRole('company');
+        $this->actingAs($company)->post(route('system-update.demo-data'), ['confirm' => 'DEMO'])->assertForbidden();
+
+        $this->actingAs(updateSuperAdmin())->post(route('system-update.demo-data'), ['confirm' => 'yes'])
+            ->assertRedirect(route('system-update.show'))
+            ->assertSessionHas('system_update_error');
+        expect(\App\Models\Project::withoutGlobalScopes()->count())->toBe(0);
+    });
+
+    test('it fills every project with recent hours, so a report for any project has data', function () {
+        $this->seed(\Database\Seeders\PlanSeeder::class);
+        $admin = updateSuperAdmin();
+
+        $this->actingAs($admin)->post(route('system-update.demo-data'), ['confirm' => 'DEMO'])
+            ->assertRedirect(route('system-update.show') . '#demo-data');
+
+        expect(app(\App\Services\SystemUpdate::class)->lastDemoData())->toMatchArray(['ok' => true]);
+        $projects = \App\Models\Project::withoutGlobalScopes()->get();
+        expect($projects->count())->toBeGreaterThanOrEqual(8);
+        $since = now()->subDays(30)->toDateString();
+        foreach ($projects as $project) {
+            $recent = \App\Models\TimesheetEntry::where('project_id', $project->id)->where('date', '>=', $since)->sum('hours');
+            expect((float) $recent)->toBeGreaterThan(0, $project->title . ' has no hours in the last 30 days');
+        }
+
+        $this->actingAs($admin)->get(route('system-update.show'))->assertOk()->assertSee('Demo data loaded')->assertSee('company@test.com');
+    });
+});

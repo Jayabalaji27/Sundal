@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Actions\ActionException;
+use Database\Seeders\DemoShowcaseSeeder;
 use Database\Seeders\PermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Artisan;
@@ -101,6 +102,62 @@ class SystemUpdate
             flock($lock, LOCK_UN);
             fclose($lock);
         }
+    }
+
+    /**
+     * Replaces all work data with the connected demo company (DemoShowcaseSeeder):
+     * projects, tasks, bugs, sprints, timesheets, invoices, meetings, budgets…
+     * Destructive, so the page asks for a typed confirmation first.
+     *
+     * @return array{at: string, ok: bool, output: string}
+     */
+    public function loadDemoData(int $userId): array
+    {
+        $lock = fopen(storage_path('framework/system-update.lock'), 'c');
+        if (!$lock || !flock($lock, LOCK_EX | LOCK_NB)) {
+            throw new ActionException(__('An update is already running. Wait a minute, then reload this page.'));
+        }
+
+        @set_time_limit(0);
+        ignore_user_abort(true);
+
+        try {
+            $output = new BufferedOutput;
+            try {
+                $ok = Artisan::call('db:seed', ['--class' => DemoShowcaseSeeder::class, '--force' => true], $output) === 0;
+                $text = $output->fetch();
+            } catch (Throwable $e) {
+                report($e);
+                $ok = false;
+                $text = $output->fetch() . "\n" . $e->getMessage();
+            }
+            if ($ok) {
+                Artisan::call('optimize:clear');
+            }
+
+            $result = ['at' => now()->toDateTimeString(), 'ok' => $ok, 'output' => trim($text)];
+            file_put_contents($this->demoResultPath(), json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            Log::info('Demo data loaded', ['user_id' => $userId, 'ok' => $ok]);
+
+            return $result;
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+
+    /** @return array{at: string, ok: bool, output: string}|null */
+    public function lastDemoData(): ?array
+    {
+        $path = $this->demoResultPath();
+        $data = is_file($path) ? json_decode((string) file_get_contents($path), true) : null;
+
+        return is_array($data) ? $data : null;
+    }
+
+    private function demoResultPath(): string
+    {
+        return storage_path('framework/demo-data-last.json');
     }
 
     /** @return array<int, array{0: string, 1: string, 2: array}> label, command, arguments */

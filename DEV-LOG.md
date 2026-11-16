@@ -1362,3 +1362,23 @@ php artisan route:list
 # Check route count
 php artisan route:list | Measure-Object
 ```
+### RP-33 · 2026-11-16 · Demo data from the System update page; every project has report hours
+
+- **Load demo data** on `/system-update` (super admin, type `DEMO` to confirm):
+  `SystemUpdate::loadDemoData` runs `DemoShowcaseSeeder` without a terminal (same lock and no time
+  limit as the update), clears the caches, and shows the logins and the demo password on the page.
+  It deletes all work data in every workspace first; users, roles, plans and settings stay.
+- **DemoShowcaseSeeder timesheets:** six weeks instead of four, for members, managers and the owner,
+  and for every project with work (Website Redesign post-launch fixes, HR Portal before the hold,
+  CRM discovery, the R&D proof of concept, Orbit Logistics, GreenLeaf, WorkDo). Every project has
+  hours in the last 30 days, so Timesheet Reports generate for any project. A block is skipped on
+  days before its task starts. CRM Integration now started 12 days ago (discovery done, mapping in
+  progress). A server without `company@test.com` gets the new owner's company settings.
+
+Deploy: PHP and Blade only (no migrations, no front-end build). Then `/system-update` → Load demo
+data. Demo password: `DEMO_PASSWORD`, default `Demo@12345`.
+
+Tests: `tests/Feature/SystemUpdateTest.php` (2 new).
+
+---
+

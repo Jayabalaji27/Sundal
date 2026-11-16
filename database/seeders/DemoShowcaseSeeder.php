@@ -255,6 +255,10 @@ class DemoShowcaseSeeder extends Seeder
         ])->save();
         $this->agency = $agency;
         $this->seedingWorkspaceId = $agency->id;
+        if ($owner->wasRecentlyCreated && function_exists('copySettingsFromSuperAdmin')) {
+            // A server without the test company: give the new owner the usual company settings.
+            copySettingsFromSuperAdmin($owner->id, $agency->id);
+        }
         $owner->forceFill(['current_workspace_id' => $agency->id])->save();
         $this->join($agency, $owner, 'owner', null, 400);
 
@@ -798,7 +802,7 @@ class DemoShowcaseSeeder extends Seeder
         $p = $this->project('crm', $this->agency, 'priya', [
             'title' => 'Salesforce CRM Integration',
             'description' => 'Connect the new BrightCart store to BrightCart\'s Salesforce org: customers, orders and account owners kept in sync every night.',
-            'status' => 'planning', 'priority' => 'medium', 'start' => 5, 'deadline' => 60, 'hours' => 240, 'budget' => 18000,
+            'status' => 'planning', 'priority' => 'medium', 'start' => -12, 'deadline' => 60, 'hours' => 240, 'budget' => 18000,
         ], ['priya' => 'manager', 'arjun' => 'member', 'rahul' => 'member'], ['daniel']);
 
         $this->milestones($p, 'priya', [
@@ -806,7 +810,8 @@ class DemoShowcaseSeeder extends Seeder
             ['c-m2', 'Sync engine & go-live', 'pending', 60, 'Nightly sync in production with monitoring.'],
         ]);
         $this->tasks($p, 'priya', [
-            ['c01', 'Map Salesforce objects to store data', 'arjun', 'To Do', 3, 'high', 'c-m1', 5, 8],
+            ['c00', 'Discovery workshops with the BrightCart Salesforce admin', 'priya', 'Done', 2, 'high', 'c-m1', -12, -5],
+            ['c01', 'Map Salesforce objects to store data', 'arjun', 'In Progress', 3, 'high', 'c-m1', -8, 8],
             ['c02', 'OAuth 2.0 connection to Salesforce', 'arjun', 'To Do', 5, 'high', 'c-m2', 8, 14],
             ['c03', 'Nightly sync: customers & orders', 'arjun', 'To Do', 8, 'high', 'c-m2', 14, 28],
             ['c04', 'Failed-sync dashboard & alerts', null, 'To Do', 5, 'medium', 'c-m2', null, null],
@@ -837,6 +842,7 @@ class DemoShowcaseSeeder extends Seeder
             ['w04', 'Blog migration from WordPress', 'arjun', 'Done', 5, 'medium', 'w-m2', -72, -58],
             ['w05', 'SEO metadata, sitemap & redirects', 'arjun', 'Done', 3, 'medium', 'w-m2', -60, -50],
             ['w06', 'Launch checklist & go-live', 'priya', 'Done', 2, 'high', 'w-m2', -50, -46],
+            ['w07', 'Post-launch fixes & analytics review', 'arjun', 'Done', 3, 'medium', 'w-m2', -42, -15],
         ]);
     }
 
@@ -884,93 +890,146 @@ class DemoShowcaseSeeder extends Seeder
     // ── Timesheets ───────────────────────────────────────────────────────────
 
     /**
-     * Four weeks of time per team member, Monday to Friday (this week up to
-     * yesterday): two older weeks approved, last week waiting for approval
-     * (or approved/rejected), this week still a draft.
+     * Six weeks of time per person, Monday to Friday (this week up to
+     * yesterday), so every project with work has hours in the last 30 days
+     * and the Timesheet Reports fill for any project or member. Older weeks
+     * approved, last week waiting for approval (or approved/rejected), this
+     * week still a draft. A block is skipped on days before its task starts.
      */
     private function seedTimesheets(): void
     {
         $plans = [
-            // person => [approver, hourly rate, weeks ago => [status, [[task, hours], [task, hours]]]]
+            // person => [approver, hourly rate, weeks ago => [status, [[task, hours per day], ...]]]
             'arjun' => ['priya', 40, [
-                3 => ['approved', [['b05', 3.5], ['b07', 4]]],
+                5 => ['approved', [['b05', 5], ['w07', 2.5]]],
+                4 => ['approved', [['b05', 4], ['w07', 3.5]]],
+                3 => ['approved', [['b07', 5], ['w07', 2.5]]],
                 2 => ['approved', [['b07', 4], ['b08', 3.5]]],
-                1 => ['submitted', [['b09', 4], ['f08', 3.5]]],
+                1 => ['submitted', [['b09', 3], ['c01', 2], ['f08', 2.5]]],
                 0 => ['draft', [['b13', 4], ['f08', 3.5]]],
             ]],
             'vikram' => ['neha', 42, [
+                5 => ['approved', [['h02', 6]]],
+                4 => ['approved', [['f02', 4], ['h02', 3.5]]],
                 3 => ['approved', [['f02', 4], ['f03', 3.5]]],
-                2 => ['approved', [['f03', 4], ['f02', 3.5]]],
+                2 => ['approved', [['f03', 4], ['f06', 2], ['h02', 1.5]]],
                 1 => ['submitted', [['f06', 4], ['f10', 3.5]]],
                 0 => ['draft', [['f07', 4], ['f06', 3.5]]],
             ]],
             'ananya' => ['priya', 35, [
-                3 => ['approved', [['b04', 4], ['f04', 3.5]]],
-                2 => ['approved', [['b10', 4], ['f12', 3.5]]],
-                1 => ['approved', [['f12', 4], ['b16', 3.5]]],
+                5 => ['approved', [['b01', 4], ['b02', 3.5]]],
+                4 => ['approved', [['b03', 3], ['b04', 2.5], ['f04', 2]]],
+                3 => ['approved', [['b10', 4], ['w07', 3]]],
+                2 => ['approved', [['f12', 4], ['b10', 3.5]]],
+                1 => ['approved', [['b16', 4], ['f12', 3.5]]],
                 0 => ['draft', [['b17', 4], ['b16', 2.5]]],
             ]],
             'rahul' => ['priya', 30, [
-                3 => ['approved', [['f05', 4], ['b11', 3.5]]],
+                5 => ['approved', [['b06', 4], ['f05', 3.5]]],
+                4 => ['approved', [['f05', 4], ['b06', 3.5]]],
+                3 => ['approved', [['b11', 4], ['f05', 3.5]]],
                 2 => ['rejected', [['b11', 4], ['f05', 3.5]]],
-                1 => ['submitted', [['f11', 4], ['b11', 3]]],
+                1 => ['submitted', [['f11', 4], ['b11', 3], ['c05', 0.5]]],
                 0 => ['draft', [['b18', 3.5], ['f11', 4]]],
+            ]],
+            // Managers log their planning and client time; the owner approves it.
+            'priya' => ['owner', 55, [
+                3 => ['approved', [['b04', 1.5], ['w07', 1]]],
+                2 => ['approved', [['c00', 2], ['b11', 1]]],
+                1 => ['approved', [['c00', 2], ['b19', 1]]],
+                0 => ['draft', [['b19', 1], ['c01', 1.5]]],
+            ]],
+            'neha' => ['owner', 55, [
+                4 => ['approved', [['f02', 1.5], ['h02', 1]]],
+                3 => ['approved', [['f03', 1.5], ['h01', 0.5]]],
+                2 => ['approved', [['f06', 1.5], ['h02', 0.5]]],
+                1 => ['submitted', [['f10', 1.5], ['f11', 1]]],
+            ]],
+            // The owner's design and demo reviews (self-approved).
+            'owner' => ['owner', 70, [
+                3 => ['approved', [['b04', 0.5], ['f03', 0.5]]],
+                2 => ['approved', [['b08', 0.5], ['f06', 0.5]]],
+                1 => ['approved', [['b12', 0.5], ['f10', 0.5]]],
             ]],
         ];
 
-        $thisMonday = $this->today->copy()->startOfWeek(Carbon::MONDAY);
         foreach ($plans as $person => [$approverKey, $rate, $weeks]) {
-            $user = $this->people[$person];
-            $approver = $this->people[$approverKey];
             foreach ($weeks as $weeksAgo => [$status, $split]) {
-                $monday = $thisMonday->copy()->subWeeks($weeksAgo);
-                $days = collect(range(0, 4))->map(fn ($i) => $monday->copy()->addDays($i))->filter(fn (Carbon $d) => $d->lt($this->today));
-                if ($days->isEmpty()) {
+                $blocks = array_map(fn ($b) => [$this->tasks[$b[0]], $b[1]], $split);
+                $this->timesheetWeek($this->people[$person], $this->agency->id, $weeksAgo, $status, $blocks, $rate, $this->people[$approverKey]);
+            }
+        }
+
+        // The R&D workspace: internal (not billable) time on the proof of concept.
+        $this->lab->forceFill(['timesheet_enabled' => true])->save();
+        $this->timesheetWeek($this->people['priya'], $this->lab->id, 1, 'approved', [[$this->tasks['l01'], 1.5]], 55, $this->people['owner'], false);
+        $this->timesheetWeek($this->people['arjun'], $this->lab->id, 1, 'submitted', [[$this->tasks['l02'], 1]], 40, $this->people['priya'], false);
+        $this->timesheetWeek($this->people['arjun'], $this->lab->id, 0, 'draft', [[$this->tasks['l02'], 1]], 40, $this->people['priya'], false);
+    }
+
+    /**
+     * One weekly timesheet for $user in $workspaceId, $weeksAgo weeks back,
+     * with the same blocks ([Task, hours]) every weekday before today.
+     *
+     * @param  array<int, array{0: Task, 1: float}>  $blocks
+     */
+    private function timesheetWeek(User $user, int $workspaceId, int $weeksAgo, string $status, array $blocks, float $rate, User $approver, bool $billable = true): void
+    {
+        $monday = $this->today->copy()->startOfWeek(Carbon::MONDAY)->subWeeks($weeksAgo);
+        $days = collect(range(0, 4))->map(fn ($i) => $monday->copy()->addDays($i))->filter(fn (Carbon $d) => $d->lt($this->today));
+        if ($days->isEmpty()) {
+            return;
+        }
+
+        $friday = $monday->copy()->addDays(4)->setTime(18, 0);
+        $previousWorkspace = $this->seedingWorkspaceId;
+        $this->seedingWorkspaceId = $workspaceId;
+        $timesheet = $this->as($user, $monday->copy()->setTime(9, 15), fn () => Timesheet::forceCreate([
+            'user_id' => $user->id, 'workspace_id' => $workspaceId,
+            'start_date' => $monday->toDateString(), 'end_date' => $monday->copy()->addDays(6)->toDateString(),
+            'status' => 'draft', 'total_hours' => 0, 'billable_hours' => 0,
+        ]));
+        $this->seedingWorkspaceId = $previousWorkspace;
+
+        $total = 0;
+        foreach ($days as $date) {
+            $clock = $date->copy()->setTime(9, 30);
+            foreach ($blocks as $i => [$task, $hours]) {
+                if ($task->start_date && $date->lt(Carbon::parse($task->start_date)->startOfDay())) {
                     continue;
                 }
-
-                $friday = $monday->copy()->addDays(4)->setTime(18, 0);
-                $timesheet = $this->as($user, $monday->copy()->setTime(9, 15), fn () => Timesheet::forceCreate([
-                    'user_id' => $user->id, 'workspace_id' => $this->agency->id,
-                    'start_date' => $monday->toDateString(), 'end_date' => $monday->copy()->addDays(6)->toDateString(),
-                    'status' => 'draft', 'total_hours' => 0, 'billable_hours' => 0,
-                ]));
-
-                $total = 0;
-                foreach ($days as $date) {
-                    $clock = $date->copy()->setTime(9, 30);
-                    foreach ($split as $i => [$taskKey, $hours]) {
-                        $task = $this->tasks[$taskKey];
-                        $start = $clock->copy();
-                        $end = $start->copy()->addMinutes((int) round($hours * 60));
-                        TimesheetEntry::forceCreate([
-                            'timesheet_id' => $timesheet->id, 'project_id' => $task->project_id, 'task_id' => $task->id, 'user_id' => $user->id,
-                            'date' => $date->toDateString(), 'start_time' => $start->format('H:i:s'), 'end_time' => $end->format('H:i:s'),
-                            'hours' => $hours, 'description' => $task->title, 'is_billable' => true, 'hourly_rate' => $rate,
-                        ]);
-                        $total += $hours;
-                        $clock = $end->copy()->addMinutes($i === 0 ? 45 : 15); // lunch after the first block
-                    }
-                }
-
-                $reviewed = in_array($status, ['approved', 'rejected'], true);
-                $timesheet->forceFill([
-                    'status' => $status, 'total_hours' => $total, 'billable_hours' => $total,
-                    'submitted_at' => $status === 'draft' ? null : $friday,
-                    'approved_at' => $status === 'approved' ? $friday->copy()->addDays(3)->setTime(10, 30) : null,
-                    'approved_by' => $status === 'approved' ? $approver->id : null,
-                    'notes' => $status === 'draft' ? null : 'Week of ' . $monday->format('j M'),
-                ])->saveQuietly();
-
-                if ($status !== 'draft') {
-                    TimesheetApproval::forceCreate([
-                        'timesheet_id' => $timesheet->id, 'approver_id' => $approver->id,
-                        'status' => $status === 'submitted' ? 'pending' : $status,
-                        'comments' => $status === 'rejected' ? 'Please split the regression testing hours by test run so we can bill them to the right project.' : ($status === 'approved' ? 'Thanks — approved.' : null),
-                        'approved_at' => $reviewed ? $friday->copy()->addDays(3)->setTime(10, 30) : null,
-                    ]);
-                }
+                $start = $clock->copy();
+                $end = $start->copy()->addMinutes((int) round($hours * 60));
+                TimesheetEntry::forceCreate([
+                    'timesheet_id' => $timesheet->id, 'project_id' => $task->project_id, 'task_id' => $task->id, 'user_id' => $user->id,
+                    'date' => $date->toDateString(), 'start_time' => $start->format('H:i:s'), 'end_time' => $end->format('H:i:s'),
+                    'hours' => $hours, 'description' => $task->title, 'is_billable' => $billable, 'hourly_rate' => $rate,
+                ]);
+                $total += $hours;
+                $clock = $end->copy()->addMinutes($i === 0 ? 45 : 15); // lunch after the first block
             }
+        }
+        if ($total == 0) {
+            $timesheet->delete();
+            return;
+        }
+
+        $reviewed = in_array($status, ['approved', 'rejected'], true);
+        $timesheet->forceFill([
+            'status' => $status, 'total_hours' => $total, 'billable_hours' => $billable ? $total : 0,
+            'submitted_at' => $status === 'draft' ? null : $friday,
+            'approved_at' => $status === 'approved' ? $friday->copy()->addDays(3)->setTime(10, 30) : null,
+            'approved_by' => $status === 'approved' ? $approver->id : null,
+            'notes' => $status === 'draft' ? null : 'Week of ' . $monday->format('j M'),
+        ])->saveQuietly();
+
+        if ($status !== 'draft' && $approver->id !== $user->id) {
+            TimesheetApproval::forceCreate([
+                'timesheet_id' => $timesheet->id, 'approver_id' => $approver->id,
+                'status' => $status === 'submitted' ? 'pending' : $status,
+                'comments' => $status === 'rejected' ? 'Please split the regression testing hours by test run so we can bill them to the right project.' : ($status === 'approved' ? 'Thanks — approved.' : null),
+                'approved_at' => $reviewed ? $friday->copy()->addDays(3)->setTime(10, 30) : null,
+            ]);
         }
     }
 
@@ -1126,6 +1185,7 @@ class DemoShowcaseSeeder extends Seeder
         $doing = $this->stage($workspace->id, 'In Progress');
         $done = $this->stage($workspace->id, 'Done');
 
+        $blocks = []; // the owner's daily time: [Task, hours]
         foreach ($projects as $p => [$title, $status, $priority, $tasks]) {
             $project = $this->as($owner, $this->day(-30 + $p * 5, '10:00'), fn () => Project::forceCreate([
                 'workspace_id' => $workspace->id, 'title' => $title, 'description' => $title . ' for ' . $workspace->name . '.',
@@ -1136,16 +1196,25 @@ class DemoShowcaseSeeder extends Seeder
             ProjectMember::forceCreate(['project_id' => $project->id, 'user_id' => $owner->id, 'role' => 'owner', 'assigned_at' => $this->day(-30), 'assigned_by' => $owner->id]);
             foreach ($tasks as $t => $taskTitle) {
                 $stage = $status === 'planning' ? $todo : ($t === 0 ? $done : ($t === 1 ? $doing : $todo));
-                $this->as($owner, $this->day(-25 + $t, '11:00'), fn () => Task::forceCreate([
+                $task = $this->as($owner, $this->day(-25 + $t, '11:00'), fn () => Task::forceCreate([
                     'project_id' => $project->id, 'task_stage_id' => $stage->id, 'title' => $taskTitle, 'priority' => $priority,
                     'story_points' => [3, 5, 2, 3][$t % 4], 'start_date' => $this->day(-20 + $t * 4)->toDateString(),
                     'end_date' => $this->day(5 + $t * 6)->toDateString(), 'assigned_to' => $owner->id, 'created_by' => $owner->id,
                     'progress' => $stage->is_completed ? 100 : ($stage->id === $doing->id ? 50 : 0),
                 ]));
+                if ($t < 2) {
+                    $blocks[] = [$task, $status === 'planning' ? 0.5 : ($t === 0 ? 3 : 3.5)];
+                }
             }
             $this->projects['company-' . $project->id] = $project;
         }
         $this->seedingWorkspaceId = $previousWorkspace;
+
+        // A few weeks of the owner's own time, so their Timesheet Reports have data.
+        $workspace->forceFill(['timesheet_enabled' => true])->save();
+        foreach ([3 => 'approved', 2 => 'approved', 1 => 'submitted', 0 => 'draft'] as $weeksAgo => $status) {
+            $this->timesheetWeek($owner, $workspace->id, $weeksAgo, $status, $blocks, 25, $owner);
+        }
     }
 
     // ── Output ───────────────────────────────────────────────────────────────
