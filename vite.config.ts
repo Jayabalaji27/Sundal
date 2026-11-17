@@ -1,7 +1,18 @@
 import tailwindcss from '@tailwindcss/vite';
 import laravel from 'laravel-vite-plugin';
+import { networkInterfaces } from 'node:os';
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
+
+// This machine's current LAN IPv4 (192.168.x / 10.x), so the dev server keeps
+// working when the router hands out a new address. Falls back to localhost.
+function lanIp(): string {
+  const addresses = Object.values(networkInterfaces())
+    .flat()
+    .filter((a) => a && a.family === 'IPv4' && !a.internal)
+    .map((a) => a!.address);
+  return addresses.find((ip) => ip.startsWith('192.168.') || ip.startsWith('10.')) ?? 'localhost';
+}
 
 function stripUseClientDirective(): import('vite').Plugin {
   return {
@@ -39,7 +50,7 @@ export default defineConfig({
         // websocket needs this machine's actual LAN IP to connect back to.
         // Override with VITE_HMR_HOST (e.g. 127.0.0.1) when running on another machine.
         hmr: {
-            host: process.env.VITE_HMR_HOST || '192.168.88.5',
+            host: process.env.VITE_HMR_HOST || lanIp(),
         },
         headers: {
             'Access-Control-Allow-Origin': '*',
