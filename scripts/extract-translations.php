@@ -2,13 +2,13 @@
 
 // Define the directories to scan
 $directories = [
-    __DIR__ . '/resources/js/pages',
-    __DIR__ . '/resources/js/components',
-    __DIR__ . '/resources/js/layouts',
-    __DIR__ . '/resources/views',
-    __DIR__ . '/app'
+    dirname(__DIR__) . '/resources/js/pages',
+    dirname(__DIR__) . '/resources/js/components',
+    dirname(__DIR__) . '/resources/js/layouts',
+    dirname(__DIR__) . '/resources/views',
+    dirname(__DIR__) . '/app'
 ];
-$outputFile = __DIR__ . '/resources/lang/en.json';
+$outputFile = dirname(__DIR__) . '/resources/lang/en.json';
 
 // Initialize an array to store translations
 $translations = [];
