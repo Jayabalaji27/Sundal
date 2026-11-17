@@ -34,6 +34,7 @@ class User extends BaseAuthenticatable implements MustVerifyEmail
         'email',
         'email_verified_at',
         'password',
+        'must_change_password',
         'type',
         'avatar',
         'lang',
@@ -103,6 +104,7 @@ class User extends BaseAuthenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
             'plan_expire_date' => 'date',
             'trial_expire_date' => 'date',
             'plan_is_active' => 'integer',

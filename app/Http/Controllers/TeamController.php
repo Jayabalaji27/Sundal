@@ -142,4 +142,55 @@ class TeamController extends Controller
 
         return back()->with('success', __('Member reactivated.'));
     }
+
+    /**
+     * Owner gives a teammate a temporary password (for when the reset email
+     * doesn't arrive). The teammate must choose their own at next sign-in, and
+     * every session they have open is signed out.
+     */
+    public function setPassword(Request $request, Workspace $workspace, User $user)
+    {
+        $this->authorizePermission('team_reset_password');
+        $owner = auth()->user();
+        abort_if(!$workspace->isOwner($owner), 403);
+
+        $member = $workspace->members()->where('user_id', $user->id)->first();
+        abort_if(!$member, 404);
+        abort_if($member->role === 'owner' || $user->id === $owner->id || $user->isSuperAdmin(), 403,
+            __('You can only set passwords for your team members.'));
+
+        // A login is shared across companies: if this person also works in a
+        // workspace this owner doesn't own, setting their password would let
+        // this owner sign in to someone else's company.
+        $inOtherCompany = WorkspaceMember::where('user_id', $user->id)
+            ->whereNotIn('workspace_id', Workspace::where('owner_id', $owner->id)->select('id'))
+            ->exists()
+            || Workspace::where('owner_id', $user->id)->exists();
+        if ($inOtherCompany) {
+            return back()->with('error', __(':name also belongs to another company\'s workspace, so only they can change their password. Ask them to use "Forgot password" on the sign-in page.', ['name' => $user->name]));
+        }
+
+        $validated = $request->validate([
+            'password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::defaults()],
+        ]);
+
+        $user->forceFill([
+            'password' => $validated['password'],
+            'must_change_password' => true,
+            'remember_token' => \Illuminate\Support\Str::random(60),
+        ])->save();
+
+        // Sign them out everywhere (database sessions; other drivers expire on their own).
+        if (config('session.driver') === 'database') {
+            DB::table(config('session.table', 'sessions'))->where('user_id', $user->id)->delete();
+        }
+
+        \Illuminate\Support\Facades\Log::info('Team member password set by workspace owner', [
+            'workspace_id' => $workspace->id,
+            'owner_id' => $owner->id,
+            'user_id' => $user->id,
+        ]);
+
+        return back()->with('success', __('Temporary password set for :name. They will be asked to choose a new one when they sign in.', ['name' => $user->name]));
+    }
 }

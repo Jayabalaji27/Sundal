@@ -1382,3 +1382,22 @@ Tests: `tests/Feature/SystemUpdateTest.php` (2 new).
 
 ---
 
+### RP-34 · 2026-11-18 · Owner sets a temporary password from the Team page
+
+- **Team page → ⋮ → Set password…** (workspace owner only, permission `team_reset_password`):
+  for when a member/manager/client's reset email doesn't arrive. Type a password or **Generate**
+  one (show / copy). `TeamController::setPassword` saves it, sets `users.must_change_password`,
+  signs the user out everywhere (database sessions + new remember token) and logs who did it.
+- **Refused** when the person also belongs to another company's workspace (or owns one): setting
+  their password would let this owner sign in to that company. They're told to use Forgot password.
+- **Next sign-in:** `EnsurePasswordChanged` (web group) sends a flagged user to
+  `/password/change` (`auth/change-password`) until they choose their own password; it can't be
+  the temporary one. Forgot-password reset and Profile → password also clear the flag. Skipped
+  while a Super Admin impersonates.
+
+Deploy: migration (`must_change_password`), new permission, front-end build. Then
+`/system-update` → Run update.
+
+Tests: `tests/Feature/TeamSetPasswordTest.php` (9 new).
+
+---

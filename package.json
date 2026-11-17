@@ -9,9 +9,6 @@
         "format:check": "prettier --check resources/",
         "lint": "eslint . --fix",
         "types": "tsc --noEmit",
-        "test:e2e": "playwright test",
-        "test:e2e:ui": "playwright test --ui",
-        "test:e2e:report": "playwright show-report",
         "test:ai-qa": "node --env-file=.env e2e/ai-qa/agent.mjs",
         "test:ai-workflow": "node --env-file=.env e2e/ai-qa/scenario-runner.mjs"
     },

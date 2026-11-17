@@ -28,3 +28,11 @@ test.md
 /storage/framework/testing
 /storage/framework/system-update.lock
 /storage/framework/system-update-last.json
+
+# OS / tool caches
+.DS_Store
+.phpunit.result.cache
+
+# Old builds and server-update bundles (rebuild with deploy-fast.bat)
+/public/buildold/
+/sundal-server-update-*/
