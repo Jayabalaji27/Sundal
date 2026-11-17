@@ -34,6 +34,7 @@ class PermissionSeeder extends Seeder
             ['name' => 'team_invite', 'module' => 'workspace', 'label' => 'Invite Team Member', 'description' => 'Invite a new member to the workspace'],
             ['name' => 'team_change_role', 'module' => 'workspace', 'label' => 'Change Member Role', 'description' => "Change an existing member's workspace role"],
             ['name' => 'team_deactivate', 'module' => 'workspace', 'label' => 'Deactivate Team Member', 'description' => 'Deactivate a member, freeing their seat and blocking login'],
+            ['name' => 'team_reset_password', 'module' => 'workspace', 'label' => 'Set Team Member Password', 'description' => 'Give a member a temporary password they must change at next sign-in'],
 
             // Project Module
             ['name' => 'project_view_any', 'module' => 'projects', 'label' => 'View All Projects', 'description' => 'View all projects in workspace'],

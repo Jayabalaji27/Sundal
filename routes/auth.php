@@ -55,4 +55,11 @@ Route::middleware('auth')->group(function () {
 
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');
+
+    // After the workspace owner set a temporary password (Team page).
+    Route::get('password/change', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'show'])
+        ->name('password.change');
+    Route::put('password/change', [\App\Http\Controllers\Auth\ForcePasswordChangeController::class, 'update'])
+        ->middleware('throttle:6,1')
+        ->name('password.change.update');
 });

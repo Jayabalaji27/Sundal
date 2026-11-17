@@ -1,12 +1,13 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { router, usePage } from '@inertiajs/react';
-import { Clock, Info, Mail, MoreVertical, SearchX, Send, Sparkles, UserPlus, UserRound, Users, XCircle } from 'lucide-react';
+import { Clock, Copy, Eye, EyeOff, Info, KeyRound, Mail, MoreVertical, SearchX, Send, Sparkles, UserPlus, UserRound, Users, Wand2, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PageTemplate } from '@/components/page-template';
 import { EmptyState } from '@/components/EmptyState';
 import { UserAvatar } from '@/components/ui/avatar';
 import { Button, IconButton } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -14,6 +15,7 @@ import {
     DropdownMenuLabel,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -73,6 +75,13 @@ const ASSIGNABLE_ROLES = ['manager', 'member', 'client'] as const;
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** A random 14-character temporary password (no look-alike characters such as l/1/O/0). */
+function generatePassword(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%*?';
+    const values = crypto.getRandomValues(new Uint32Array(14));
+    return Array.from(values, v => chars[v % chars.length]).join('');
+}
+
 /** A white card with a section title, a short explanation and optional controls. */
 function Section({ id, title, description, toolbar, children }: {
     id: string;
@@ -119,6 +128,13 @@ export default function TeamIndex({ workspace, members, projects = [], pendingIn
     // and the row can't be submitted twice.
     const [busyKey, setBusyKey] = useState<string | null>(null);
     const [memberToDeactivate, setMemberToDeactivate] = useState<Member | null>(null);
+
+    // "Set password" dialog: the owner gives a teammate a temporary password.
+    const [passwordMember, setPasswordMember] = useState<Member | null>(null);
+    const [tempPassword, setTempPassword] = useState('');
+    const [tempPasswordConfirm, setTempPasswordConfirm] = useState('');
+    const [showTempPassword, setShowTempPassword] = useState(false);
+    const [passwordError, setPasswordError] = useState<string | null>(null);
 
     const breadcrumbs = [
         { title: t('Dashboard'), href: route('dashboard') },
@@ -209,6 +225,56 @@ export default function TeamIndex({ workspace, members, projects = [], pendingIn
             router.post(route('team.reactivate', [workspace.id, member.user_id]), {}, options));
     };
 
+    const openSetPassword = (member: Member) => {
+        setPasswordMember(member);
+        setTempPassword('');
+        setTempPasswordConfirm('');
+        setShowTempPassword(false);
+        setPasswordError(null);
+    };
+
+    const fillGeneratedPassword = () => {
+        const password = generatePassword();
+        setTempPassword(password);
+        setTempPasswordConfirm(password);
+        setShowTempPassword(true);
+        setPasswordError(null);
+    };
+
+    const copyTempPassword = async () => {
+        try {
+            await navigator.clipboard.writeText(tempPassword);
+            toast.success(t('Password copied.'));
+        } catch {
+            toast.error(t('Could not copy. Select the password and copy it yourself.'));
+        }
+    };
+
+    const submitSetPassword = () => {
+        if (!passwordMember) return;
+        if (tempPassword.length < 8) {
+            setPasswordError(t('Use at least 8 characters.'));
+            return;
+        }
+        if (tempPassword !== tempPasswordConfirm) {
+            setPasswordError(t('The two passwords don\'t match.'));
+            return;
+        }
+        const member = passwordMember;
+        setBusyKey(`password:${member.user_id}`);
+        router.put(route('team.set-password', [workspace.id, member.user_id]), {
+            password: tempPassword, password_confirmation: tempPasswordConfirm,
+        }, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                // A refusal (e.g. they belong to another company) comes back as an error flash.
+                if (!(page.props as any).flash?.error) setPasswordMember(null);
+            },
+            onError: (formErrors) => setPasswordError(Object.values(formErrors)[0] as string),
+            onFinish: () => setBusyKey(null),
+        });
+    };
+
     const cancelInvitation = (invitation: PendingInvitation) => {
         runRowAction(`cancel:${invitation.id}`, options =>
             router.delete(route('invitations.destroy', invitation.id), options));
@@ -259,6 +325,7 @@ export default function TeamIndex({ workspace, members, projects = [], pendingIn
 
     const isInactive = (member: Member) => member.is_deactivated || member.status !== 'active';
     const canManage = (member: Member) => isOwner && member.role !== 'owner';
+    const canSetPassword = isOwner && permissions.includes('team_reset_password');
     const canManageInvitation = (invitation: PendingInvitation) => canInvite && invitableRoles.includes(invitation.role);
 
     // ── Pieces shared by the desktop table and the mobile list ──
@@ -298,6 +365,15 @@ export default function TeamIndex({ workspace, members, projects = [], pendingIn
                                 <DropdownMenuRadioItem key={role} value={role}>{roleLabel(role)}</DropdownMenuRadioItem>
                             ))}
                         </DropdownMenuRadioGroup>
+                        {canSetPassword && (
+                            <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onSelect={() => openSetPassword(member)}>
+                                    <KeyRound aria-hidden="true" />
+                                    {t('Set password...')}
+                                </DropdownMenuItem>
+                            </>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -650,6 +726,78 @@ export default function TeamIndex({ workspace, members, projects = [], pendingIn
                 loading={memberToDeactivate !== null && busyKey === `deactivate:${memberToDeactivate.user_id}`}
                 onConfirm={confirmDeactivate}
             />
+
+            <Dialog open={passwordMember !== null} onOpenChange={(open) => { if (!open) setPasswordMember(null); }}>
+                <DialogContent className="sm:max-w-md">
+                    <form onSubmit={(e) => { e.preventDefault(); submitSetPassword(); }}>
+                        <DialogHeader>
+                            <DialogTitle>{t('Set a temporary password for {{name}}', { name: passwordMember?.name ?? '' })}</DialogTitle>
+                            <DialogDescription>
+                                {t('Use this when the password reset email doesn\'t arrive. {{name}} will be signed out everywhere and asked to choose their own password the next time they sign in.', { name: passwordMember?.name ?? '' })}
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="mt-4 space-y-4">
+                            <div>
+                                <div className="mb-1.5 flex items-center justify-between gap-2">
+                                    <Label htmlFor="temp-password">{t('Temporary password')}</Label>
+                                    <Button type="button" variant="ghost" size="sm" onClick={fillGeneratedPassword}>
+                                        <Wand2 aria-hidden="true" /> {t('Generate')}
+                                    </Button>
+                                </div>
+                                <div className="flex gap-1">
+                                    <Input
+                                        id="temp-password"
+                                        type={showTempPassword ? 'text' : 'password'}
+                                        autoComplete="new-password"
+                                        value={tempPassword}
+                                        onChange={(e) => { setTempPassword(e.target.value); setPasswordError(null); }}
+                                        aria-invalid={passwordError !== null || undefined}
+                                        aria-describedby="temp-password-hint"
+                                        className="font-mono"
+                                        autoFocus
+                                    />
+                                    <IconButton type="button" aria-label={showTempPassword ? t('Hide password') : t('Show password')}
+                                        onClick={() => setShowTempPassword(v => !v)}>
+                                        {showTempPassword ? <EyeOff /> : <Eye />}
+                                    </IconButton>
+                                    <IconButton type="button" aria-label={t('Copy password')} onClick={copyTempPassword} disabled={!tempPassword}>
+                                        <Copy />
+                                    </IconButton>
+                                </div>
+                                <p id="temp-password-hint" className="mt-1 text-xs text-ds-fg-muted">{t('At least 8 characters.')}</p>
+                            </div>
+
+                            <div>
+                                <Label htmlFor="temp-password-confirm" className="mb-1.5 block">{t('Confirm temporary password')}</Label>
+                                <Input
+                                    id="temp-password-confirm"
+                                    type={showTempPassword ? 'text' : 'password'}
+                                    autoComplete="new-password"
+                                    value={tempPasswordConfirm}
+                                    onChange={(e) => { setTempPasswordConfirm(e.target.value); setPasswordError(null); }}
+                                    className="font-mono"
+                                />
+                            </div>
+
+                            {passwordError && <p role="alert" className="text-sm text-ds-danger-fg">{passwordError}</p>}
+
+                            <div className="flex items-start gap-2.5 rounded-lg border border-ds-info/20 bg-ds-info-bg px-4 py-3 text-sm text-ds-info-fg">
+                                <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                                <p>{t('Share it with {{name}} privately, for example in person or by phone, not in a group chat.', { name: passwordMember?.name ?? '' })}</p>
+                            </div>
+                        </div>
+
+                        <DialogFooter className="mt-6">
+                            <Button type="button" variant="outline" onClick={() => setPasswordMember(null)}>{t('Cancel')}</Button>
+                            <Button type="submit" loading={passwordMember !== null && busyKey === `password:${passwordMember.user_id}`}
+                                loadingText={t('Saving...')}>
+                                {t('Set password')}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </PageTemplate>
     );
 }

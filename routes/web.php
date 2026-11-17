@@ -343,6 +343,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('workspaces/{workspace}/team/{user}/role', [\App\Http\Controllers\TeamController::class, 'updateRole'])->middleware('permission:team_change_role')->name('team.update-role');
         Route::post('workspaces/{workspace}/team/{user}/deactivate', [\App\Http\Controllers\TeamController::class, 'deactivate'])->middleware('permission:team_deactivate')->name('team.deactivate');
         Route::post('workspaces/{workspace}/team/{user}/reactivate', [\App\Http\Controllers\TeamController::class, 'reactivate'])->middleware('permission:team_deactivate')->name('team.reactivate');
+        Route::put('workspaces/{workspace}/team/{user}/password', [\App\Http\Controllers\TeamController::class, 'setPassword'])->middleware(['permission:team_reset_password', 'throttle:10,1'])->name('team.set-password');
         Route::delete('workspaces/{workspace}/members/{user}', [WorkspaceController::class, 'removeMember'])->middleware('permission:workspace_manage_members')->name('workspace.remove-member');
         Route::post('workspaces/{workspace}/leave', [WorkspaceController::class, 'leaveWorkspace'])->middleware('permission:workspace_leave')->name('workspaces.leave');
         Route::post('invitations/{invitation}/resend', [WorkspaceInvitationController::class, 'resend'])->middleware('permission:team_invite')->name('invitations.resend');

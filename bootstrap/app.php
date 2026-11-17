@@ -32,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             DemoModeMiddleware::class,
+            \App\Http\Middleware\EnsurePasswordChanged::class,
         ]);
 
         $middleware->alias([
