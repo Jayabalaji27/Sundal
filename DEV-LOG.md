@@ -1401,3 +1401,23 @@ Deploy: migration (`must_change_password`), new permission, front-end build. The
 Tests: `tests/Feature/TeamSetPasswordTest.php` (9 new).
 
 ---
+
+### RP-35 · 2026-11-20 · Settings forms: field-level errors, no double toasts, honest test email
+
+- **Email Settings → Save:** validation errors now show under the field they belong to (red
+  border + message), the page scrolls to and focuses the first one, and each clears as you edit
+  it. The toast just says "Please fix the highlighted fields."
+- **Send Test Email:** failures (`EmailSettingController::sendTestEmail`) are returned as
+  validation errors instead of an `error` flash. Before, the global `FlashMessages` component
+  cleared the flash before the form's `onSuccess` ran, so a failed send showed a red toast *and*
+  "sent successfully" in the panel. With SMTP Host still `smtp.example.com`, the test now
+  highlights and focuses the SMTP Host field instead of saying "above".
+- **Double toasts:** Email, Currency and Email Notification settings toasted their own success
+  message on top of the server flash `FlashMessages` already shows (and on a failed save showed a
+  green success next to the red error). Their `onSuccess` no longer toasts.
+- `config/demo.php`: login-page demo panel Owner is `companysundal@gmail.com` (the local
+  owner account now uses a real inbox).
+
+Deploy: front-end build only, no migration. `config/demo.php` is left out of the server zip.
+
+---

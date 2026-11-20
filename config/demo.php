@@ -17,7 +17,7 @@ return [
     // Shown in this order; an email with no matching user is skipped.
     'accounts' => [
         ['role' => 'Super Admin', 'email' => 'superadmin@test.com'],
-        ['role' => 'Owner', 'email' => 'company@test.com'],
+        ['role' => 'Owner', 'email' => 'companysundal@gmail.com'],
         ['role' => 'Manager', 'email' => 'manager@test.com'],
         ['role' => 'Manager', 'email' => 'neha.iyer@test.com'],
         ['role' => 'Member', 'email' => 'member@test.com'],
