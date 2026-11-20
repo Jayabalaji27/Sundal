@@ -72,16 +72,21 @@ class MailConfigService
             }
         }
 
-        // Fallback to global settings
+        // Fallback to the platform's settings. In SaaS mode name the Super Admin explicitly:
+        // with no user, getSetting() reads the *logged-in* user's settings, so an owner or
+        // manager sending an invite got their own empty workspace settings, not the platform's.
+        // (Non-SaaS mode keeps null: getSetting() then resolves the company user itself.)
+        $platformUserId = isSaasMode() ? platformSettingsUserId() : null;
+
         return [
-            'driver' => getSetting('email_driver', 'smtp'),
-            'host' => getSetting('email_host', 'smtp.example.com'),
-            'port' => getSetting('email_port', '587'),
-            'username' => getSetting('email_username', ''),
-            'password' => getSetting('email_password', ''),
-            'encryption' => getSetting('email_encryption', 'tls'),
-            'fromAddress' => getSetting('email_from_address', 'noreply@example.com'),
-            'fromName' => getSetting('email_from_name', config('app.name'))
+            'driver' => getSetting('email_driver', 'smtp', $platformUserId),
+            'host' => getSetting('email_host', 'smtp.example.com', $platformUserId),
+            'port' => getSetting('email_port', '587', $platformUserId),
+            'username' => getSetting('email_username', '', $platformUserId),
+            'password' => getSetting('email_password', '', $platformUserId),
+            'encryption' => getSetting('email_encryption', 'tls', $platformUserId),
+            'fromAddress' => getSetting('email_from_address', 'noreply@example.com', $platformUserId),
+            'fromName' => getSetting('email_from_name', config('app.name'), $platformUserId)
         ];
     }
     

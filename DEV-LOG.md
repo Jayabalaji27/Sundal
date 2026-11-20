@@ -1421,3 +1421,27 @@ Tests: `tests/Feature/TeamSetPasswordTest.php` (9 new).
 Deploy: front-end build only, no migration. `config/demo.php` is left out of the server zip.
 
 ---
+
+### RP-36 · 2026-11-21 · Invitation emails actually send (platform mail, owner's switch, honest warnings)
+
+- **Platform mail for company users:** `MailConfigService::getMailSettings()` fell back to
+  `getSetting()` with no user, which reads the *logged-in* user's settings. An owner or manager
+  sending an invite got their own empty workspace settings, so invites said "email settings are not
+  configured" even after the Super Admin set up Email Settings. The fallback now names the platform
+  user (`platformSettingsUserId()`) in SaaS mode.
+- **Manager invites were never emailed:** `SendWorkspaceInvitationEmail` checked
+  `isEmailTemplateEnabled('Workspace Invitation', createdBy())`, i.e. the manager's own (never set)
+  choice. It now uses the workspace owner's choice, whoever sends.
+- **No false "Invitation sent":** every email type starts off for a new company, so invites were
+  created, nothing was mailed, and the page said "sent". `WorkspaceInvitationController::
+  invitationEmailIssue()` (`not_configured` | `turned_off`) now drives a warning + Copy Invitation
+  Link on send and on resend (resend used to say "resent successfully"), and a notice in the Team
+  page's invite box before sending, with a link to Email Notification Settings for the owner.
+  `FlashMessages` warning title is now "Email not sent".
+
+Deploy: back-end + front-end build, no migration. Owners must switch on **Workspace Invitation** in
+Settings → Email Notification Settings (the Team page now tells them).
+
+Tests: `tests/Feature/ManagerInviteTest.php` (7 new).
+
+---

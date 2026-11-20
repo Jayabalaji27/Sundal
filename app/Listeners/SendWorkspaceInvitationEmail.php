@@ -27,7 +27,10 @@ class SendWorkspaceInvitationEmail
         $workspace = $invitation->workspace;
         $invitedBy = $invitation->invitedBy;
 
-        if (isEmailTemplateEnabled('Workspace Invitation', createdBy())) {
+        // The workspace owner's choice decides, whoever sends the invite: createdBy()
+        // is the logged-in user, so a manager's invites read the manager's own
+        // (never-set) choice and were always skipped.
+        if (isEmailTemplateEnabled('Workspace Invitation', $workspace?->owner_id)) {
             // Prepare email variables
             $variables = [
                 '{workspace_name}' => $workspace->name ?? '-',

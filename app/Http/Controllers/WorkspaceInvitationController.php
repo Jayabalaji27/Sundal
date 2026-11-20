@@ -57,9 +57,8 @@ class WorkspaceInvitationController extends Controller
         // consumed by FlashMessages.tsx's "Copy Invitation Link" toast) —
         // same fallback pattern as CompanyController/UserController welcome
         // emails.
-        $userId = $workspace->owner_id ?? auth()->id();
-        $emailConfigured = \App\Services\MailConfigService::isEmailConfigured($userId, $workspace->id);
-        $emailWarning = __('The invitation was created, but no email could be sent because email settings are not configured. Share the link below with the invitee instead.');
+        $emailWarning = self::invitationEmailWarning($workspace);
+        $emailConfigured = $emailWarning === null;
 
         // Check if invitation already exists
         $existingInvitation = WorkspaceInvitation::where('workspace_id', $workspace->id)
@@ -179,10 +178,11 @@ class WorkspaceInvitationController extends Controller
         }
         $this->ensureCanManageInvitation($invitation);
 
-        // Check if email is properly configured before resending
-        $userId = $invitation->workspace->owner_id ?? auth()->id();
-        if (!\App\Services\MailConfigService::isEmailConfigured($userId, $invitation->workspace_id)) {
-            return back()->with('error', __('Email configuration is incorrect or missing. Please configure your email settings properly to send workspace invitations via email.'));
+        // Don't claim "resent" when no email can go out; hand back the link instead.
+        $emailWarning = self::invitationEmailWarning($invitation->workspace);
+        if ($emailWarning !== null) {
+            return back()->with('warning', $emailWarning)
+                ->with('invitation_link', route('invitations.show', $invitation->token));
         }
 
         $invitation->load(['workspace', 'invitedBy']);
@@ -192,6 +192,35 @@ class WorkspaceInvitationController extends Controller
 
 
         return back()->with('success', __('Invitation resent successfully'));
+    }
+
+    /**
+     * Why an invitation email can't be sent for this workspace, or null when it can.
+     * Two independent reasons: no working mail server, or the owner has the
+     * "Workspace Invitation" email turned off in Email Notification Settings
+     * (SendWorkspaceInvitationEmail skips it silently in that case).
+     */
+    public static function invitationEmailWarning(Workspace $workspace): ?string
+    {
+        return match (self::invitationEmailIssue($workspace)) {
+            'not_configured' => __('The invitation was created, but no email could be sent because email settings are not configured. Share the link below with the invitee instead.'),
+            'turned_off' => __('The invitation was created, but no email was sent because the "Workspace Invitation" email is turned off in Settings → Email Notification Settings. Share the link below with the invitee instead.'),
+            default => null,
+        };
+    }
+
+    /** 'not_configured' | 'turned_off' | null: also shown on the Team page before anyone sends an invite. */
+    public static function invitationEmailIssue(Workspace $workspace): ?string
+    {
+        if (!\App\Services\MailConfigService::isEmailConfigured($workspace->owner_id, $workspace->id)) {
+            return 'not_configured';
+        }
+
+        if (!isEmailTemplateEnabled('Workspace Invitation', $workspace->owner_id)) {
+            return 'turned_off';
+        }
+
+        return null;
     }
 
     public function destroy(WorkspaceInvitation $invitation)
