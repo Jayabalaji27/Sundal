@@ -481,7 +481,12 @@ export default function TeamIndex({ workspace, members, projects = [], pendingIn
                                 <p>
                                     {invitationEmailIssue === 'turned_off'
                                         ? t('Invitation emails are turned off, so invitees won\'t get an email.')
-                                        : t('Email isn\'t set up yet, so invitees won\'t get an email.')}{' '}
+                                        : t('Your company\'s mail server isn\'t set up yet, so invitees won\'t get an email.')}{' '}
+                                    {invitationEmailIssue === 'not_configured' && (
+                                        permissions.includes('settings_email')
+                                            ? <><a href={route('settings') + '#email-settings'} className="font-medium underline underline-offset-2">{t('Set up your mail server in Email Settings')}</a>{'. '}</>
+                                            : <>{t('Ask the workspace owner to set up the mail server in Email Settings.')}{' '}</>
+                                    )}
                                     {invitationEmailIssue === 'turned_off' && (
                                         permissions.includes('settings_email_notification')
                                             ? <><a href={route('settings') + '#email-notification-settings'} className="font-medium underline underline-offset-2">{t('Turn on "Workspace Invitation" in Email Notification Settings')}</a>{'. '}</>

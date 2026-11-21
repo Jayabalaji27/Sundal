@@ -325,11 +325,11 @@ class User extends BaseAuthenticatable implements MustVerifyEmail
     public function sendEmailVerificationNotification()
     {
         $workspace = $this->currentWorkspace ?? $this->ownedWorkspaces()->first() ?? $this->workspaces()->first();
-        MailConfigService::setDynamicConfig($this->id, $workspace?->id);
-
-        // If workspace SMTP not configured and in SaaS mode, fallback to super admin
-        if (config('mail.default') === 'log' && isSaasMode()) {
-            MailConfigService::setDynamicConfig(null, null);
+        if (isSaasMode()) {
+            // An account email from the platform (sign-up verification), not from a company.
+            MailConfigService::usePlatform();
+        } else {
+            MailConfigService::setDynamicConfig($this->id, $workspace?->id);
         }
 
         // If SMTP is still invalid/unconfigured after both attempts, the mail

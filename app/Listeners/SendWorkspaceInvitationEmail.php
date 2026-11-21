@@ -30,7 +30,10 @@ class SendWorkspaceInvitationEmail
         // The workspace owner's choice decides, whoever sends the invite: createdBy()
         // is the logged-in user, so a manager's invites read the manager's own
         // (never-set) choice and were always skipped.
-        if (isEmailTemplateEnabled('Workspace Invitation', $workspace?->owner_id)) {
+        // Skip quietly when the company has no working mail server (the inviter is already
+        // told, with the invitation link: WorkspaceInvitationController::invitationEmailWarning).
+        if (isEmailTemplateEnabled('Workspace Invitation', $workspace?->owner_id)
+            && \App\Services\MailConfigService::isEmailConfigured($workspace?->owner_id, $workspace?->id)) {
             // Prepare email variables
             $variables = [
                 '{workspace_name}' => $workspace->name ?? '-',

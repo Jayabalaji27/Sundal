@@ -203,7 +203,7 @@ class WorkspaceInvitationController extends Controller
     public static function invitationEmailWarning(Workspace $workspace): ?string
     {
         return match (self::invitationEmailIssue($workspace)) {
-            'not_configured' => __('The invitation was created, but no email could be sent because email settings are not configured. Share the link below with the invitee instead.'),
+            'not_configured' => __('The invitation was created, but no email was sent because your company\'s mail server isn\'t set up (Settings → Email Settings). Share the link below with the invitee instead.'),
             'turned_off' => __('The invitation was created, but no email was sent because the "Workspace Invitation" email is turned off in Settings → Email Notification Settings. Share the link below with the invitee instead.'),
             default => null,
         };

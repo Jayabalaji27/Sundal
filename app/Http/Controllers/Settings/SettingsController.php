@@ -154,6 +154,12 @@ class SettingsController extends Controller
             'webhooks' => $webhooks,
             'taxes' => $taxes,
             'invoiceSettings' => $invoiceSettings,
+            // Company Email Settings: whether its own mail server is set up (in SaaS mode its
+            // emails are only sent through it).
+            'emailSending' => $user->type === 'company' ? [
+                'ownServer' => \App\Services\MailConfigService::usesOwnServer($user->id, $workspaceId),
+                'required' => isSaasMode(),
+            ] : null,
             'currentWorkspace' => $currentWorkspace,
             'isDemoMode' => config('app.is_demo', false),
             'isSaasMode' => isSaasMode(),
