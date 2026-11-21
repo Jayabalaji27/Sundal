@@ -452,9 +452,13 @@ class InvoiceController extends Controller
         $currencyCode = settings()['defaultCurrency'] ?? 'INR';
         $currencySymbol = \App\Models\Currency::where('code', $currencyCode)->value('symbol') ?? '$';
 
+        // Same logo as the on-screen preview: the invoice logo if set, else the brand logo.
+        $invoiceLogo = \App\Models\Setting::where('user_id', $invoice->created_by)->where('key', 'invoice_logo')->value('value');
+
         $html = view('pdf.invoice', [
             'invoice' => $invoice,
             'currencySymbol' => $currencySymbol,
+            'logo' => \App\Support\BrandLogo::dataUri($invoice->workspace, $invoiceLogo),
         ])->render();
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)->setPaper('a4', 'portrait');

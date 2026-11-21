@@ -97,7 +97,7 @@ export default function FlashMessages() {
                     </div>
                     <div className="flex-1">
                         <h3 className="mb-1 font-medium text-ds-fg">
-                            Email Configuration Issue
+                            Email not sent
                         </h3>
                         <p className="mb-2 text-sm text-ds-fg-secondary">
                             {flash.warning}

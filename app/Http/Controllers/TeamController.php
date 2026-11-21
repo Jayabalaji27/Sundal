@@ -73,6 +73,8 @@ class TeamController extends Controller
             'projects' => $projects,
             'pendingInvitations' => $pendingInvitations,
             'isOwner' => $workspace->isOwner(auth()->user()),
+            // Tells the invite box up front when invitation emails won't go out.
+            'invitationEmailIssue' => WorkspaceInvitationController::invitationEmailIssue($workspace),
         ]);
     }
 

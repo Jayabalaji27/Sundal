@@ -67,7 +67,11 @@
 <body>
     <div class="container">
         <div class="header">
-            <img alt="{{ config('app.name') }}" height="auto" src="{{ config('app.url') . getSidebarLogo() }}{{ '?' . time() }}" style="border:none;display:block;outline:none;text-decoration:none;height:auto;width:100%;max-height:60px;" title="{{ config('app.name') }}" width="110"/>
+            {{-- Embedded in the email (cid:) when the logo is a local file, so it shows even when
+                 the site isn't publicly reachable (local dev) and in clients that block remote
+                 images; otherwise the logo's absolute URL. --}}
+            @php($logoFile = \App\Support\BrandLogo::file())
+            <img alt="{{ config('app.name') }}" src="{{ isset($message) && $logoFile ? $message->embed($logoFile) : \App\Support\BrandLogo::url() }}" width="180" style="border:none;display:block;outline:none;text-decoration:none;margin:0 auto;width:180px;max-width:100%;height:auto;" title="{{ config('app.name') }}"/>
         </div>
 
         @if(isset($content))

@@ -1401,3 +1401,77 @@ Deploy: migration (`must_change_password`), new permission, front-end build. The
 Tests: `tests/Feature/TeamSetPasswordTest.php` (9 new).
 
 ---
+
+### RP-35 · 2026-11-20 · Settings forms: field-level errors, no double toasts, honest test email
+
+- **Email Settings → Save:** validation errors now show under the field they belong to (red
+  border + message), the page scrolls to and focuses the first one, and each clears as you edit
+  it. The toast just says "Please fix the highlighted fields."
+- **Send Test Email:** failures (`EmailSettingController::sendTestEmail`) are returned as
+  validation errors instead of an `error` flash. Before, the global `FlashMessages` component
+  cleared the flash before the form's `onSuccess` ran, so a failed send showed a red toast *and*
+  "sent successfully" in the panel. With SMTP Host still `smtp.example.com`, the test now
+  highlights and focuses the SMTP Host field instead of saying "above".
+- **Double toasts:** Email, Currency and Email Notification settings toasted their own success
+  message on top of the server flash `FlashMessages` already shows (and on a failed save showed a
+  green success next to the red error). Their `onSuccess` no longer toasts.
+- `config/demo.php`: login-page demo panel Owner is `companysundal@gmail.com` (the local
+  owner account now uses a real inbox).
+
+Deploy: front-end build only, no migration. `config/demo.php` is left out of the server zip.
+
+---
+
+### RP-36 · 2026-11-21 · Invitation emails actually send (platform mail, owner's switch, honest warnings)
+
+- **Platform mail for company users:** `MailConfigService::getMailSettings()` fell back to
+  `getSetting()` with no user, which reads the *logged-in* user's settings. An owner or manager
+  sending an invite got their own empty workspace settings, so invites said "email settings are not
+  configured" even after the Super Admin set up Email Settings. The fallback now names the platform
+  user (`platformSettingsUserId()`) in SaaS mode.
+- **Manager invites were never emailed:** `SendWorkspaceInvitationEmail` checked
+  `isEmailTemplateEnabled('Workspace Invitation', createdBy())`, i.e. the manager's own (never set)
+  choice. It now uses the workspace owner's choice, whoever sends.
+- **No false "Invitation sent":** every email type starts off for a new company, so invites were
+  created, nothing was mailed, and the page said "sent". `WorkspaceInvitationController::
+  invitationEmailIssue()` (`not_configured` | `turned_off`) now drives a warning + Copy Invitation
+  Link on send and on resend (resend used to say "resent successfully"), and a notice in the Team
+  page's invite box before sending, with a link to Email Notification Settings for the owner.
+  `FlashMessages` warning title is now "Email not sent".
+
+Deploy: back-end + front-end build, no migration. Owners must switch on **Workspace Invitation** in
+Settings → Email Notification Settings (the Team page now tells them).
+
+Tests: `tests/Feature/ManagerInviteTest.php` (7 new).
+
+---
+
+### RP-37 · 2026-11-21 · New Sundal logo; logo in emails and generated documents
+
+- **New logo ("Sprout"):** a split seed (dal) with a two-leaf shoot, beside the Space Grotesk
+  wordmark. Replaces the bundled `public/images/logos/logo-dark.png`, `logo-light.png` and
+  `favicon.png` (same names and 237×70 proportions, 3× resolution), plus `public/favicon.ico`
+  (16–64 px), `public/favicon.png` (timer notifications pointed at it; it didn't exist) and a vector
+  `images/logos/sundal-mark.svg`. Companies show it until they upload their own under Settings →
+  Brand, since their logo settings default to these files.
+- **`App\Support\BrandLogo`:** the workspace owner's brand logo as a local file / data URI / absolute
+  URL. Resolves stored values in any form (full URL on this site, `/storage/media/...`, bare media
+  name, bundled path); reads only from `public/` or `storage/app/public/`; a logo hosted elsewhere or
+  an SVG gives no logo rather than a wrong one.
+- **Emails:** the layout header embeds the logo in the message (`$message->embed`) instead of linking
+  `APP_URL + path`, so it shows from local dev and in clients that block remote images. Always the
+  dark-ink logo (the white one was invisible on the light header in dark theme); fixed size instead
+  of `width:100%` + `max-height`, which squashed it.
+- **Other emails:** the Settings test email (own template) embeds it the same way; Laravel's
+  notification emails (verify email, password reset, AI token alert) show it via an override of
+  just `resources/views/vendor/mail/html/header.blade.php` (a URL: markdown components can't embed).
+- **Documents:** logo in the invoice PDF (invoice logo, else brand logo, as in the on-screen
+  preview), the project report PDF, and the report PDF and Word exports. Excel exports unchanged.
+- `resources/lang/language.json`: English shows the India flag (`IN`). Left out of the server zip:
+  the file also holds the admin-edited language list.
+
+Deploy: PHP + Blade + images, no front-end build, no migration.
+
+Tests: `tests/Feature/BrandLogoTest.php` (10 new).
+
+---

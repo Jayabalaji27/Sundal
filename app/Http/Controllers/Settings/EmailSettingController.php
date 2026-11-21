@@ -105,8 +105,10 @@ class EmailSettingController extends Controller
             ]
         );
 
+        // Failures go back as validation errors (not an 'error' flash) so the page's
+        // onError handler sees them; FlashMessages clears flashes before onSuccess runs.
         if ($validator->fails()) {
-            return redirect()->back()->with('error', $validator->errors()->first());
+            return redirect()->back()->withErrors(['email' => $validator->errors()->first()]);
         }
 
         $user = auth()->user();
@@ -148,7 +150,7 @@ class EmailSettingController extends Controller
 
             return redirect()->back()->with('success', __('Test email sent successfully to :email', ["email" =>  $request->email]));
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', __('Failed to send test email: :message' , ["message" => $e->getMessage()]));
+            return redirect()->back()->withErrors(['error' => __('Failed to send test email: :message' , ["message" => $e->getMessage()])]);
         }
     }
 

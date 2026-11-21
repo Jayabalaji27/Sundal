@@ -29,6 +29,9 @@ export default function EmailSettings() {
     fromName: settings.email_from_name || ''
   });
 
+  // Server validation errors from saving, keyed by form field (the keys match emailSettings)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   // Test email state
   const [testEmail, setTestEmail] = useState('');
   const [testEmailError, setTestEmailError] = useState<string | null>(null);
@@ -53,34 +56,50 @@ export default function EmailSettings() {
     // field as the cause — once it's edited, that warning is stale even
     // though the test-email input itself hasn't changed.
     if (field === 'host') setTestEmailError(null);
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => {
+        const rest = { ...prev };
+        delete rest[field];
+        return rest;
+      });
+    }
   };
+
+  const errorClass = (field: string) => (fieldErrors[field] ? 'border-red-500' : '');
+  const renderFieldError = (field: string) =>
+    fieldErrors[field] ? <p className="text-xs text-red-600">{fieldErrors[field]}</p> : null;
 
   // Handle email settings form submission
   const submitEmailSettings = (e: React.FormEvent) => {
     e.preventDefault();
     
     toast.loading(t('Saving email settings...'));
-    
+    setFieldErrors({});
+
     router.post(route('settings.email.update'), emailSettings, {
       preserveScroll: true,
-      onSuccess: (page) => {
+      onSuccess: () => {
+        // The server's flash ("Email settings updated successfully") is shown by the
+        // global FlashMessages component, so don't toast a second confirmation here.
         toast.dismiss();
         setTestEmailError(null);
-        const successMessage = page.props.flash?.success;
-        const errorMessage = page.props.flash?.error;
-
-        if (successMessage) {
-          toast.success(successMessage);
-        } else if (errorMessage) {
-          toast.error(errorMessage);
-        } else {
-          toast.success(t('Email settings saved successfully'));
-        }
       },
       onError: (errors) => {
         toast.dismiss();
-        const errorMessage = errors.error || Object.values(errors).join(', ') || t('Failed to save email settings');
-        toast.error(errorMessage);
+        const { error: generalError, ...perField } = errors;
+        setFieldErrors(perField);
+
+        const invalidFields = Object.keys(perField);
+        if (invalidFields.length > 0) {
+          toast.error(t('Please fix the highlighted fields.'));
+          // Focus the first invalid field in on-screen order (emailSettings' key order matches the form).
+          const firstInvalid = Object.keys(emailSettings).find(f => invalidFields.includes(f));
+          const el = firstInvalid ? document.getElementById(firstInvalid) : null;
+          el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el?.focus({ preventScroll: true });
+        } else {
+          toast.error(generalError || t('Failed to save email settings'));
+        }
       }
     });
   };
@@ -96,7 +115,12 @@ export default function EmailSettings() {
       return;
     }
     if (PLACEHOLDER_HOSTS.includes(emailSettings.host.trim())) {
-      setTestEmailError(t('SMTP Host is still set to the placeholder value — enter your real mail server settings above and save before sending a test email.'));
+      setTestEmailError(t('SMTP Host is still the example value. Enter your mail server (e.g. smtp.gmail.com) in the highlighted SMTP Host field, click Save Changes, then send the test.'));
+      // Point at the field itself: on wide screens the form is beside this panel, not above it.
+      setFieldErrors(prev => ({ ...prev, host: t('Enter your mail server, e.g. smtp.gmail.com') }));
+      const hostInput = document.getElementById('host');
+      hostInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      hostInput?.focus({ preventScroll: true });
       return;
     }
 
@@ -106,24 +130,13 @@ export default function EmailSettings() {
     
     router.post(route('settings.email.test'), { email: testEmail }, {
       preserveScroll: true,
-      onSuccess: (page) => {
+      onSuccess: () => {
+        // Failures come back through onError, so reaching here means it was sent.
+        // The toast is the server's flash, shown by the global FlashMessages component.
         setIsSending(false);
         toast.dismiss();
-        const successMessage = page.props.flash?.success;
-        const errorMessage = page.props.flash?.error;
-        
-        if (successMessage) {
-          toast.success(successMessage);
-          setTestResult({ success: true, message: successMessage });
-        } else if (errorMessage) {
-          toast.error(errorMessage);
-          setTestResult({ success: false, message: errorMessage });
-        } else {
-          const message = t('Test email sent successfully to {{email}}', { email: testEmail });
-          toast.success(message);
-          setTestResult({ success: true, message });
-        }
-        
+        setTestResult({ success: true, message: t('Test email sent successfully to {{email}}', { email: testEmail }) });
+
         // Reset result after 5 seconds
         setTimeout(() => {
           setTestResult(null);
@@ -132,7 +145,7 @@ export default function EmailSettings() {
       onError: (errors) => {
         setIsSending(false);
         toast.dismiss();
-        const errorMessage = errors.error || Object.values(errors).join(', ') || t('Failed to send test email');
+        const errorMessage = errors.error || errors.email || Object.values(errors).join(', ') || t('Failed to send test email');
         toast.error(errorMessage);
         setTestResult({ success: false, message: errorMessage });
         
@@ -181,7 +194,7 @@ export default function EmailSettings() {
                         }
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="provider" className={errorClass('provider')}>
                         <SelectValue placeholder="Select provider" />
                       </SelectTrigger>
                       <SelectContent>
@@ -191,6 +204,7 @@ export default function EmailSettings() {
                         <SelectItem value="sendmail">Sendmail</SelectItem>
                       </SelectContent>
                     </Select>
+                    {renderFieldError('provider')}
                   </div>
 
                   <div className="space-y-1.5">
@@ -203,7 +217,9 @@ export default function EmailSettings() {
                       value={emailSettings.driver}
                       onChange={(e) => handleEmailSettingsChange('driver', e.target.value)}
                       placeholder="smtp"
+                      className={errorClass('driver')}
                     />
+                    {renderFieldError('driver')}
                   </div>
 
                   <div className="space-y-1.5">
@@ -216,7 +232,9 @@ export default function EmailSettings() {
                       value={emailSettings.host}
                       onChange={(e) => handleEmailSettingsChange('host', e.target.value)}
                       placeholder="smtp.example.com"
+                      className={errorClass('host')}
                     />
+                    {renderFieldError('host')}
                   </div>
 
                   <div className="space-y-1.5">
@@ -239,7 +257,9 @@ export default function EmailSettings() {
                       value={emailSettings.port}
                       onChange={(e) => handleEmailSettingsChange('port', e.target.value)}
                       placeholder="587"
+                      className={errorClass('port')}
                     />
+                    {renderFieldError('port')}
                   </div>
 
                   <div className="space-y-1.5">
@@ -252,7 +272,9 @@ export default function EmailSettings() {
                       value={emailSettings.username}
                       onChange={(e) => handleEmailSettingsChange('username', e.target.value)}
                       placeholder="user@example.com"
+                      className={errorClass('username')}
                     />
+                    {renderFieldError('username')}
                   </div>
 
                   <div className="space-y-1.5">
@@ -266,7 +288,9 @@ export default function EmailSettings() {
                       value={emailSettings.password}
                       onChange={(e) => handleEmailSettingsChange('password', e.target.value)}
                       placeholder="••••••••••••"
+                      className={errorClass('password')}
                     />
+                    {renderFieldError('password')}
                   </div>
 
                   <div className="space-y-1.5">
@@ -278,7 +302,7 @@ export default function EmailSettings() {
                       value={emailSettings.encryption} 
                       onValueChange={(value) => handleEmailSettingsChange('encryption', value)}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="encryption" className={errorClass('encryption')}>
                         <SelectValue placeholder="Select encryption" />
                       </SelectTrigger>
                       <SelectContent>
@@ -287,6 +311,7 @@ export default function EmailSettings() {
                         <SelectItem value="none">None</SelectItem>
                       </SelectContent>
                     </Select>
+                    {renderFieldError('encryption')}
                   </div>
 
                   <div className="space-y-1.5">
@@ -299,7 +324,9 @@ export default function EmailSettings() {
                       value={emailSettings.fromAddress}
                       onChange={(e) => handleEmailSettingsChange('fromAddress', e.target.value)}
                       placeholder="noreply@example.com"
+                      className={errorClass('fromAddress')}
                     />
+                    {renderFieldError('fromAddress')}
                   </div>
 
                   <div className="space-y-1.5">
@@ -312,7 +339,9 @@ export default function EmailSettings() {
                       value={emailSettings.fromName}
                       onChange={(e) => handleEmailSettingsChange('fromName', e.target.value)}
                       placeholder="System"
+                      className={errorClass('fromName')}
                     />
+                    {renderFieldError('fromName')}
                   </div>
                 </div>
               </CardContent>

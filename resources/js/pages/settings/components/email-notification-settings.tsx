@@ -124,21 +124,14 @@ export default function EmailNotificationSettings() {
         toast.loading(t('Saving email notification settings...'));
         router.post(route('settings.email-notifications.update'), notifications, {
             preserveScroll: true,
-            onSuccess: (page) => {
+            onSuccess: () => {
+                // The server's success/error flash is shown by the global FlashMessages
+                // component, so this callback must not toast its own (it would double up).
                 toast.dismiss();
-                const successMessage = page.props.flash?.success;
-                const errorMessage = page.props.flash?.error;
-
-                if (successMessage) {
-                    toast.success(successMessage);
-                } else if (errorMessage) {
-                    toast.error(errorMessage);
-                } else {
-                    toast.success('Email notification settings updated successfully.');
-                }
             },
             onError: () => {
-                toast.error('Failed to update email notification settings.');
+                toast.dismiss();
+                toast.error(t('Failed to update email notification settings.'));
             }
         });
     };

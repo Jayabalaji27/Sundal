@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { router, usePage } from '@inertiajs/react';
-import { Clock, Copy, Eye, EyeOff, Info, KeyRound, Mail, MoreVertical, SearchX, Send, Sparkles, UserPlus, UserRound, Users, Wand2, XCircle } from 'lucide-react';
+import { AlertTriangle, Clock, Copy, Eye, EyeOff, Info, KeyRound, Mail, MoreVertical, SearchX, Send, Sparkles, UserPlus, UserRound, Users, Wand2, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PageTemplate } from '@/components/page-template';
 import { EmptyState } from '@/components/EmptyState';
@@ -65,6 +65,8 @@ interface Props {
     projects: ProjectOption[];
     pendingInvitations: PendingInvitation[];
     isOwner: boolean;
+    /** Why invitation emails won't be sent right now (WorkspaceInvitationController::invitationEmailIssue). */
+    invitationEmailIssue?: 'not_configured' | 'turned_off' | null;
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -104,7 +106,7 @@ function Section({ id, title, description, toolbar, children }: {
     );
 }
 
-export default function TeamIndex({ workspace, members, projects = [], pendingInvitations, isOwner }: Props) {
+export default function TeamIndex({ workspace, members, projects = [], pendingInvitations, isOwner, invitationEmailIssue = null }: Props) {
     const { t, i18n } = useTranslation();
     const { props } = usePage();
     const { auth, flash } = props as any;
@@ -472,6 +474,23 @@ export default function TeamIndex({ workspace, members, projects = [], pendingIn
                                 </p>
                             </div>
                         </div>
+
+                        {invitationEmailIssue && (
+                            <div role="status" className="mt-4 flex items-start gap-2.5 rounded-lg border border-ds-warning/30 bg-ds-warning-bg px-4 py-3 text-sm text-ds-warning-fg">
+                                <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                                <p>
+                                    {invitationEmailIssue === 'turned_off'
+                                        ? t('Invitation emails are turned off, so invitees won\'t get an email.')
+                                        : t('Email isn\'t set up yet, so invitees won\'t get an email.')}{' '}
+                                    {invitationEmailIssue === 'turned_off' && (
+                                        permissions.includes('settings_email_notification')
+                                            ? <><a href={route('settings') + '#email-notification-settings'} className="font-medium underline underline-offset-2">{t('Turn on "Workspace Invitation" in Email Notification Settings')}</a>{'. '}</>
+                                            : <>{t('Ask the workspace owner to turn on "Workspace Invitation" in Email Notification Settings.')}{' '}</>
+                                    )}
+                                    {t('You can still send the invite and share its link yourself.')}
+                                </p>
+                            </div>
+                        )}
 
                         <form
                             noValidate

@@ -123,18 +123,10 @@ export default function CurrencySettings() {
 
         router.post(route('settings.currency.update'), currencySettings, {
             preserveScroll: true,
-            onSuccess: (page) => {
+            onSuccess: () => {
+                // The server's success/error flash is shown by the global FlashMessages
+                // component, so this callback must not toast its own (it would double up).
                 toast.dismiss();
-                const successMessage = page.props.flash?.success;
-                const errorMessage = page.props.flash?.error;
-
-                if (successMessage) {
-                    toast.success(successMessage);
-                } else if (errorMessage) {
-                    toast.error(errorMessage);
-                } else {
-                    toast.success(t('Currency settings updated successfully'));
-                }
             },
             onError: (errors) => {
                 toast.dismiss();

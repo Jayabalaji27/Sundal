@@ -34,6 +34,9 @@
 <body>
     <div class="container">
         <div class="header">
+            {{-- Same embedded logo as emails/layout.blade.php, so this test also shows it works. --}}
+            @php($logoFile = \App\Support\BrandLogo::file())
+            <img alt="{{ config('app.name') }}" src="{{ isset($message) && $logoFile ? $message->embed($logoFile) : \App\Support\BrandLogo::url() }}" width="160" style="border:none;display:block;outline:none;text-decoration:none;width:160px;max-width:100%;height:auto;margin:4px 0 8px 0;"/>
             <h2>Test Email</h2>
         </div>
         

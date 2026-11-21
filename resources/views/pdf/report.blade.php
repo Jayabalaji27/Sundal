@@ -38,6 +38,9 @@
 </head>
 <body>
     <div class="accent"></div>
+    @if (!empty($logo))
+        <img src="{{ $logo }}" alt="" style="height: 36px; margin-bottom: 12px;">
+    @endif
     <h1>{{ $doc->title }}</h1>
     @if($doc->subtitle)
         <div class="muted">{{ $doc->subtitle }}</div>
