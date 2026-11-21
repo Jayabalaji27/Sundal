@@ -50,6 +50,9 @@
     </style>
 </head>
 <body>
+    @if (!empty($logo))
+        <img src="{{ $logo }}" alt="" style="height: 36px; margin-bottom: 14px;">
+    @endif
     <table class="header-table">
         <tr>
             <td style="width: 70%;">

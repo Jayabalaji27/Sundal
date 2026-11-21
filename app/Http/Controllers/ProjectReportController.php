@@ -880,7 +880,7 @@ class ProjectReportController extends Controller
             'statusStyle',
             'projectStatusText',
             'primaryColor'
-        ))->render();
+        ) + ['logo' => \App\Support\BrandLogo::dataUri($workspace)])->render();
 
         return \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)
             ->setPaper('a4', 'landscape')

@@ -1445,3 +1445,30 @@ Settings → Email Notification Settings (the Team page now tells them).
 Tests: `tests/Feature/ManagerInviteTest.php` (7 new).
 
 ---
+
+### RP-37 · 2026-11-21 · New Sundal logo; logo in emails and generated documents
+
+- **New logo ("Sprout"):** a split seed (dal) with a two-leaf shoot, beside the Space Grotesk
+  wordmark. Replaces the bundled `public/images/logos/logo-dark.png`, `logo-light.png` and
+  `favicon.png` (same names and 237×70 proportions, 3× resolution), plus `public/favicon.ico`
+  (16–64 px), `public/favicon.png` (timer notifications pointed at it; it didn't exist) and a vector
+  `images/logos/sundal-mark.svg`. Companies show it until they upload their own under Settings →
+  Brand, since their logo settings default to these files.
+- **`App\Support\BrandLogo`:** the workspace owner's brand logo as a local file / data URI / absolute
+  URL. Resolves stored values in any form (full URL on this site, `/storage/media/...`, bare media
+  name, bundled path); reads only from `public/` or `storage/app/public/`; a logo hosted elsewhere or
+  an SVG gives no logo rather than a wrong one.
+- **Emails:** the layout header embeds the logo in the message (`$message->embed`) instead of linking
+  `APP_URL + path`, so it shows from local dev and in clients that block remote images. Always the
+  dark-ink logo (the white one was invisible on the light header in dark theme); fixed size instead
+  of `width:100%` + `max-height`, which squashed it.
+- **Documents:** logo in the invoice PDF (invoice logo, else brand logo, as in the on-screen
+  preview), the project report PDF, and the report PDF and Word exports. Excel exports unchanged.
+- `resources/lang/language.json`: English shows the India flag (`IN`). Left out of the server zip:
+  the file also holds the admin-edited language list.
+
+Deploy: PHP + Blade + images, no front-end build, no migration.
+
+Tests: `tests/Feature/BrandLogoTest.php` (10 new).
+
+---

@@ -4,6 +4,7 @@ namespace App\Services\Reports;
 
 use App\Exports\ReportWorkbookExport;
 use App\Models\Setting;
+use App\Support\BrandLogo;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpWord\IOFactory;
@@ -136,7 +137,7 @@ class ReportRenderer
     {
         // Embed only the glyphs used: a 110-row report drops from ~870 KB to ~35 KB,
         // which matters once the file is sent as an email attachment.
-        return Pdf::loadView('pdf.report', ['doc' => $doc, 'primaryColor' => self::brandColor()])
+        return Pdf::loadView('pdf.report', ['doc' => $doc, 'primaryColor' => self::brandColor(), 'logo' => BrandLogo::dataUri()])
             ->setPaper('a4', 'landscape')
             ->setOption('isFontSubsettingEnabled', true)
             ->output();
@@ -154,6 +155,10 @@ class ReportRenderer
         $word->setDefaultFontSize(10);
         $page = $word->addSection(['orientation' => 'landscape', 'marginLeft' => 720, 'marginRight' => 720, 'marginTop' => 720, 'marginBottom' => 720]);
 
+        if ($logo = BrandLogo::file()) {
+            $page->addImage($logo, ['height' => 27, 'wrappingStyle' => 'inline']); // ~36 px, as in the PDF
+            $page->addTextBreak(1, ['size' => 4]);
+        }
         $page->addText(self::display($doc->title), ['size' => 18, 'bold' => true], ['spaceAfter' => 60]);
         if ($doc->subtitle) {
             $page->addText(self::display($doc->subtitle), ['size' => 10, 'color' => '6B7280'], ['spaceAfter' => 160]);
