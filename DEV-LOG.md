@@ -1462,6 +1462,9 @@ Tests: `tests/Feature/ManagerInviteTest.php` (7 new).
   `APP_URL + path`, so it shows from local dev and in clients that block remote images. Always the
   dark-ink logo (the white one was invisible on the light header in dark theme); fixed size instead
   of `width:100%` + `max-height`, which squashed it.
+- **Other emails:** the Settings test email (own template) embeds it the same way; Laravel's
+  notification emails (verify email, password reset, AI token alert) show it via an override of
+  just `resources/views/vendor/mail/html/header.blade.php` (a URL: markdown components can't embed).
 - **Documents:** logo in the invoice PDF (invoice logo, else brand logo, as in the on-screen
   preview), the project report PDF, and the report PDF and Word exports. Excel exports unchanged.
 - `resources/lang/language.json`: English shows the India flag (`IN`). Left out of the server zip:
