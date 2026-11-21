@@ -286,9 +286,9 @@ export default function Settings() {
               />
             </section>
           )}
-          {/* In SaaS mode a workspace sends through the platform's mail server unless it
-              set up its own (MailConfigService), so only the platform admin configures SMTP. */}
-          {(!isSaasMode || isSuperAdmin) && (hasPermission('settings_view') && hasPermission('settings_email')) && (
+          {/* A company sends through the platform's mail server unless it sets up its own
+              here (MailConfigService); the form offers both for companies. */}
+          {(hasPermission('settings_view') && hasPermission('settings_email')) && (
             <section id="email-settings"><EmailSettings /></section>
           )}
           {(hasPermission('settings_view') && hasPermission('settings_email_notification')) && (

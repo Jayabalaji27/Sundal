@@ -14,18 +14,24 @@ import { toast } from '@/components/custom-toast';
 
 export default function EmailSettings() {
   const { t } = useTranslation();
-  const { settings = {} } = usePage().props as any;
-  
+  const { settings = {}, emailSending } = usePage().props as any;
+  // Set for a company (SettingsController): whether its own mail server is connected. In SaaS
+  // mode a company's emails are sent only through it.
+  const isCompany = !!emailSending;
+  // A company setting up its own server starts from empty fields (with example placeholders),
+  // not the example values the platform admin's form pre-fills.
+  const example = (value: string | undefined, sample: string) => value || (isCompany ? '' : sample);
+
   // Email Settings form state
   const [emailSettings, setEmailSettings] = useState({
     provider: settings.email_provider || 'smtp',
     driver: settings.email_driver || 'smtp',
-    host: settings.email_host || 'smtp.example.com',
+    host: example(settings.email_host, 'smtp.example.com'),
     port: settings.email_port || '587',
-    username: settings.email_username || 'user@example.com',
+    username: example(settings.email_username, 'user@example.com'),
     password: settings.email_password ? '••••••••••••' : '',
     encryption: settings.email_encryption || 'tls',
-    fromAddress: settings.email_from_address || 'noreply@example.com',
+    fromAddress: example(settings.email_from_address, 'noreply@example.com'),
     fromName: settings.email_from_name || ''
   });
 
@@ -104,6 +110,12 @@ export default function EmailSettings() {
     });
   };
 
+  // Company only: remove its mail server (its emails stop until one is set up again).
+  const disconnectServer = () => {
+    if (!window.confirm(t('Disconnect your mail server? Your company\'s emails won\'t be sent until you set one up again.'))) return;
+    router.post(route('settings.email.update'), { disconnect: true }, { preserveScroll: true });
+  };
+
   // Handle test email submission
   const sendTestEmail = (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,6 +186,27 @@ export default function EmailSettings() {
           <form id="email-settings-form" onSubmit={submitEmailSettings}>
             <Card>
               <CardContent className="pt-6">
+                {isCompany && (
+                  emailSending.ownServer ? (
+                    <Alert variant="success" className="mb-6 py-3">
+                      <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                        <span>
+                          {t('Connected. Your company\'s emails are sent from {{address}}.', { address: settings.email_from_address || settings.email_username })}
+                        </span>
+                        <Button type="button" variant="outline" size="sm" onClick={disconnectServer}>{t('Disconnect')}</Button>
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <p className="mb-5 flex items-start gap-2 text-sm text-muted-foreground">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span>
+                        {emailSending.required
+                          ? t('Not set up yet. Your company\'s emails are sent from this mail server, so none go out until you save it.')
+                          : t('Not set up yet.')}
+                      </span>
+                    </p>
+                  )
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
@@ -269,6 +302,8 @@ export default function EmailSettings() {
                     </div>
                     <Input
                       id="username"
+                      // Not the user's own login: stop the browser filling in saved credentials.
+                      autoComplete="off"
                       value={emailSettings.username}
                       onChange={(e) => handleEmailSettingsChange('username', e.target.value)}
                       placeholder="user@example.com"
@@ -285,6 +320,7 @@ export default function EmailSettings() {
                     <Input
                       id="password"
                       type="password"
+                      autoComplete="new-password"
                       value={emailSettings.password}
                       onChange={(e) => handleEmailSettingsChange('password', e.target.value)}
                       placeholder="••••••••••••"

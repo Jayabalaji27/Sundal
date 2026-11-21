@@ -44,17 +44,9 @@ class PasswordResetLinkController extends Controller
 
         try {
             if (isSaasMode()) {
-                if (!$user->created_by) {
-                    MailConfigService::setDynamicConfig($user->id, null);
-                } else {
-                    $creator = User::find($user->created_by);
-                    if ($creator && $creator->type === 'superadmin') {
-                        MailConfigService::setDynamicConfig($creator->id, null);
-                    } else {
-                        $workspace = $user->currentWorkspace ?? $user->workspaces()->first();
-                        MailConfigService::setDynamicConfig($creator->id, $workspace?->id);
-                    }
-                }
+                // An account email from the platform, not from a company: it has to work
+                // even for someone whose company hasn't set up its own mail server.
+                MailConfigService::usePlatform();
             } else {
                 $companyId = $user->created_by ?? $user->id;
                 $workspace = $user->currentWorkspace ?? $user->workspaces()->first();

@@ -167,6 +167,16 @@ class EmailTemplateService
             }
         }
 
+        // No workspace named (most listeners: task/project assignment, invoices, contracts,
+        // meetings, to-dos ...): it's the company the signed-in user is working in, so it
+        // goes through that company's mail server. The Super Admin, or no one signed in
+        // (console, queue), means a platform email.
+        $user = auth()->user();
+        if ($user && $user->type !== 'superadmin' && $user->current_workspace_id
+            && ($workspace = Workspace::find($user->current_workspace_id))) {
+            return [$workspace->owner_id, $workspace->id];
+        }
+
         return [null, null];
     }
 }

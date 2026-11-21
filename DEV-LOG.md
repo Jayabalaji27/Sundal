@@ -1475,3 +1475,33 @@ Deploy: PHP + Blade + images, no front-end build, no migration.
 Tests: `tests/Feature/BrandLogoTest.php` (10 new).
 
 ---
+
+### RP-38 · 2026-11-21 · Companies send email only through their own mail server
+
+- **Company Email Settings (SaaS mode):** the section is now shown to companies (owner only:
+  `settings_email`, plus a workspace-owner check in `EmailSettingController`). A short note says
+  it's not set up; once saved, a "Connected… from <address>" bar with **Disconnect**
+  (`disconnect=1` removes the company's `email_*` settings). Browser autofill is off on the SMTP
+  username/password fields.
+- **No platform fallback for companies:** `MailConfigService` uses a company's own server or
+  nothing (unconfigured → `log` driver, `isEmailConfigured()` false). The Super Admin's server is
+  used only for platform emails: sign-up verification and password reset (`usePlatform()`), and
+  anything sent by the Super Admin or with no one signed in.
+- **Which company:** `EmailTemplateService::resolveMailScope()` falls back to the signed-in user's
+  current workspace when a listener doesn't name one (task/project assignment, invoices,
+  contracts, expenses, meetings, to-dos, user created), so those use the company's server.
+- **Safeguards (SaaS, companies only):** SMTP driver only, ports 25/465/587/2525, host must not be
+  or resolve to loopback/private/link-local (`MailConfigService::isPrivateHost`), password required
+  the first time. Checked on save and again when sending, so older settings breaking the rules are
+  ignored. Self-hosted installs and the Super Admin are not restricted.
+- **Test email:** for a company, sends with exactly what its emails will use; errors until its
+  own server is saved.
+- Invitation warning and the Team page notice point to Settings → Email Settings when the
+  company's mail server isn't set up; the invitation listener skips the send in that case.
+
+Deploy: back-end + front-end build, no migration. **After deploying, a company's emails stop until
+its owner sets up its mail server** (Settings → Email Settings). Tell companies first.
+
+Tests: `tests/Feature/CompanyEmailSettingsTest.php` (16 new); `ManagerInviteTest` updated.
+
+---

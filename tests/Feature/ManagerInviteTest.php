@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\EmailTemplate;
+use App\Models\Setting;
 use App\Models\Plan;
 use App\Models\UserEmailTemplate;
 use App\Services\EmailTemplateService;
@@ -14,6 +15,7 @@ use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Cache;
 
 beforeEach(function () {
+    config(['app.is_saas' => true]);
     app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
     $this->seed(PermissionSeeder::class);
     $this->seed(RoleSeeder::class);
@@ -54,7 +56,7 @@ test('a manager can invite someone as a member', function () {
         ->toBe('member');
 });
 
-/** Mail server set up by the Super Admin only (Settings → Email Settings); workspaces have none. */
+/** The platform's mail server (Super Admin → Settings → Email Settings). */
 function configurePlatformMail(): void
 {
     $superadmin = User::factory()->create(['type' => 'superadmin']);
@@ -68,6 +70,20 @@ function configurePlatformMail(): void
     ] as $key => $value) {
         updateSetting($key, $value, $superadmin->id, null);
     }
+    Cache::flush();
+}
+
+/** The company's own mail server (owner → Settings → Email Settings). */
+function configureCompanyMail(Workspace $workspace): void
+{
+    foreach ([
+        'email_driver' => 'smtp', 'email_host' => 'smtp.gmail.com', 'email_port' => '587',
+        'email_username' => 'hr@company.example', 'email_password' => 'app-password',
+        'email_encryption' => 'tls', 'email_from_address' => 'hr@company.example', 'email_from_name' => 'HR',
+    ] as $key => $value) {
+        Setting::updateOrCreate(['user_id' => $workspace->owner_id, 'workspace_id' => $workspace->id, 'key' => $key], ['value' => $value]);
+    }
+    Cache::flush();
 }
 
 /** The owner's switch in Settings → Email Notification Settings → "Workspace Invitation". */
@@ -80,9 +96,9 @@ function setInvitationEmail(Workspace $workspace, bool $on): void
     );
 }
 
-test('invites use the platform mail settings and the owner\'s switch, whoever sends them', function (string $as) {
-    configurePlatformMail();
+test('invites go out through the company\'s mail server and the owner\'s switch, whoever sends them', function (string $as) {
     [$workspace, $manager] = managerInviteSetup();
+    configureCompanyMail($workspace);
     setInvitationEmail($workspace, true);
     $inviter = $as === 'owner' ? $workspace->owner : $manager;
 
@@ -96,8 +112,8 @@ test('invites use the platform mail settings and the owner\'s switch, whoever se
 })->with(['owner', 'manager']);
 
 test('invites warn instead of claiming "sent" when the invitation email is turned off', function () {
-    configurePlatformMail();
     [$workspace, $manager] = managerInviteSetup(); // the switch starts off for a new company
+    configureCompanyMail($workspace);
     $this->mock(EmailTemplateService::class)->shouldNotReceive('sendTemplateEmailWithLanguage');
 
     $this->actingAs($manager)
@@ -114,13 +130,15 @@ test('invites warn instead of claiming "sent" when the invitation email is turne
         ->assertSessionHas('warning', fn ($w) => str_contains($w, 'turned off'));
 });
 
-test('invites still warn when nobody has configured mail', function () {
+test('invites warn when the company has no mail server, even if the platform has one', function () {
+    configurePlatformMail(); // SaaS mode: the platform's server is not lent to companies
     [$workspace, $manager] = managerInviteSetup();
     setInvitationEmail($workspace, true);
+    $this->mock(EmailTemplateService::class)->shouldNotReceive('sendTemplateEmailWithLanguage');
 
     $this->actingAs($manager)
         ->post(route('workspace.invitations.store', $workspace), ['email' => 'nomail@example.com', 'role' => 'member'])
-        ->assertSessionHas('warning', fn ($w) => str_contains($w, 'not configured'));
+        ->assertSessionHas('warning', fn ($w) => str_contains($w, "mail server isn't set up"));
 });
 
 test('the Team page says up front when invitation emails won\'t be sent', function () {
@@ -128,9 +146,9 @@ test('the Team page says up front when invitation emails won\'t be sent', functi
     $issue = fn () => $this->actingAs($manager)->get(route('team.index', $workspace))
         ->assertInertia(fn (Assert $page) => $page)->inertiaProps('invitationEmailIssue');
 
-    expect($issue())->toBe('not_configured');
     configurePlatformMail();
-    Cache::flush(); // the first load cached "no Super Admin yet" (platformSettingsUserId)
+    expect($issue())->toBe('not_configured'); // the platform's server doesn't count
+    configureCompanyMail($workspace);
     expect($issue())->toBe('turned_off');
     setInvitationEmail($workspace, true);
     expect($issue())->toBeNull();
